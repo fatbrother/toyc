@@ -7,22 +7,19 @@ extern int yyparse();
 %}
 
 
-%token	IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL FUNC_NAME SIZEOF
+%token	IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL SIZEOF
 %token	PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token	AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token	XOR_ASSIGN OR_ASSIGN
-%token	TYPEDEF_NAME ENUMERATION_CONSTANT
+%token	TYPEDEF_NAME
 
-%token	TYPEDEF EXTERN STATIC AUTO REGISTER INLINE
-%token	CONST RESTRICT VOLATILE
+%token	TYPEDEF STATIC
+%token	CONST
 %token	BOOL CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE VOID
-%token	COMPLEX IMAGINARY
-%token	STRUCT UNION ENUM ELLIPSIS
+%token	STRUCT ELLIPSIS
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
-
-%token	ALIGNAS ALIGNOF ATOMIC GENERIC NORETURN STATIC_ASSERT THREAD_LOCAL
 
 %start translation_unit
 %%
@@ -32,36 +29,15 @@ primary_expression
 	| constant
 	| string
 	| '(' expression ')'
-	| generic_selection
 	;
 
 constant
 	: I_CONSTANT		/* includes character_constant */
 	| F_CONSTANT
-	| ENUMERATION_CONSTANT	/* after it has been defined as such */
-	;
-
-enumeration_constant		/* before it has been defined as such */
-	: IDENTIFIER
 	;
 
 string
 	: STRING_LITERAL
-	| FUNC_NAME
-	;
-
-generic_selection
-	: GENERIC '(' assignment_expression ',' generic_assoc_list ')'
-	;
-
-generic_assoc_list
-	: generic_association
-	| generic_assoc_list ',' generic_association
-	;
-
-generic_association
-	: type_name ':' assignment_expression
-	| DEFAULT ':' assignment_expression
 	;
 
 postfix_expression
@@ -89,7 +65,6 @@ unary_expression
 	| unary_operator cast_expression
 	| SIZEOF unary_expression
 	| SIZEOF '(' type_name ')'
-	| ALIGNOF '(' type_name ')'
 	;
 
 unary_operator
@@ -200,7 +175,6 @@ constant_expression
 declaration
 	: declaration_specifiers ';'
 	| declaration_specifiers init_declarator_list ';'
-	| static_assert_declaration
 	;
 
 declaration_specifiers
@@ -210,10 +184,6 @@ declaration_specifiers
 	| type_specifier
 	| type_qualifier declaration_specifiers
 	| type_qualifier
-	| function_specifier declaration_specifiers
-	| function_specifier
-	| alignment_specifier declaration_specifiers
-	| alignment_specifier
 	;
 
 init_declarator_list
@@ -228,11 +198,7 @@ init_declarator
 
 storage_class_specifier
 	: TYPEDEF	/* identifiers must be flagged as TYPEDEF_NAME */
-	| EXTERN
 	| STATIC
-	| THREAD_LOCAL
-	| AUTO
-	| REGISTER
 	;
 
 type_specifier
@@ -246,23 +212,14 @@ type_specifier
 	| SIGNED
 	| UNSIGNED
 	| BOOL
-	| COMPLEX
-	| IMAGINARY	  	/* non-mandated extension */
-	| atomic_type_specifier
-	| struct_or_union_specifier
-	| enum_specifier
+	| struct_specifier
 	| TYPEDEF_NAME		/* after it has been defined as such */
 	;
 
-struct_or_union_specifier
-	: struct_or_union '{' struct_declaration_list '}'
-	| struct_or_union IDENTIFIER '{' struct_declaration_list '}'
-	| struct_or_union IDENTIFIER
-	;
-
-struct_or_union
-	: STRUCT
-	| UNION
+struct_specifier
+	: STRUCT '{' struct_declaration_list '}'
+	| STRUCT IDENTIFIER '{' struct_declaration_list '}'
+	| STRUCT IDENTIFIER
 	;
 
 struct_declaration_list
@@ -273,7 +230,6 @@ struct_declaration_list
 struct_declaration
 	: specifier_qualifier_list ';'	/* for anonymous struct/union */
 	| specifier_qualifier_list struct_declarator_list ';'
-	| static_assert_declaration
 	;
 
 specifier_qualifier_list
@@ -294,43 +250,8 @@ struct_declarator
 	| declarator
 	;
 
-enum_specifier
-	: ENUM '{' enumerator_list '}'
-	| ENUM '{' enumerator_list ',' '}'
-	| ENUM IDENTIFIER '{' enumerator_list '}'
-	| ENUM IDENTIFIER '{' enumerator_list ',' '}'
-	| ENUM IDENTIFIER
-	;
-
-enumerator_list
-	: enumerator
-	| enumerator_list ',' enumerator
-	;
-
-enumerator	/* identifiers must be flagged as ENUMERATION_CONSTANT */
-	: enumeration_constant '=' constant_expression
-	| enumeration_constant
-	;
-
-atomic_type_specifier
-	: ATOMIC '(' type_name ')'
-	;
-
 type_qualifier
 	: CONST
-	| RESTRICT
-	| VOLATILE
-	| ATOMIC
-	;
-
-function_specifier
-	: INLINE
-	| NORETURN
-	;
-
-alignment_specifier
-	: ALIGNAS '(' type_name ')'
-	| ALIGNAS '(' constant_expression ')'
 	;
 
 declarator
@@ -449,10 +370,6 @@ designator_list
 designator
 	: '[' constant_expression ']'
 	| '.' IDENTIFIER
-	;
-
-static_assert_declaration
-	: STATIC_ASSERT '(' constant_expression ',' STRING_LITERAL ')' ';'
 	;
 
 statement
