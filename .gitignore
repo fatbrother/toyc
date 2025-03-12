@@ -1,0 +1,9 @@
+# Ignore object files and executables
+*.o
+*.out
+toyc
+
+# Ignore build directories
+build/
+
+.vscode/
