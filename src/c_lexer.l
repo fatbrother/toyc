@@ -16,88 +16,117 @@ WS  [ \t\v\n\f]
 
 %{
 #include <stdio.h>
-#include "y.tab.h"
+#include <string>
+#include <unordered_map>
+
+struct ValueType {
+    std::string string;
+    int integer;
+    double real;
+};
+
+extern std::unordered_map<std::string, int> symbol_table;
+extern int yylineno;
+extern char* yytext;
+extern "C" int yylex(void);
+int yycolumn = 1;
+
+#define YYSTYPE ValueType
+#include "parser/y.tab.hpp"
 
 extern void yyerror(const char *);  /* prints grammar violation message */
+extern int sym_type(const char *);  /* returns type of symbol */
 
-extern int sym_type(const char *);  /* returns type from symbol table */
+#define SAVE_TOKEN yylval.string = std::string(yytext); yycolumn += yyleng;
+#define TOKEN(t) yycolumn += yyleng; return t;
+#define YYTEXT_STR std::string(yytext)
 
-#define sym_type(identifier) IDENTIFIER /* with no symbol table, fake it */
-
-static void comment(void);
 static int check_type(void);
 %}
 
-%%
-"/*"                                    { comment(); }
-"//".*                                    { /* consume //-comment */ }
+%x COMMENT
+%x MULTI_COMMENT
 
-"break"					{ return(BREAK); }
-"bool"                  { return(BOOL); }
-"case"					{ return(CASE); }
-"char"					{ return(CHAR); }
-"const"					{ return(CONST); }
-"continue"				{ return(CONTINUE); }
-"default"				{ return(DEFAULT); }
-"do"					{ return(DO); }
-"double"				{ return(DOUBLE); }
-"else"					{ return(ELSE); }
-"float"					{ return(FLOAT); }
-"for"					{ return(FOR); }
-"goto"					{ return(GOTO); }
-"if"					{ return(IF); }
-"int"					{ return(INT); }
-"long"					{ return(LONG); }
-"return"				{ return(RETURN); }
-"short"					{ return(SHORT); }
-"signed"				{ return(SIGNED); }
-"sizeof"				{ return(SIZEOF); }
-"static"				{ return(STATIC); }
-"struct"				{ return(STRUCT); }
-"switch"				{ return(SWITCH); }
-"typedef"				{ return(TYPEDEF); }
-"unsigned"				{ return(UNSIGNED); }
-"void"					{ return(VOID); }
-"while"					{ return(WHILE); }
+%option noyywrap
+%option yylineno
+
+%%
+
+\/\/            { BEGIN COMMENT; }
+<COMMENT>[^\n]* { ; }
+<COMMENT>\n     { BEGIN 0; }
+
+\/\*            { BEGIN MULTI_COMMENT; }
+<MULTI_COMMENT>[^*]* { ; }
+<MULTI_COMMENT>\*+[^*/]* { ; }
+<MULTI_COMMENT>\*+\/ { BEGIN 0; }
+
+"break"					{ TOKEN(BREAK); }
+"bool"                  { TOKEN(BOOL); }
+"case"					{ TOKEN(CASE); }
+"char"					{ TOKEN(CHAR); }
+"const"					{ TOKEN(CONST); }
+"continue"				{ TOKEN(CONTINUE); }
+"default"				{ TOKEN(DEFAULT); }
+"do"					{ TOKEN(DO); }
+"double"				{ TOKEN(DOUBLE); }
+"else"					{ TOKEN(ELSE); }
+"float"					{ TOKEN(FLOAT); }
+"for"					{ TOKEN(FOR); }
+"goto"					{ TOKEN(GOTO); }
+"if"					{ TOKEN(IF); }
+"int"					{ TOKEN(INT); }
+"long"					{ TOKEN(LONG); }
+"return"				{ TOKEN(RETURN); }
+"short"					{ TOKEN(SHORT); }
+"signed"				{ TOKEN(SIGNED); }
+"sizeof"				{ TOKEN(SIZEOF); }
+"static"				{ TOKEN(STATIC); }
+"struct"				{ TOKEN(STRUCT); }
+"switch"				{ TOKEN(SWITCH); }
+"typedef"				{ TOKEN(TYPEDEF); }
+"unsigned"				{ TOKEN(UNSIGNED); }
+"void"					{ TOKEN(VOID); }
+"while"					{ TOKEN(WHILE); }
 
 {L}{A}*					{ return check_type(); }
 
-{HP}{H}+{IS}?				    { return I_CONSTANT; }
-{NZ}{D}*{IS}?				    { return I_CONSTANT; }
-"0"{O}*{IS}?				    { return I_CONSTANT; }
-{CP}?"'"([^'\\\n]|{ES})+"'"		{ return I_CONSTANT; }
+{HP}{H}+{IS}?				        { SAVE_TOKEN; return I_CONSTANT; }
+{NZ}{D}*{IS}?				        { SAVE_TOKEN; return I_CONSTANT; }
+"0"{O}*{IS}?				        { SAVE_TOKEN; return I_CONSTANT; }
+{CP}?"'"([^'\\\n]|{ES})+"'"		    { SAVE_TOKEN; return I_CONSTANT; }
 
-{D}+{E}{FS}?				    { return F_CONSTANT; }
-{D}*"."{D}+{E}?{FS}?			{ return F_CONSTANT; }
-{D}+"."{E}?{FS}?			    { return F_CONSTANT; }
-{HP}{H}+{P}{FS}?			    { return F_CONSTANT; }
-{HP}{H}*"."{H}+{P}{FS}?			{ return F_CONSTANT; }
-{HP}{H}+"."{P}{FS}?			    { return F_CONSTANT; }
+{D}+{E}{FS}?				        { SAVE_TOKEN; return F_CONSTANT; }
+{D}*"."{D}+{E}?{FS}?			    { SAVE_TOKEN; return F_CONSTANT; }
+{D}+"."{E}?{FS}?			        { SAVE_TOKEN; return F_CONSTANT; }
+{HP}{H}+{P}{FS}?			        { SAVE_TOKEN; return F_CONSTANT; }
+{HP}{H}*"."{H}+{P}{FS}?			    { SAVE_TOKEN; return F_CONSTANT; }
+{HP}{H}+"."{P}{FS}?			        { SAVE_TOKEN; return F_CONSTANT; }
 
-({SP}?\"([^"\\\n]|{ES})*\"{WS}*)+	{ return STRING_LITERAL; }
+({SP}?\"([^"\\\n]|{ES})*\"{WS}*)+	{ SAVE_TOKEN; return STRING_LITERAL; }
 
-"..."					{ return ELLIPSIS; }
-">>="					{ return RIGHT_ASSIGN; }
-"<<="					{ return LEFT_ASSIGN; }
-"+="					{ return ADD_ASSIGN; }
-"-="					{ return SUB_ASSIGN; }
-"*="					{ return MUL_ASSIGN; }
-"/="					{ return DIV_ASSIGN; }
-"%="					{ return MOD_ASSIGN; }
-"&="					{ return AND_ASSIGN; }
-"^="					{ return XOR_ASSIGN; }
-"|="					{ return OR_ASSIGN; }
-">>"					{ return RIGHT_OP; }
-"<<"					{ return LEFT_OP; }
-"++"					{ return INC_OP; }
-"--"					{ return DEC_OP; }
-"->"					{ return PTR_OP; }
-"&&"					{ return AND_OP; }
-"||"					{ return OR_OP; }
-"<="					{ return LE_OP; }
-">="					{ return GE_OP; }
-"=="					{ return EQ_OP; }
-"!="					{ return NE_OP; }
+"..."					{ TOKEN(ELLIPSIS); }
+">>="					{ TOKEN(RIGHT_ASSIGN); }
+"<<="					{ TOKEN(LEFT_ASSIGN); }
+"+="					{ TOKEN(ADD_ASSIGN); }
+"-="					{ TOKEN(SUB_ASSIGN); }
+"*="					{ TOKEN(MUL_ASSIGN); }
+"/="					{ TOKEN(DIV_ASSIGN); }
+"%="					{ TOKEN(MOD_ASSIGN); }
+"&="					{ TOKEN(AND_ASSIGN); }
+"^="					{ TOKEN(XOR_ASSIGN); }
+"|="					{ TOKEN(OR_ASSIGN); }
+">>"					{ TOKEN(RIGHT_OP); }
+"<<"					{ TOKEN(LEFT_OP); }
+"++"					{ TOKEN(INC_OP); }
+"--"					{ TOKEN(DEC_OP); }
+"->"					{ TOKEN(PTR_OP); }
+"&&"					{ TOKEN(AND_OP); }
+"||"					{ TOKEN(OR_OP); }
+"<="					{ TOKEN(LE_OP); }
+">="					{ TOKEN(GE_OP); }
+"=="					{ TOKEN(EQ_OP); }
+"!="					{ TOKEN(NE_OP); }
 ";"					    { return ';'; }
 ("{"|"<%")				{ return '{'; }
 ("}"|"%>")				{ return '}'; }
@@ -123,35 +152,18 @@ static int check_type(void);
 "|"					    { return '|'; }
 "?"					    { return '?'; }
 
-{WS}+					{ /* whitespace separates tokens */ }
+[ \t\r]+        { yycolumn += yyleng; }
+\n              { yycolumn = 1; }
+
 .					{ /* discard bad characters */ }
 
 %%
 
-int yywrap(void)        /* called at end of input */
-{
-    return 1;           /* terminate now */
-}
-
-static void comment(void)
-{
-    char c, lastc;
-
-    for (lastc = 0; (c = yyinput()) != EOF; lastc = c)
-    {
-        if (lastc == '*' && c == '/')
-            return;
-    }
-    yyerror("unterminated comment");
-}
-
 static int check_type(void)
 {
-    switch (sym_type(yytext))
-    {
-    case TYPEDEF_NAME:                /* previously defined */
-        return TYPEDEF_NAME;
-    default:                          /* includes undefined */
+    if (symbol_table.find(YYTEXT_STR) != symbol_table.end()) {
+        yylval.integer = symbol_table[YYTEXT_STR];
         return IDENTIFIER;
     }
+    return TYPEDEF_NAME;
 }

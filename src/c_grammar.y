@@ -1,13 +1,28 @@
 %{
+#include <string>
+#include <iostream>
+#include <unordered_set>
+#include "parser/y.tab.hpp"
 
 void yyerror(const char *s);
-extern int yylex();
+extern "C" int yylex(void);
 extern int yyparse();
+
+extern std::unordered_set<std::string> symbol_table;
+extern int yylineno;
+extern int yycolumn;
+extern char* yytext;
 
 %}
 
+%union {
+	std::string *string;
+	int integer;
+	double real;
+}
 
-%token	IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL SIZEOF
+
+%token	<string> IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL SIZEOF
 %token	PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token	AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
@@ -21,6 +36,8 @@ extern int yyparse();
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
+%type	<string> string constant
+
 %start translation_unit
 %%
 
@@ -32,12 +49,21 @@ primary_expression
 	;
 
 constant
-	: I_CONSTANT		/* includes character_constant */
-	| F_CONSTANT
+	: I_CONSTANT {
+		std::cout << "I_CONSTANT: " << yytext << std::endl;
+		$$ = $1;
+	}
+	| F_CONSTANT {
+		std::cout << "F_CONSTANT: " << yytext << std::endl;
+		$$ = $1;
+	}
 	;
 
 string
-	: STRING_LITERAL
+	: STRING_LITERAL {
+		std::cout << "STRING_LITERAL: " << yytext << std::endl;
+		$$ = $1;
+	}
 	;
 
 postfix_expression
@@ -182,8 +208,8 @@ declaration_specifiers
 	| storage_class_specifier
 	| type_specifier declaration_specifiers
 	| type_specifier
-	| type_qualifier declaration_specifiers
-	| type_qualifier
+	| CONST declaration_specifiers
+	| CONST
 	;
 
 init_declarator_list
@@ -217,9 +243,15 @@ type_specifier
 	;
 
 struct_specifier
-	: STRUCT '{' struct_declaration_list '}'
-	| STRUCT IDENTIFIER '{' struct_declaration_list '}'
-	| STRUCT IDENTIFIER
+	: STRUCT '{' struct_declaration_list '}' {
+
+	}
+	| STRUCT IDENTIFIER '{' struct_declaration_list '}' {
+		insert_symbol($2, STRUCT);
+	}
+	| STRUCT IDENTIFIER {
+		insert_symbol($2, STRUCT);
+	}
 	;
 
 struct_declaration_list
@@ -235,8 +267,8 @@ struct_declaration
 specifier_qualifier_list
 	: type_specifier specifier_qualifier_list
 	| type_specifier
-	| type_qualifier specifier_qualifier_list
-	| type_qualifier
+	| CONST specifier_qualifier_list
+	| CONST
 	;
 
 struct_declarator_list
@@ -250,10 +282,6 @@ struct_declarator
 	| declarator
 	;
 
-type_qualifier
-	: CONST
-	;
-
 declarator
 	: pointer direct_declarator
 	| direct_declarator
@@ -263,13 +291,6 @@ direct_declarator
 	: IDENTIFIER
 	| '(' declarator ')'
 	| direct_declarator '[' ']'
-	| direct_declarator '[' '*' ']'
-	| direct_declarator '[' STATIC type_qualifier_list assignment_expression ']'
-	| direct_declarator '[' STATIC assignment_expression ']'
-	| direct_declarator '[' type_qualifier_list '*' ']'
-	| direct_declarator '[' type_qualifier_list STATIC assignment_expression ']'
-	| direct_declarator '[' type_qualifier_list assignment_expression ']'
-	| direct_declarator '[' type_qualifier_list ']'
 	| direct_declarator '[' assignment_expression ']'
 	| direct_declarator '(' parameter_type_list ')'
 	| direct_declarator '(' ')'
@@ -277,17 +298,10 @@ direct_declarator
 	;
 
 pointer
-	: '*' type_qualifier_list pointer
-	| '*' type_qualifier_list
+	: '*' CONST pointer
 	| '*' pointer
 	| '*'
 	;
-
-type_qualifier_list
-	: type_qualifier
-	| type_qualifier_list type_qualifier
-	;
-
 
 parameter_type_list
 	: parameter_list ',' ELLIPSIS
@@ -324,20 +338,8 @@ abstract_declarator
 direct_abstract_declarator
 	: '(' abstract_declarator ')'
 	| '[' ']'
-	| '[' '*' ']'
-	| '[' STATIC type_qualifier_list assignment_expression ']'
-	| '[' STATIC assignment_expression ']'
-	| '[' type_qualifier_list STATIC assignment_expression ']'
-	| '[' type_qualifier_list assignment_expression ']'
-	| '[' type_qualifier_list ']'
 	| '[' assignment_expression ']'
 	| direct_abstract_declarator '[' ']'
-	| direct_abstract_declarator '[' '*' ']'
-	| direct_abstract_declarator '[' STATIC type_qualifier_list assignment_expression ']'
-	| direct_abstract_declarator '[' STATIC assignment_expression ']'
-	| direct_abstract_declarator '[' type_qualifier_list assignment_expression ']'
-	| direct_abstract_declarator '[' type_qualifier_list STATIC assignment_expression ']'
-	| direct_abstract_declarator '[' type_qualifier_list ']'
 	| direct_abstract_declarator '[' assignment_expression ']'
 	| '(' ')'
 	| '(' parameter_type_list ')'
@@ -455,6 +457,10 @@ declaration_list
 
 void yyerror(const char *s)
 {
-	fflush(stdout);
-	fprintf(stderr, "*** %s\n", s);
+	std::cerr << "Error: " << s << std::endl;
+}
+
+void insert_symbol(const std::string &s, int type)
+{
+	symbol_table[s] = type;
 }
