@@ -13,7 +13,7 @@ make
 To compile a C file, run the following command:
 
 ```bash
-./toyc <input_file> <output_file>
+./toyc <input_file> -o <output_file>
 ```
 
 ## Grammar
