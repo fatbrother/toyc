@@ -13,7 +13,7 @@ extern void yy_delete_buffer(YY_BUFFER_STATE buffer);
 
 namespace toyc::parser {
 
-bool parseFile(const std::string &fileName);
-bool parseContent(const std::string &content);
+int parseFile(const std::string &fileName);
+int parseContent(const std::string &content);
 
 } // namespace ddlbx::parser
