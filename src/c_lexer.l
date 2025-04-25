@@ -15,31 +15,21 @@ ES  (\\(['"\?\\abfnrtv]|[0-7]{1,3}|x[a-fA-F0-9]+))
 WS  [ \t\v\n\f]
 
 %{
-#include <stdio.h>
+
 #include <string>
-#include <unordered_map>
+#include <iostream>
+#include "parser/y.tab.hpp"
 
-struct ValueType {
-    std::string string;
-    int integer;
-    double real;
-};
-
-extern std::unordered_map<std::string, int> symbol_table;
+// extern std::unordered_map<std::string, std::string> symbol_table;
 extern int yylineno;
 extern char* yytext;
 extern "C" int yylex(void);
 int yycolumn = 1;
 
-#define YYSTYPE ValueType
-#include "parser/y.tab.hpp"
-
 extern void yyerror(const char *);  /* prints grammar violation message */
-extern int sym_type(const char *);  /* returns type of symbol */
 
-#define SAVE_TOKEN yylval.string = std::string(yytext); yycolumn += yyleng;
-#define TOKEN(t) yycolumn += yyleng; return t;
-#define YYTEXT_STR std::string(yytext)
+#define SAVE_TOKEN yylval.string = new std::string(yytext); std::cout << "Token: " << *yylval.string << std::endl;
+#define TOKEN(t) (yylval.token = t); std::cout << "Token: " << yytext << std::endl; return t;
 
 static int check_type(void);
 %}
@@ -89,7 +79,7 @@ static int check_type(void);
 "void"					{ TOKEN(VOID); }
 "while"					{ TOKEN(WHILE); }
 
-{L}{A}*					{ return check_type(); }
+{L}{A}*					{ SAVE_TOKEN; return check_type(); }
 
 {HP}{H}+{IS}?				        { SAVE_TOKEN; return I_CONSTANT; }
 {NZ}{D}*{IS}?				        { SAVE_TOKEN; return I_CONSTANT; }
@@ -161,9 +151,5 @@ static int check_type(void);
 
 static int check_type(void)
 {
-    if (symbol_table.find(YYTEXT_STR) != symbol_table.end()) {
-        yylval.integer = symbol_table[YYTEXT_STR];
-        return IDENTIFIER;
-    }
-    return TYPEDEF_NAME;
+    return IDENTIFIER;
 }
