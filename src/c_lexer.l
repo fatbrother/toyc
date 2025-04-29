@@ -16,8 +16,11 @@ WS  [ \t\v\n\f]
 
 %{
 
-#include <string>
 #include <iostream>
+#include "ast/node.hpp"
+#include "ast/expression.hpp"
+#include "ast/statement.hpp"
+#include "ast/external_definition.hpp"
 #include "parser/y.tab.hpp"
 
 // extern std::unordered_map<std::string, std::string> symbol_table;
@@ -28,8 +31,10 @@ int yycolumn = 1;
 
 extern void yyerror(const char *);  /* prints grammar violation message */
 
-#define SAVE_TOKEN yylval.string = new std::string(yytext); std::cout << "Token: " << *yylval.string << std::endl;
-#define TOKEN(t) (yylval.token = t); std::cout << "Token: " << yytext << std::endl; return t;
+#define SAVE_TOKEN yylval.string = new char[yyleng + 1]; \
+    strncpy(yylval.string, yytext, yyleng); \
+    yylval.string[yyleng] = '\0';
+#define TOKEN(t) (yylval.token = t); return t;
 
 static int check_type(void);
 %}
@@ -117,6 +122,16 @@ static int check_type(void);
 ">="					{ TOKEN(GE_OP); }
 "=="					{ TOKEN(EQ_OP); }
 "!="					{ TOKEN(NE_OP); }
+"<"					    { TOKEN(L_OP); }
+">"					    { TOKEN(G_OP); }
+"-"					    { TOKEN(SUB_OP); }
+"+"					    { TOKEN(ADD_OP); }
+"*"					    { TOKEN(MUL_OP); }
+"/"					    { TOKEN(DIV_OP); }
+"%"					    { TOKEN(MOD_OP); }
+"^"					    { TOKEN(XOR_OP); }
+"&"					    { TOKEN(BIT_AND_OP); }
+"|"					    { TOKEN(BIT_OR_OP); }
 ";"					    { return ';'; }
 ("{"|"<%")				{ return '{'; }
 ("}"|"%>")				{ return '}'; }
@@ -128,24 +143,14 @@ static int check_type(void);
 ("["|"<:")				{ return '['; }
 ("]"|":>")				{ return ']'; }
 "."					    { return '.'; }
-"&"					    { return '&'; }
 "!"					    { return '!'; }
 "~"					    { return '~'; }
-"-"					    { return '-'; }
-"+"					    { return '+'; }
-"*"					    { return '*'; }
-"/"					    { return '/'; }
-"%"					    { return '%'; }
-"<"					    { return '<'; }
-">"					    { return '>'; }
-"^"					    { return '^'; }
-"|"					    { return '|'; }
 "?"					    { return '?'; }
 
-[ \t\r]+        { yycolumn += yyleng; }
-\n              { yycolumn = 1; }
+[ \t\r]+                { yycolumn += yyleng; }
+\n                      { yycolumn = 1; }
 
-.					{ /* discard bad characters */ }
+.					    { yyterminate();}
 
 %%
 

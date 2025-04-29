@@ -4,6 +4,13 @@
 #include <iostream>
 #include <string>
 
+typedef struct yy_buffer_state * YY_BUFFER_STATE;
+extern int yyparse();
+extern int yylineno;
+extern YY_BUFFER_STATE yy_scan_string(const char * str);
+extern YY_BUFFER_STATE yy_switch_to_buffer(YY_BUFFER_STATE buffer);
+extern void yy_delete_buffer(YY_BUFFER_STATE buffer);
+
 int toyc::parser::parseFile(const std::string &fileName) {
     std::ifstream file(fileName);
     std::string content;
@@ -14,10 +21,6 @@ int toyc::parser::parseFile(const std::string &fileName) {
     }
     content = std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
-
-    // dump the content to the console
-    std::cout << "Content of the file: " << std::endl;
-    std::cout << content << std::endl;
 
     return parseContent(content);
 }

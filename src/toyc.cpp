@@ -1,5 +1,10 @@
 #include <iostream>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include "ast/external_definition.hpp"
 #include "parser/parse_file.hpp"
+
+extern toyc::ast::NExternalDeclaration *program;
 
 void help() {
     std::cout << "Usage: toyc <filename>" << std::endl;
@@ -45,5 +50,16 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     std::cout << "File parsed successfully: " << fileName << std::endl;
+
+    llvm::LLVMContext context;
+    llvm::Module module("main", context);
+    llvm::IRBuilder<> builder(context);
+
+    for (auto &decl = program; decl != nullptr; decl = decl->next) {
+        decl->codegen(context, module, builder);
+    }
+
+    module.print(llvm::outs(), nullptr);
+
     return 0;
 }

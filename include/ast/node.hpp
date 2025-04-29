@@ -1,9 +1,12 @@
 #pragma once
 
 #include <string>
+#include <map>
+#include <iostream>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/IRBuilder.h>
 
-namespace ast
-{
+namespace toyc::ast {
 
 class BasicNode {
 public:
@@ -13,7 +16,20 @@ public:
     BasicNode(BasicNode &&) = default;
     BasicNode &operator=(const BasicNode &) = default;
     virtual std::string getType() const = 0;
-    virtual void print() const = 0;
 };
 
-} // namespace ast
+class NType : public BasicNode {
+public:
+    NType(int type, const std::string &name = "")
+        : type(type), name(name) {}
+    virtual std::string getType() const override { return "Type"; }
+    virtual llvm::Type *getLLVMType(llvm::LLVMContext &context) const;
+
+private:
+    int type;
+    std::string name;
+};
+
+class NBlock;
+
+} // namespace toyc::ast
