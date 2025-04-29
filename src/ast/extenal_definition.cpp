@@ -1,8 +1,4 @@
-#include "ast/node.hpp"
-#include "ast/statement.hpp"
 #include "ast/external_definition.hpp"
-
-#include "parser/y.tab.hpp"
 
 #include <iostream>
 #include <llvm/IR/Verifier.h>

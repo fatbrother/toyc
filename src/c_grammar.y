@@ -1,10 +1,11 @@
 %{
 #include <string>
+#include <iostream>
+
 #include "ast/node.hpp"
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
 #include "ast/external_definition.hpp"
-#include "parser/y.tab.hpp"
 
 // #include <unordered_map>
 
@@ -29,14 +30,15 @@ toyc::ast::NExternalDeclaration *program;
 	toyc::ast::NStatement *statement;
 	toyc::ast::NExternalDeclaration *external_declaration;
 	toyc::ast::NParameter *parameter;
+	toyc::ast::BineryOperator bop;
 	char *string;
 	int token;
 }
 
 
 %token	<string> IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL TYPEDEF_NAME
-%token	<token> PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP L_OP G_OP
-%token	<token> ADD_OP SUB_OP MUL_OP DIV_OP MOD_OP AND_OP OR_OP XOR_OP BIT_AND_OP BIT_OR_OP
+%token	<bop> PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP L_OP G_OP
+%token	<bop> ADD_OP SUB_OP MUL_OP DIV_OP MOD_OP AND_OP OR_OP XOR_OP BIT_AND_OP BIT_OR_OP
 %token	MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token	XOR_ASSIGN OR_ASSIGN
@@ -50,7 +52,7 @@ toyc::ast::NExternalDeclaration *program;
 
 %type	<expression> expression condition calculation term factor numeric string
 %type   <type> type
-%type	<token> condition_op
+%type	<bop> condition_op
 %type   <declarator> declarator declarator_list
 %type   <parameter> parameter_list parameter_declaration
 %type   <statement> statement statement_list declaration_statement expression_statement compound_statement jump_statement
@@ -208,10 +210,10 @@ expression_statement
 
 expression:
       condition AND_OP expression {
-        $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
+        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::AND, $3);
       }
     | condition OR_OP expression {
-        $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
+        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::OR, $3);
       }
     | condition {
         $$ = $1;
@@ -232,10 +234,10 @@ calculation:
         $$ = $1;
       }
     | calculation ADD_OP term {
-        $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
+        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::ADD, $3);
       }
     | calculation SUB_OP term {
-        $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
+        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::SUB, $3);
       }
     ;
 
@@ -244,13 +246,13 @@ term:
         $$ = $1;
       }
     | term MUL_OP factor {
-        $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
+        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MUL, $3);
       }
     | term DIV_OP factor {
-        $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
+        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::DIV, $3);
       }
 	| term MOD_OP factor {
-		$$ = new toyc::ast::NBinaryOperator($1, $2, $3);
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MOD, $3);
 	  }
     ;
 
@@ -290,44 +292,60 @@ string:
 
 
 condition_op
-	: LE_OP
-	| GE_OP
-	| EQ_OP
-	| NE_OP
-	| AND_OP
-	| OR_OP
-	| L_OP
-	| G_OP
+	: LE_OP {
+		$$ = toyc::ast::BineryOperator::LE;
+	}
+	| GE_OP {
+		$$ = toyc::ast::BineryOperator::GE;
+	}
+	| EQ_OP {
+		$$ = toyc::ast::BineryOperator::EQ;
+	}
+	| NE_OP {
+		$$ = toyc::ast::BineryOperator::NE;
+	}
+	| AND_OP {
+		$$ = toyc::ast::BineryOperator::AND;
+	}
+	| OR_OP {
+		$$ = toyc::ast::BineryOperator::OR;
+	}
+	| L_OP {
+		$$ = toyc::ast::BineryOperator::L;
+	}
+	| G_OP {
+		$$ = toyc::ast::BineryOperator::G;
+	}
 	;
 
 type
 	: TYPEDEF_NAME {
-		$$ = new toyc::ast::NType(TYPEDEF_NAME, std::string($1));
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_DEFINED, std::string($1));
 		delete $1;
 	}
 	| BOOL {
-		$$ = new toyc::ast::NType($1);
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_BOOL);
 	}
 	| CHAR {
-		$$ = new toyc::ast::NType($1);
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_CHAR);
 	}
 	| SHORT {
-		$$ = new toyc::ast::NType($1);
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_SHORT);
 	}
 	| INT {
-		$$ = new toyc::ast::NType($1);
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_INT);
 	}
 	| LONG {
-		$$ = new toyc::ast::NType($1);
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_LONG);
 	}
 	| FLOAT {
-		$$ = new toyc::ast::NType($1);
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_FLOAT);
 	}
 	| DOUBLE {
-		$$ = new toyc::ast::NType($1);
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_DOUBLE);
 	}
 	| VOID {
-		$$ = new toyc::ast::NType($1);
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_VOID);
 	}
 	;
 

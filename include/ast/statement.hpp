@@ -1,20 +1,11 @@
 #pragma once
 
-#include <ast/node.hpp>
-#include <ast/expression.hpp>
+#include "ast/node.hpp"
+#include "ast/expression.hpp"
+
+#include <map>
 
 namespace toyc::ast {
-
-class NStatement : public BasicNode {
-public:
-    virtual void codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) = 0;
-    virtual std::string getType() const override { return "Statement"; }
-    void setParent(NBlock *parent) { this->parent = parent; }
-
-public:
-    NBlock *parent = nullptr;
-    NStatement *next = nullptr;
-};
 
 class NDeclarationStatement : public NStatement
 {

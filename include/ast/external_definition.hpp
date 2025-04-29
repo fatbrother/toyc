@@ -1,18 +1,9 @@
 #pragma once
 
 #include "ast/node.hpp"
-#include "ast/expression.hpp"
 #include "ast/statement.hpp"
 
 namespace toyc::ast {
-
-class NExternalDeclaration : public BasicNode {
-public:
-    virtual void codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) = 0;
-
-public:
-    NExternalDeclaration *next = nullptr;
-};
 
 class NParameter : public BasicNode {
 public:

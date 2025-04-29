@@ -4,15 +4,9 @@
 
 namespace toyc::ast {
 
-class NExpression : public BasicNode {
-public:
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) = 0;
-    virtual std::string getType() const override { return "Expression"; }
-};
-
 class NBinaryOperator : public NExpression {
 public:
-    NBinaryOperator(NExpression *lhs, int &op, NExpression *rhs)
+    NBinaryOperator(NExpression *lhs, BineryOperator op, NExpression *rhs)
         : lhs(lhs), rhs(rhs), op(op) {}
     ~NBinaryOperator() {
         delete lhs;
@@ -24,7 +18,7 @@ public:
 private:
     NExpression *lhs;
     NExpression *rhs;
-    int op;
+    BineryOperator op;
 };
 
 class NIdentifier : public NExpression {
