@@ -53,9 +53,9 @@ toyc::ast::NExternalDeclaration *program;
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
-%type	<expression> expression unary_expression condition calculation term factor numeric string
+%type	<expression> expression unary_expression relational_expression equality_expression additive_expression multiplicative_expression primary_expression numeric postfix_expression
 %type   <type> type
-%type	<bop> condition_op
+%type	<bop> relational_expression_op
 %type   <declarator> declarator declarator_list
 %type   <parameter> parameter_list parameter_declaration
 %type   <statement> statement statement_list declaration_statement expression_statement jump_statement for_statement_init_declaration
@@ -244,75 +244,93 @@ expression_statement
 	;
 
 expression:
-      condition AND_OP expression {
+      equality_expression AND_OP expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::AND, $3);
       }
-    | condition OR_OP expression {
+    | equality_expression OR_OP expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::OR, $3);
       }
-    | condition {
+    | equality_expression {
         $$ = $1;
       }
     ;
 
-condition:
-      calculation condition_op calculation {
+equality_expression:
+	  relational_expression EQ_OP relational_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::EQ, $3);
+	  }
+	| relational_expression NE_OP relational_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::NE, $3);
+	  }
+	| relational_expression {
+		$$ = $1;
+	  }
+	;
+
+relational_expression:
+      additive_expression relational_expression_op additive_expression {
         $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
       }
-    | calculation {
+    | additive_expression {
         $$ = $1;
       }
     ;
 
-calculation:
-      term {
+additive_expression:
+      multiplicative_expression {
         $$ = $1;
       }
-    | calculation '+' term {
+    | additive_expression '+' multiplicative_expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::ADD, $3);
       }
-    | calculation '-' term {
+    | additive_expression '-' multiplicative_expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::SUB, $3);
       }
     ;
 
-term:
+multiplicative_expression:
       unary_expression {
         $$ = $1;
       }
-    | term '*' unary_expression {
+    | multiplicative_expression '*' unary_expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MUL, $3);
       }
-    | term '/' unary_expression {
+    | multiplicative_expression '/' unary_expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::DIV, $3);
       }
-	| term '%' unary_expression {
+	| multiplicative_expression '%' unary_expression {
 		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MOD, $3);
 	  }
     ;
 
 unary_expression:
-	  INC_OP factor {
+	  postfix_expression {
+		$$ = $1;
+	  }
+	| INC_OP primary_expression {
 		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::L_INC, $2);
 	  }
-	| DEC_OP factor {
+	| DEC_OP primary_expression {
 		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::L_DEC, $2);
 	  }
-	| factor INC_OP {
-		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::R_INC, $1);
-	  }
-	| factor DEC_OP {
-		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::R_DEC, $1);
-	  }
-	| '!' factor {
+	| '!' primary_expression {
 		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::NOT, $2);
-	  }
-	| factor {
-		$$ = $1;
 	  }
 	;
 
-factor:
+postfix_expression:
+	  primary_expression {
+		$$ = $1;
+	  }
+	| primary_expression INC_OP {
+	$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::R_INC, $1);
+	  }
+	| primary_expression DEC_OP {
+		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::R_DEC, $1);
+	  }
+	;
+
+primary_expression:
 	  '(' expression ')' {
 		$$ = $2;
 	  }
@@ -323,8 +341,10 @@ factor:
     | numeric {
         $$ = $1;
       }
-    | string {
-        $$ = $1;
+    | STRING_LITERAL {
+		std::string str($1);
+        $$ = new toyc::ast::NString(str.substr(1, str.length() - 2));
+		delete $1;
       }
 
 numeric:
@@ -338,33 +358,12 @@ numeric:
 	  }
     ;
 
-string:
-      STRING_LITERAL {
-		std::string str($1);
-        $$ = new toyc::ast::NString(str.substr(1, str.length() - 2));
-		delete $1;
-      }
-    ;
-
-
-condition_op
+relational_expression_op
 	: LE_OP {
 		$$ = toyc::ast::BineryOperator::LE;
 	}
 	| GE_OP {
 		$$ = toyc::ast::BineryOperator::GE;
-	}
-	| EQ_OP {
-		$$ = toyc::ast::BineryOperator::EQ;
-	}
-	| NE_OP {
-		$$ = toyc::ast::BineryOperator::NE;
-	}
-	| AND_OP {
-		$$ = toyc::ast::BineryOperator::AND;
-	}
-	| OR_OP {
-		$$ = toyc::ast::BineryOperator::OR;
 	}
 	| '<' {
 		$$ = toyc::ast::BineryOperator::L;
