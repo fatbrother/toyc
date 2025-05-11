@@ -32,7 +32,6 @@ toyc::ast::NExternalDeclaration *program;
 	toyc::ast::NParentStatement *parent_statement;
 	toyc::ast::NExternalDeclaration *external_declaration;
 	toyc::ast::NParameter *parameter;
-	toyc::ast::UnaryOperator uop;
 	toyc::ast::BineryOperator bop;
 	char *string;
 	int token;
@@ -53,7 +52,7 @@ toyc::ast::NExternalDeclaration *program;
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
-%type	<expression> expression unary_expression relational_expression equality_expression additive_expression multiplicative_expression primary_expression numeric postfix_expression
+%type	<expression> expression unary_expression assignment_expression relational_expression equality_expression additive_expression multiplicative_expression primary_expression numeric postfix_expression
 %type   <type> type
 %type	<bop> relational_expression_op
 %type   <declarator> declarator declarator_list
@@ -244,22 +243,46 @@ expression_statement
 	;
 
 expression:
-      equality_expression AND_OP expression {
+      assignment_expression AND_OP expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::AND, $3);
       }
-    | equality_expression OR_OP expression {
+    | assignment_expression OR_OP expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::OR, $3);
       }
-    | equality_expression {
+    | assignment_expression {
         $$ = $1;
       }
     ;
 
+assignment_expression
+	: equality_expression {
+		$$ = $1;
+      }
+	| unary_expression '=' assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, $3);
+	  }
+	| unary_expression MUL_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MUL, $3));
+	  }
+	| unary_expression DIV_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::DIV, $3));
+	  }
+	| unary_expression ADD_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::ADD, $3));
+	  }
+	| unary_expression SUB_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::SUB, $3));
+	  }
+	| unary_expression MOD_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MOD, $3));
+	  }
+	;
+
 equality_expression:
-	  relational_expression EQ_OP relational_expression {
+	  equality_expression EQ_OP relational_expression {
 		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::EQ, $3);
 	  }
-	| relational_expression NE_OP relational_expression {
+	| equality_expression NE_OP relational_expression {
 		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::NE, $3);
 	  }
 	| relational_expression {
@@ -268,7 +291,7 @@ equality_expression:
 	;
 
 relational_expression:
-      additive_expression relational_expression_op additive_expression {
+      relational_expression relational_expression_op additive_expression {
         $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
       }
     | additive_expression {
@@ -307,14 +330,11 @@ unary_expression:
 	  postfix_expression {
 		$$ = $1;
 	  }
-	| INC_OP primary_expression {
-		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::L_INC, $2);
+	| INC_OP unary_expression {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::L_INC, $2);
 	  }
-	| DEC_OP primary_expression {
-		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::L_DEC, $2);
-	  }
-	| '!' primary_expression {
-		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::NOT, $2);
+	| DEC_OP unary_expression {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::L_DEC, $2);
 	  }
 	;
 
@@ -322,11 +342,11 @@ postfix_expression:
 	  primary_expression {
 		$$ = $1;
 	  }
-	| primary_expression INC_OP {
-	$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::R_INC, $1);
+	| postfix_expression INC_OP {
+	$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::R_INC, $1);
 	  }
-	| primary_expression DEC_OP {
-		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::R_DEC, $1);
+	| postfix_expression DEC_OP {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::R_DEC, $1);
 	  }
 	;
 

@@ -81,8 +81,10 @@ class NParentStatement;
 class NExpression : public BasicNode {
 public:
     virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) = 0;
+    virtual llvm::AllocaInst *allocgen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+        throw std::runtime_error("Expression is not a valid left value");
+    };
     virtual std::string getType() const override { return "Expression"; }
-    virtual bool isLeftValue() const { return false; }
 };
 
 class NExternalDeclaration : public BasicNode {

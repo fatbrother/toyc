@@ -45,7 +45,7 @@ llvm::Value *NBinaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &
     return result;
 }
 
-llvm::Value *NUnaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+llvm::Value *NUnaryExpression::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
     llvm::Value *value = nullptr;
     llvm::Value *one = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1);
 
@@ -58,28 +58,27 @@ llvm::Value *NUnaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &m
         value = expr->codegen(context, module, builder, parent);
         value = builder.CreateNot(value, "not");
     } else {
-        LeftValue *leftValue = static_cast<LeftValue *>(expr);
         llvm::Value *tmp = nullptr;
         switch (op) {
             case L_INC:
                 value = expr->codegen(context, module, builder, parent);
                 value = builder.CreateAdd(value, one, "inc");
-                builder.CreateStore(value, leftValue->allocgen(context, module, builder, parent));
+                builder.CreateStore(value, expr->allocgen(context, module, builder, parent));
                 break;
             case R_INC:
                 value = expr->codegen(context, module, builder, parent);
                 tmp = builder.CreateAdd(value, one, "inc");
-                builder.CreateStore(tmp, leftValue->allocgen(context, module, builder, parent));
+                builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
                 break;
             case L_DEC:
                 value = expr->codegen(context, module, builder, parent);
                 value = builder.CreateSub(value, one, "dec");
-                builder.CreateStore(value, leftValue->allocgen(context, module, builder, parent));
+                builder.CreateStore(value, expr->allocgen(context, module, builder, parent));
                 break;
             case R_DEC:
                 value = expr->codegen(context, module, builder, parent);
                 tmp = builder.CreateSub(value, one, "dec");
-                builder.CreateStore(tmp, leftValue->allocgen(context, module, builder, parent));
+                builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
                 break;
             default:
                 std::cerr << "Unknown unary operator: " << op << std::endl;
@@ -124,6 +123,22 @@ llvm::AllocaInst *NIdentifier::allocgen(llvm::LLVMContext &context, llvm::Module
     }
 
     return allocaInst;
+}
+
+llvm::Value *NAssignment::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+    llvm::AllocaInst *lhsAlloca = lhs->allocgen(context, module, builder, parent);
+    llvm::Value *rhsValue = rhs->codegen(context, module, builder, parent);
+    if (nullptr == rhsValue || nullptr == lhsAlloca) {
+        std::cerr << "Error: Assignment failed due to null values" << std::endl;
+        return nullptr;
+    }
+
+    if (lhsAlloca->getAllocatedType() != rhsValue->getType()) {
+        std::cerr << "Error: Type mismatch in assignment" << std::endl;
+        return nullptr;
+    }
+    builder.CreateStore(rhsValue, lhsAlloca);
+    return rhsValue;
 }
 
 llvm::Value *NInteger::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {

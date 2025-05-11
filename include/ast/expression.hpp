@@ -21,28 +21,25 @@ private:
     BineryOperator op;
 };
 
-class NUnaryOperator : public NExpression {
+class NUnaryExpression : public NExpression {
 public:
-    NUnaryOperator(UnaryOperator op, NExpression *expr)
+    NUnaryExpression(UnaryOperator op, NExpression *expr)
         : op(op), expr(expr) {}
-    ~NUnaryOperator() {
+    ~NUnaryExpression() {
         SAFE_DELETE(expr);
     }
     virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
     virtual std::string getType() const override { return "UnaryOperator"; }
+    virtual llvm::AllocaInst *allocgen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override {
+        return expr->allocgen(context, module, builder, parent);
+    };
 
 private:
     UnaryOperator op;
     NExpression *expr;
 };
 
-class LeftValue : public NExpression {
-public:
-    virtual llvm::AllocaInst *allocgen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) = 0;
-    virtual bool isLeftValue() const override { return true; }
-};
-
-class NIdentifier : public LeftValue {
+class NIdentifier : public NExpression {
 public:
     NIdentifier(const std::string &name) : name(name) {}
     virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
@@ -106,6 +103,22 @@ public:
 private:
     std::string name;
     NExpression *expr;
+};
+
+class NAssignment : public NExpression {
+public:
+    NAssignment(NExpression *lhs, NExpression *rhs)
+        : lhs(lhs), rhs(rhs) {}
+    ~NAssignment() {
+        SAFE_DELETE(lhs);
+        SAFE_DELETE(rhs);
+    }
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
+    virtual std::string getType() const override { return "Assignment"; }
+
+private:
+    NExpression *lhs;
+    NExpression *rhs;
 };
 
 } // namespace toyc::ast
