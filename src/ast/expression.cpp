@@ -6,7 +6,7 @@
 
 using namespace toyc::ast;
 
-llvm::Value *NBinaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) {
+llvm::Value *NBinaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
     llvm::Value *lhsValue = lhs->codegen(context, module, builder, parent);
     llvm::Value *rhsValue = rhs->codegen(context, module, builder, parent);
     llvm::Value *result = nullptr;
@@ -21,8 +21,8 @@ llvm::Value *NBinaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &
         {ADD, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateAdd(lhs, rhs, "add"); }},
         {SUB, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateSub(lhs, rhs, "sub"); }},
         {MUL, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateMul(lhs, rhs, "mul"); }},
-        {DIV, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateFDiv(lhs, rhs, "div"); }},
-        {MOD, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateFRem(lhs, rhs, "mod"); }},
+        {DIV, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateSDiv(lhs, rhs, "div"); }},
+        {MOD, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateSRem(lhs, rhs, "mod"); }},
         {LEFT, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateShl(lhs, rhs, "left"); }},
         {RIGHT, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateLShr(lhs, rhs, "right"); }},
         {EQ, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateICmpEQ(lhs, rhs, "eq"); }},
@@ -45,13 +45,58 @@ llvm::Value *NBinaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &
     return result;
 }
 
-llvm::Value *NIdentifier::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) {
+llvm::Value *NUnaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+    llvm::Value *value = nullptr;
+    llvm::Value *one = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1);
+
+    if (nullptr == expr) {
+        std::cerr << "Error: Expression is null" << std::endl;
+        return nullptr;
+    }
+
+    if (NOT == op) {
+        value = expr->codegen(context, module, builder, parent);
+        value = builder.CreateNot(value, "not");
+    } else {
+        LeftValue *leftValue = static_cast<LeftValue *>(expr);
+        llvm::Value *tmp = nullptr;
+        switch (op) {
+            case L_INC:
+                value = expr->codegen(context, module, builder, parent);
+                value = builder.CreateAdd(value, one, "inc");
+                builder.CreateStore(value, leftValue->allocgen(context, module, builder, parent));
+                break;
+            case R_INC:
+                value = expr->codegen(context, module, builder, parent);
+                tmp = builder.CreateAdd(value, one, "inc");
+                builder.CreateStore(tmp, leftValue->allocgen(context, module, builder, parent));
+                break;
+            case L_DEC:
+                value = expr->codegen(context, module, builder, parent);
+                value = builder.CreateSub(value, one, "dec");
+                builder.CreateStore(value, leftValue->allocgen(context, module, builder, parent));
+                break;
+            case R_DEC:
+                value = expr->codegen(context, module, builder, parent);
+                tmp = builder.CreateSub(value, one, "dec");
+                builder.CreateStore(tmp, leftValue->allocgen(context, module, builder, parent));
+                break;
+            default:
+                std::cerr << "Unknown unary operator: " << op << std::endl;
+                return nullptr;
+        }
+    }
+
+    return value;
+}
+
+llvm::Value *NIdentifier::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
     if (nullptr == parent) {
         std::cerr << "Error: Parent block is null" << std::endl;
         return nullptr;
     }
 
-    llvm::AllocaInst *allocaInst = parent->findVariable(name);
+    llvm::AllocaInst *allocaInst = parent->lookupVariable(name);
     llvm::Value *value = nullptr;
     if (nullptr == allocaInst) {
         std::cerr << "Error: Variable not found: " << name << std::endl;
@@ -66,14 +111,29 @@ llvm::Value *NIdentifier::codegen(llvm::LLVMContext &context, llvm::Module &modu
     return value;
 }
 
-llvm::Value *NInteger::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) {
-    return llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), value);
+llvm::AllocaInst *NIdentifier::allocgen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+    if (nullptr == parent) {
+        std::cerr << "Error: Parent block is null" << std::endl;
+        return nullptr;
+    }
+
+    llvm::AllocaInst *allocaInst = parent->lookupVariable(name);
+    if (nullptr == allocaInst) {
+        std::cerr << "Error: Variable not found: " << name << std::endl;
+        return nullptr;
+    }
+
+    return allocaInst;
 }
 
-llvm::Value *NFloat::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) {
+llvm::Value *NInteger::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+    return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), value);
+}
+
+llvm::Value *NFloat::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
     return llvm::ConstantFP::get(llvm::Type::getDoubleTy(context), value);
 }
 
-llvm::Value *NString::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) {
+llvm::Value *NString::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
     return llvm::ConstantDataArray::getString(context, value);
 }

@@ -39,6 +39,20 @@ enum BineryOperator {
     XOR
 };
 
+enum UnaryOperator {
+    L_INC,
+    R_INC,
+    L_DEC,
+    R_DEC,
+    NOT
+};
+
+#define SAFE_DELETE(ptr) \
+    if (ptr) {           \
+        delete ptr;      \
+        ptr = nullptr;   \
+    }
+
 class BasicNode {
 public:
     virtual ~BasicNode() = default;
@@ -62,26 +76,20 @@ private:
 };
 
 class NBlock;
-
-class NStatement : public BasicNode {
-public:
-    virtual void codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) = 0;
-    virtual std::string getType() const override { return "Statement"; }
-    void setParent(NBlock *parent) { this->parent = parent; }
-
-public:
-    NBlock *parent = nullptr;
-    NStatement *next = nullptr;
-};
+class NParentStatement;
 
 class NExpression : public BasicNode {
 public:
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) = 0;
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) = 0;
     virtual std::string getType() const override { return "Expression"; }
+    virtual bool isLeftValue() const { return false; }
 };
 
 class NExternalDeclaration : public BasicNode {
 public:
+    virtual ~NExternalDeclaration() {
+        SAFE_DELETE(next);
+    }
     virtual void codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) = 0;
 
 public:

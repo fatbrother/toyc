@@ -40,16 +40,11 @@ void NFunctionDefinition::codegen(llvm::LLVMContext &context, llvm::Module &modu
         return;
     }
 
-    body->setName("body");
+    body->setName("start");
     body->setParentFunction(function);
     body->codegen(context, module, builder);
 
-    if (llvmReturnType->isVoidTy()) {
-        builder.CreateRetVoid();
-    }
-
-    if (false == llvm::verifyFunction(*function)) {
-        std::cerr << "Error: Function verification failed" << std::endl;
+    if (false == llvm::verifyFunction(*function, &llvm::errs())) {
         return;
     }
 }

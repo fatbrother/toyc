@@ -10,7 +10,8 @@ public:
     NParameter(NType *type, const std::string &name)
         : type(type), name(name) {}
     ~NParameter() {
-        delete type;
+        SAFE_DELETE(type);
+        SAFE_DELETE(next);
     }
     virtual std::string getType() const override { return "Parameter"; }
     llvm::Type *getLLVMType(llvm::LLVMContext &context) const {
@@ -30,18 +31,22 @@ private:
 class NFunctionDefinition : public NExternalDeclaration {
 public:
     NFunctionDefinition(NType *returnType, const std::string &name, NParameter *params, NBlock *body)
-        : returnType(returnType), name(name), params(params), body(body) {}
+        : returnType(returnType), name(name), params(params), body(body) {
+        if (nullptr != body) {
+            body->setIsFunctionBlock(true);
+        }
+    }
     ~NFunctionDefinition() {
-        delete returnType;
-        delete params;
-        delete body;
+        SAFE_DELETE(returnType);
+        SAFE_DELETE(params);
+        SAFE_DELETE(body);
     }
     virtual void codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override;
     virtual std::string getType() const override { return "FunctionDefinition"; }
 
 private:
-    NType *returnType;
     std::string name;
+    NType *returnType;
     NParameter *params;
     NBlock *body;
 };

@@ -28,8 +28,11 @@ toyc::ast::NExternalDeclaration *program;
 	toyc::ast::NType *type;
 	toyc::ast::NDeclarator *declarator;
 	toyc::ast::NStatement *statement;
+	toyc::ast::NBlock *block;
+	toyc::ast::NParentStatement *parent_statement;
 	toyc::ast::NExternalDeclaration *external_declaration;
 	toyc::ast::NParameter *parameter;
+	toyc::ast::UnaryOperator uop;
 	toyc::ast::BineryOperator bop;
 	char *string;
 	int token;
@@ -37,25 +40,27 @@ toyc::ast::NExternalDeclaration *program;
 
 
 %token	<string> IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL TYPEDEF_NAME
-%token	<bop> PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP L_OP G_OP
-%token	<bop> ADD_OP SUB_OP MUL_OP DIV_OP MOD_OP AND_OP OR_OP XOR_OP BIT_AND_OP BIT_OR_OP
+%token	INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP PTR_OP
+%token	AND_OP OR_OP XOR_OP BIT_AND_OP BIT_OR_OP
 %token	MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token	XOR_ASSIGN OR_ASSIGN
 
 %token	TYPEDEF SIZEOF
-%token	<token> BOOL CHAR SHORT INT LONG FLOAT DOUBLE VOID
+%token	BOOL CHAR SHORT INT LONG FLOAT DOUBLE VOID
 %token	SIGNED UNSIGNED CONST STATIC
 %token	STRUCT ELLIPSIS
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
-%type	<expression> expression condition calculation term factor numeric string
+%type	<expression> expression unary_expression condition calculation term factor numeric string
 %type   <type> type
 %type	<bop> condition_op
 %type   <declarator> declarator declarator_list
 %type   <parameter> parameter_list parameter_declaration
-%type   <statement> statement statement_list declaration_statement expression_statement compound_statement jump_statement
+%type   <statement> statement statement_list declaration_statement expression_statement jump_statement for_statement_init_declaration
+%type   <parent_statement>  if_statement for_statement
+%type   <block> compound_statement
 %type   <external_declaration> program external_declaration external_declaration_list function_definition
 
 %start program
@@ -85,11 +90,11 @@ external_declaration
 
 function_definition
 	: type IDENTIFIER '(' parameter_list ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), $4, (toyc::ast::NBlock *)$6);
+		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), $4, $6);
 		delete $2;
 	}
 	| type IDENTIFIER '(' ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), nullptr, (toyc::ast::NBlock *)$5);
+		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), nullptr, $5);
 		delete $2;
 	}
 	| type IDENTIFIER '(' parameter_list ')' ';' {
@@ -97,7 +102,7 @@ function_definition
 		delete $2;
 	}
 	| type IDENTIFIER '(' VOID ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), nullptr, (toyc::ast::NBlock *)$6);
+		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), nullptr, $6);
 		delete $2;
 	}
 	| type IDENTIFIER '(' VOID ')' ';' {
@@ -159,6 +164,27 @@ statement
 	| jump_statement {
 		$$ = $1;
 	}
+	| if_statement {
+		$$ = $1;
+	}
+	| for_statement {
+		$$ = $1;
+	}
+	;
+
+for_statement_init_declaration
+	: expression_statement {
+		$$ = $1;
+	}
+	| declaration_statement {
+		$$ = $1;
+	}
+	;
+
+for_statement
+	: FOR '(' for_statement_init_declaration expression ';' expression ')' statement {
+		$$ = new toyc::ast::NForStatement($3, $4, $6, $8);
+	}
 	;
 
 jump_statement
@@ -199,6 +225,15 @@ declarator_list
 	}
 	;
 
+if_statement
+	: IF '(' expression ')' statement {
+		$$ = new toyc::ast::NIfStatement($3, $5);
+	}
+	| IF '(' expression ')' statement ELSE statement {
+		$$ = new toyc::ast::NIfStatement($3, $5, $7);
+	}
+	;
+
 expression_statement
 	: expression ';' {
 		$$ = new toyc::ast::NExpressionStatement($1);
@@ -233,28 +268,49 @@ calculation:
       term {
         $$ = $1;
       }
-    | calculation ADD_OP term {
+    | calculation '+' term {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::ADD, $3);
       }
-    | calculation SUB_OP term {
+    | calculation '-' term {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::SUB, $3);
       }
     ;
 
 term:
-      factor {
+      unary_expression {
         $$ = $1;
       }
-    | term MUL_OP factor {
+    | term '*' unary_expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MUL, $3);
       }
-    | term DIV_OP factor {
+    | term '/' unary_expression {
         $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::DIV, $3);
       }
-	| term MOD_OP factor {
+	| term '%' unary_expression {
 		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MOD, $3);
 	  }
     ;
+
+unary_expression:
+	  INC_OP factor {
+		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::L_INC, $2);
+	  }
+	| DEC_OP factor {
+		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::L_DEC, $2);
+	  }
+	| factor INC_OP {
+		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::R_INC, $1);
+	  }
+	| factor DEC_OP {
+		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::R_DEC, $1);
+	  }
+	| '!' factor {
+		$$ = new toyc::ast::NUnaryOperator(toyc::ast::UnaryOperator::NOT, $2);
+	  }
+	| factor {
+		$$ = $1;
+	  }
+	;
 
 factor:
 	  '(' expression ')' {
@@ -310,10 +366,10 @@ condition_op
 	| OR_OP {
 		$$ = toyc::ast::BineryOperator::OR;
 	}
-	| L_OP {
+	| '<' {
 		$$ = toyc::ast::BineryOperator::L;
 	}
-	| G_OP {
+	| '>' {
 		$$ = toyc::ast::BineryOperator::G;
 	}
 	;

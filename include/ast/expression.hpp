@@ -9,10 +9,10 @@ public:
     NBinaryOperator(NExpression *lhs, BineryOperator op, NExpression *rhs)
         : lhs(lhs), rhs(rhs), op(op) {}
     ~NBinaryOperator() {
-        delete lhs;
-        delete rhs;
+        SAFE_DELETE(lhs);
+        SAFE_DELETE(rhs);
     }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) override;
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
     virtual std::string getType() const override { return "BinaryOperator"; }
 
 private:
@@ -21,10 +21,32 @@ private:
     BineryOperator op;
 };
 
-class NIdentifier : public NExpression {
+class NUnaryOperator : public NExpression {
+public:
+    NUnaryOperator(UnaryOperator op, NExpression *expr)
+        : op(op), expr(expr) {}
+    ~NUnaryOperator() {
+        SAFE_DELETE(expr);
+    }
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
+    virtual std::string getType() const override { return "UnaryOperator"; }
+
+private:
+    UnaryOperator op;
+    NExpression *expr;
+};
+
+class LeftValue : public NExpression {
+public:
+    virtual llvm::AllocaInst *allocgen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) = 0;
+    virtual bool isLeftValue() const override { return true; }
+};
+
+class NIdentifier : public LeftValue {
 public:
     NIdentifier(const std::string &name) : name(name) {}
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) override;
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
+    virtual llvm::AllocaInst *allocgen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
     virtual std::string getType() const override { return "Identifier"; }
 
 private:
@@ -34,7 +56,7 @@ private:
 class NInteger : public NExpression {
 public:
     NInteger(int value) : value(value) {}
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) override;
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
     virtual std::string getType() const override { return "Integer"; }
 
 private:
@@ -44,7 +66,7 @@ private:
 class NFloat : public NExpression {
 public:
     NFloat(double value) : value(value) {}
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) override;
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
     virtual std::string getType() const override { return "Float"; }
 
 private:
@@ -54,7 +76,7 @@ private:
 class NString : public NExpression {
 public:
     NString(const std::string &value) : value(value) {}
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) override;
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
     virtual std::string getType() const override { return "String"; }
 
 private:
@@ -66,12 +88,10 @@ public:
     NDeclarator(const std::string &name, NExpression *expr)
         : name(name), expr(expr) {}
     ~NDeclarator() {
-        delete expr;
-        if (next) {
-            delete next;
-        }
+        SAFE_DELETE(expr);
+        SAFE_DELETE(next);
     }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NBlock *parent) override {
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override {
         if (nullptr == expr) {
             return nullptr;
         }

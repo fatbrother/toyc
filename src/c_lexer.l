@@ -21,7 +21,7 @@ WS  [ \t\v\n\f]
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
 #include "ast/external_definition.hpp"
-#include "parser/y.tab.hpp"
+#include "y.tab.hpp"
 
 // extern std::unordered_map<std::string, std::string> symbol_table;
 extern int yylineno;
@@ -122,16 +122,16 @@ static int check_type(void);
 ">="					{ TOKEN(GE_OP); }
 "=="					{ TOKEN(EQ_OP); }
 "!="					{ TOKEN(NE_OP); }
-"<"					    { TOKEN(L_OP); }
-">"					    { TOKEN(G_OP); }
-"-"					    { TOKEN(SUB_OP); }
-"+"					    { TOKEN(ADD_OP); }
-"*"					    { TOKEN(MUL_OP); }
-"/"					    { TOKEN(DIV_OP); }
-"%"					    { TOKEN(MOD_OP); }
-"^"					    { TOKEN(XOR_OP); }
-"&"					    { TOKEN(BIT_AND_OP); }
-"|"					    { TOKEN(BIT_OR_OP); }
+"<"					    { return '<'; }
+">"					    { return '>'; }
+"-"					    { return '-'; }
+"+"					    { return '+'; }
+"*"					    { return '*'; }
+"/"					    { return '/'; }
+"%"					    { return '%'; }
+"^"					    { return '^'; }
+"&"					    { return '&'; }
+"|"					    { return '|'; }
 ";"					    { return ';'; }
 ("{"|"<%")				{ return '{'; }
 ("}"|"%>")				{ return '}'; }

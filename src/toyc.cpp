@@ -1,8 +1,10 @@
 #include <iostream>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
-#include "ast/external_definition.hpp"
-#include "parser/parse_file.hpp"
+#include <unistd.h>
+
+#include "ast/node.hpp"
+#include "utility/parse_file.hpp"
 
 extern toyc::ast::NExternalDeclaration *program;
 
@@ -15,44 +17,44 @@ void help() {
 
 int main(int argc, char *argv[]) {
     int res = 0;
-    std::string fileName;
+    std::string inputFileName;
+    std::string outputFileName;
+    char flag;
 
     if (argc < 2) {
         help();
         return -1;
     }
 
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "-h" || arg == "--help") {
-            help();
-            return 0;
-        } else if (arg == "-o" || arg == "--output") {
-            if (i + 1 < argc) {
-                // Handle output file option
-                ++i;
-            } else {
-                std::cerr << "Error: No output file specified." << std::endl;
+    while ((flag = getopt(argc, argv, "ho:")) != -1) {
+        switch (flag) {
+            case 'h':
+                help();
+                return 0;
+            case 'o':
+                outputFileName = std::string(optarg);
+                break;
+            case '?':
+            default:
+                std::cerr << "Unknown option: " << static_cast<char>(flag) << std::endl;
                 return -1;
-            }
-        } else {
-            fileName = arg;
         }
     }
-    if (fileName.empty()) {
+    inputFileName = argv[optind];
+
+    if (inputFileName.empty()) {
         std::cerr << "Error: No input file specified." << std::endl;
         return -1;
     }
     // Parse the file
-    res = toyc::parser::parseFile(fileName);
+    res = toyc::parser::parseFile(inputFileName);
     if (res != 0) {
-        std::cerr << "Failed to parse file: " << fileName << std::endl;
+        std::cerr << "Failed to parse file: " << inputFileName << std::endl;
         return -1;
     }
-    std::cout << "File parsed successfully: " << fileName << std::endl;
 
     llvm::LLVMContext context;
-    llvm::Module module("main", context);
+    llvm::Module module(inputFileName, context);
     llvm::IRBuilder<> builder(context);
 
     for (auto &decl = program; decl != nullptr; decl = decl->next) {
