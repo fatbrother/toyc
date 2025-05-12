@@ -10,41 +10,43 @@ void NFunctionDefinition::codegen(llvm::LLVMContext &context, llvm::Module &modu
     llvm::Type *llvmReturnType = returnType->getLLVMType(context);
     std::vector<llvm::Type *> paramTypes;
     std::vector<std::string> paramNames;
-    NParameter *param = nullptr;
-    llvm::Function *function = module.getFunction(name);
+    NParameter *paramIt = nullptr;
+    llvm::Function *function = nullptr;
+    llvm::FunctionType *functionType = nullptr;
 
-    if (nullptr == function) {
-        for (param = params; param != nullptr; param = param->next) {
-            llvm::Type *paramType = param->getLLVMType(context);
-            if (nullptr == paramType) {
-                std::cerr << "Error: Parameter type is null" << std::endl;
-                return;
-            }
-
-            paramTypes.push_back(paramType);
-            paramNames.push_back(param->getName());
+    for (NParameter *paramIt = params; paramIt != nullptr; paramIt = paramIt->next) {
+        llvm::Type *paramType = paramIt->getLLVMType(context);
+        if (nullptr == paramType) {
+            std::cerr << "Error: Parameter type is null" << std::endl;
+            return;
         }
 
-        llvm::FunctionType *functionType = llvm::FunctionType::get(llvmReturnType, paramTypes, false);
-        function = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, module);
-
-        param = params;
-        for (auto it = function->arg_begin(), end = function->arg_end(); it != end; ++it) {
-            it->setName(param->getName());
-            param = param->next;
-        }
+        paramTypes.push_back(paramType);
+        paramNames.push_back(paramIt->getName());
     }
 
-    if (nullptr == body) {
-        std::cerr << "Error: Function body is null" << std::endl;
+    functionType = llvm::FunctionType::get(llvmReturnType, paramTypes, false);
+    function = static_cast<llvm::Function *>(module.getOrInsertFunction(name, functionType).getCallee());
+    if (nullptr == function) {
+        std::cerr << "Error: Function is null" << std::endl;
         return;
     }
 
-    body->setName("start");
+    paramIt = params;
+    for (auto it = function->arg_begin(); it != function->arg_end(); ++it) {
+        it->setName(paramIt->getName());
+        paramIt = paramIt->next;
+    }
+
+    if (nullptr == body) {
+        return;
+    }
+
+    body->setName("entry");
     body->setParentFunction(function);
     body->codegen(context, module, builder);
 
-    if (false == llvm::verifyFunction(*function, &llvm::errs())) {
+    if (false != llvm::verifyFunction(*function, &llvm::errs())) {
         return;
     }
 }

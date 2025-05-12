@@ -141,6 +141,34 @@ llvm::Value *NAssignment::codegen(llvm::LLVMContext &context, llvm::Module &modu
     return rhsValue;
 }
 
+llvm::Value *NArguments::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+    if (nullptr == expr) {
+        std::cerr << "Error: Expression is null" << std::endl;
+        return nullptr;
+    }
+    return expr->codegen(context, module, builder, parent);
+}
+
+llvm::Value *NFunctionCall::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+    std::vector<llvm::Value *> args;
+    llvm::Function *function = module.getFunction(name);
+    if (nullptr == function) {
+        std::cerr << "Error: Function not found: " << name << std::endl;
+        return nullptr;
+    }
+
+    for (NArguments *argNode = argNodes; argNode != nullptr; argNode = argNode->next) {
+        llvm::Value *argValue = argNode->codegen(context, module, builder, parent);
+        if (nullptr == argValue) {
+            std::cerr << "Error: Argument value is null" << std::endl;
+            return nullptr;
+        }
+        args.push_back(argValue);
+    }
+
+    return builder.CreateCall(function, args, "call");
+}
+
 llvm::Value *NInteger::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
     return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), value);
 }

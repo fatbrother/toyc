@@ -31,11 +31,7 @@ private:
 class NFunctionDefinition : public NExternalDeclaration {
 public:
     NFunctionDefinition(NType *returnType, const std::string &name, NParameter *params, NBlock *body)
-        : returnType(returnType), name(name), params(params), body(body) {
-        if (nullptr != body) {
-            body->setIsFunctionBlock(true);
-        }
-    }
+        : returnType(returnType), name(name), params(params), body(body) {}
     ~NFunctionDefinition() {
         SAFE_DELETE(returnType);
         SAFE_DELETE(params);

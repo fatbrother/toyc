@@ -73,10 +73,8 @@ public:
     void setParentFunction(llvm::Function *parent) { this->parentFunction = parent; }
     void setName(const std::string &name) { this->name = name; }
     void setNextBlock(llvm::BasicBlock *nextBlock) { this->nextBlock = nextBlock; }
-    void setIsFunctionBlock(bool isFunctionBlock) { this->isFunctionBlock = isFunctionBlock; }
 
 private:
-    bool isFunctionBlock = false;
     std::string name;
     NStatement *statements;
     llvm::BasicBlock *nextBlock = nullptr;

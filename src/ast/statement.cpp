@@ -52,11 +52,12 @@ llvm::Value *NDeclarationStatement::codegen(llvm::LLVMContext &context, llvm::Mo
 }
 
 llvm::Value *NBlock::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) {
-    llvm::BasicBlock *block = llvm::BasicBlock::Create(context, name, parentFunction);
+    llvm::Function *parent = (nullptr == parentFunction) ? builder.GetInsertBlock()->getParent() : parentFunction;
+    llvm::BasicBlock *block = llvm::BasicBlock::Create(context, name, parent);
 
     builder.SetInsertPoint(block);
 
-    if (true == isFunctionBlock) {
+    if (nullptr != parentFunction) {
         for (auto &arg : parentFunction->args()) {
             llvm::AllocaInst *allocaInst = builder.CreateAlloca(arg.getType(), nullptr, arg.getName());
             builder.CreateStore(&arg, allocaInst);
@@ -111,7 +112,6 @@ llvm::Value *NIfStatement::codegen(llvm::LLVMContext &context, llvm::Module &mod
     thenBlockNode->setParent(parent);
     thenBlockNode->setName("if_then");
     thenBlockNode->setNextBlock(mergeBlock);
-    thenBlockNode->setParentFunction(function);
     thenBlock = static_cast<llvm::BasicBlock *>(thenBlockNode->codegen(context, module, builder));
     if (nullptr == thenBlock) {
         std::cerr << "Error: Then block is null" << std::endl;
@@ -122,7 +122,6 @@ llvm::Value *NIfStatement::codegen(llvm::LLVMContext &context, llvm::Module &mod
         elseBlockNode->setParent(parent);
         elseBlockNode->setName("if_else");
         elseBlockNode->setNextBlock(mergeBlock);
-        elseBlockNode->setParentFunction(function);
         elseBlock = static_cast<llvm::BasicBlock *>(elseBlockNode->codegen(context, module, builder));
         if (nullptr == elseBlock) {
             std::cerr << "Error: Else block is null" << std::endl;
@@ -150,7 +149,6 @@ llvm::Value *NForStatement::codegen(llvm::LLVMContext &context, llvm::Module &mo
     bodyNode->setParent(this);
     bodyNode->setName("for_body");
     bodyNode->setNextBlock(loopIncrement);
-    bodyNode->setParentFunction(function);
     loopBody = static_cast<llvm::BasicBlock *>(bodyNode->codegen(context, module, builder));
     if (nullptr == loopBody) {
         std::cerr << "Error: Loop body is null" << std::endl;

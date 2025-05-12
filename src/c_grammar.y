@@ -32,6 +32,7 @@ toyc::ast::NExternalDeclaration *program;
 	toyc::ast::NParentStatement *parent_statement;
 	toyc::ast::NExternalDeclaration *external_declaration;
 	toyc::ast::NParameter *parameter;
+	toyc::ast::NArguments *arguments;
 	toyc::ast::BineryOperator bop;
 	char *string;
 	int token;
@@ -61,6 +62,7 @@ toyc::ast::NExternalDeclaration *program;
 %type   <parent_statement>  if_statement for_statement
 %type   <block> compound_statement
 %type   <external_declaration> program external_declaration external_declaration_list function_definition
+%type   <arguments> argument_expression_list
 
 %start program
 %%
@@ -348,6 +350,24 @@ postfix_expression:
 	| postfix_expression DEC_OP {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::R_DEC, $1);
 	  }
+	| IDENTIFIER '(' argument_expression_list ')' {
+		$$ = new toyc::ast::NFunctionCall(std::string($1), $3);
+		delete $1;
+	  }
+	| IDENTIFIER '(' ')' {
+		$$ = new toyc::ast::NFunctionCall(std::string($1), nullptr);
+		delete $1;
+	  }
+	;
+
+argument_expression_list
+	: assignment_expression {
+		$$ = new toyc::ast::NArguments($1);
+	}
+	| assignment_expression ',' argument_expression_list {
+		$$ = new toyc::ast::NArguments($1);
+		$$->next = $3;
+	}
 	;
 
 primary_expression:

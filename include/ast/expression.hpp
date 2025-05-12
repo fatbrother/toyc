@@ -121,4 +121,34 @@ private:
     NExpression *rhs;
 };
 
+class NArguments : public NExpression {
+public:
+    NArguments(NExpression *expr) : expr(expr) {}
+    ~NArguments() {
+        SAFE_DELETE(expr);
+        SAFE_DELETE(next);
+    }
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
+    virtual std::string getType() const override { return "Arguments"; }
+
+public:
+    NArguments *next = nullptr;
+    NExpression *expr = nullptr;
+};
+
+class NFunctionCall : public NExpression {
+public:
+    NFunctionCall(const std::string &name, NArguments *argNodes)
+        : name(name), argNodes(argNodes) {}
+    ~NFunctionCall() {
+        SAFE_DELETE(argNodes);
+    }
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
+    virtual std::string getType() const override { return "FunctionCall"; }
+
+private:
+    std::string name;
+    NArguments *argNodes;
+};
+
 } // namespace toyc::ast
