@@ -1,9 +1,12 @@
 #include <iostream>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Transforms/Utils.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Scalar/GVN.h>
 #include <unistd.h>
 
 #include "ast/node.hpp"
+#include "obj/object_genner.hpp"
 #include "utility/parse_file.hpp"
 
 extern toyc::ast::NExternalDeclaration *program;
@@ -19,7 +22,9 @@ int main(int argc, char *argv[]) {
     int res = 0;
     std::string inputFileName;
     std::string outputFileName;
+    std::string tmpFileChar = "abcdefghijklmnopqrstuvwxyz";
     char flag;
+    bool isOutputFile = false;
 
     if (argc < 2) {
         help();
@@ -53,6 +58,15 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    if (outputFileName.empty()) {
+        for (int i = 0; i < tmpFileChar.size(); ++i) {
+            outputFileName += tmpFileChar[i];
+            if (access(outputFileName.c_str(), F_OK) == -1) {
+                break;
+            }
+        }
+    }
+
     llvm::LLVMContext context;
     llvm::Module module(inputFileName, context);
     llvm::IRBuilder<> builder(context);
@@ -61,7 +75,24 @@ int main(int argc, char *argv[]) {
         decl->codegen(context, module, builder);
     }
 
-    module.print(llvm::outs(), nullptr);
+    llvm::legacy::PassManager passManager;
+    passManager.add(llvm::createPromoteMemoryToRegisterPass());
+    passManager.add(llvm::createInstructionNamerPass());
+    passManager.add(llvm::createReassociatePass());
+    passManager.add(llvm::createGVNPass());
+    passManager.add(llvm::createCFGSimplificationPass());
+    passManager.run(module);
+
+    // print module
+    // module.print(llvm::errs(), nullptr);
+
+    // generate object file
+    toyc::obj::ObjectGenner objectGenner;
+    isOutputFile = objectGenner.generate(module);
+    if (!isOutputFile) {
+        std::cerr << "Failed to generate object file." << std::endl;
+        return -1;
+    }
 
     return 0;
 }

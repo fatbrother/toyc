@@ -152,6 +152,7 @@ llvm::Value *NArguments::codegen(llvm::LLVMContext &context, llvm::Module &modul
 llvm::Value *NFunctionCall::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
     std::vector<llvm::Value *> args;
     llvm::Function *function = module.getFunction(name);
+    llvm::Value *res = nullptr;
     if (nullptr == function) {
         std::cerr << "Error: Function not found: " << name << std::endl;
         return nullptr;
@@ -166,7 +167,13 @@ llvm::Value *NFunctionCall::codegen(llvm::LLVMContext &context, llvm::Module &mo
         args.push_back(argValue);
     }
 
-    return builder.CreateCall(function, args, "call");
+    if (function->getReturnType()->isVoidTy()) {
+        res = builder.CreateCall(function, args);
+    } else {
+        res = builder.CreateCall(function, args, "calltmp");
+    }
+
+    return res;
 }
 
 llvm::Value *NInteger::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
