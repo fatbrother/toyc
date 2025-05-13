@@ -27,7 +27,6 @@ $(BUILDDIR)/lex.yy.cpp: $(SRCDIR)/c_lexer.l
 $(BUILDDIR)/y.tab.cpp $(BUILDDIR)/y.tab.hpp: $(SRCDIR)/c_grammar.y
 	@mkdir -p $(BUILDDIR)
 	$(YACC) -d -o $(BUILDDIR)/y.tab.cpp $<
-	cp $(BUILDDIR)/y.tab.hpp $(INCDIR)/parser/
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(INCLUDES)
 	@mkdir -p $(dir $@)
