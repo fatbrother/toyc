@@ -131,6 +131,9 @@ parameter_declaration
 		$$ = new toyc::ast::NParameter($1, std::string($2));
 		delete $2;
 	}
+	| ELLIPSIS {
+		$$ = new toyc::ast::NParameter(nullptr, "", true);
+	}
 	;
 
 compound_statement
@@ -382,8 +385,7 @@ primary_expression:
         $$ = $1;
       }
     | STRING_LITERAL {
-		std::string str($1);
-        $$ = new toyc::ast::NString(str.substr(1, str.length() - 2));
+        $$ = new toyc::ast::NString(std::string($1));
 		delete $1;
       }
 
@@ -414,7 +416,10 @@ relational_expression_op
 	;
 
 type
-	: TYPEDEF_NAME {
+	: type '*' {
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_PTR, $1);
+	}
+	| TYPEDEF_NAME {
 		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_DEFINED, std::string($1));
 		delete $1;
 	}

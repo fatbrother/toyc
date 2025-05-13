@@ -7,8 +7,8 @@ namespace toyc::ast {
 
 class NParameter : public BasicNode {
 public:
-    NParameter(NType *type, const std::string &name)
-        : type(type), name(name) {}
+    NParameter(NType *type, const std::string &name, bool isVarArg = false)
+        : type(type), name(name), isVarArg(isVarArg) {}
     ~NParameter() {
         SAFE_DELETE(type);
         SAFE_DELETE(next);
@@ -21,6 +21,7 @@ public:
 
 public:
     NParameter *next = nullptr;
+    bool isVarArg = false;
 
 private:
     NType *type;

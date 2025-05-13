@@ -185,5 +185,5 @@ llvm::Value *NFloat::codegen(llvm::LLVMContext &context, llvm::Module &module, l
 }
 
 llvm::Value *NString::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
-    return llvm::ConstantDataArray::getString(context, value);
+    return builder.CreateGlobalStringPtr(value, "str");
 }

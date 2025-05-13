@@ -16,6 +16,7 @@ enum VarType {
     VAR_TYPE_DOUBLE,
     VAR_TYPE_VOID,
     VAR_TYPE_DEFINED,
+    VAR_TYPE_PTR,
 };
 
 enum BineryOperator {
@@ -67,12 +68,15 @@ class NType : public BasicNode {
 public:
     NType(VarType type, const std::string &name = "")
         : type(type), name(name) {}
+    NType(VarType type, NType *pointTo)
+        : type(type), pointTo(pointTo) {}
     virtual std::string getType() const override { return "Type"; }
     virtual llvm::Type *getLLVMType(llvm::LLVMContext &context) const;
 
 private:
     VarType type;
     std::string name;
+    NType *pointTo = nullptr;
 };
 
 class NBlock;

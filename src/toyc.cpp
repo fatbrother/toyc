@@ -75,16 +75,16 @@ int main(int argc, char *argv[]) {
         decl->codegen(context, module, builder);
     }
 
-    llvm::legacy::PassManager passManager;
-    passManager.add(llvm::createPromoteMemoryToRegisterPass());
-    passManager.add(llvm::createInstructionNamerPass());
-    passManager.add(llvm::createReassociatePass());
-    passManager.add(llvm::createGVNPass());
-    passManager.add(llvm::createCFGSimplificationPass());
-    passManager.run(module);
+    // llvm::legacy::PassManager passManager;
+    // passManager.add(llvm::createPromoteMemoryToRegisterPass());
+    // passManager.add(llvm::createInstructionNamerPass());
+    // passManager.add(llvm::createReassociatePass());
+    // passManager.add(llvm::createGVNPass());
+    // passManager.add(llvm::createCFGSimplificationPass());
+    // passManager.run(module);
 
     // print module
-    // module.print(llvm::errs(), nullptr);
+    module.print(llvm::outs(), nullptr);
 
     // generate object file
     toyc::obj::ObjectGenner objectGenner;

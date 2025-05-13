@@ -13,8 +13,14 @@ void NFunctionDefinition::codegen(llvm::LLVMContext &context, llvm::Module &modu
     NParameter *paramIt = nullptr;
     llvm::Function *function = nullptr;
     llvm::FunctionType *functionType = nullptr;
+    bool isVarArg = false;
 
     for (NParameter *paramIt = params; paramIt != nullptr; paramIt = paramIt->next) {
+        if (true == paramIt->isVarArg) {
+            isVarArg = true;
+            break;
+        }
+
         llvm::Type *paramType = paramIt->getLLVMType(context);
         if (nullptr == paramType) {
             std::cerr << "Error: Parameter type is null" << std::endl;
@@ -25,7 +31,7 @@ void NFunctionDefinition::codegen(llvm::LLVMContext &context, llvm::Module &modu
         paramNames.push_back(paramIt->getName());
     }
 
-    functionType = llvm::FunctionType::get(llvmReturnType, paramTypes, false);
+    functionType = llvm::FunctionType::get(llvmReturnType, paramTypes, isVarArg);
     function = static_cast<llvm::Function *>(module.getOrInsertFunction(name, functionType).getCallee());
     if (nullptr == function) {
         std::cerr << "Error: Function is null" << std::endl;

@@ -2,6 +2,8 @@
 
 #include <ast/node.hpp>
 
+#include <iostream>
+
 namespace toyc::ast {
 
 class NBinaryOperator : public NExpression {

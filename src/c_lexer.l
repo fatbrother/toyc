@@ -30,13 +30,15 @@ extern "C" int yylex(void);
 int yycolumn = 1;
 
 extern void yyerror(const char *);  /* prints grammar violation message */
+static int check_type(void);
+static char* unescape_string(const char* yytext, int yyleng);
 
 #define SAVE_TOKEN yylval.string = new char[yyleng + 1]; \
     strncpy(yylval.string, yytext, yyleng); \
     yylval.string[yyleng] = '\0';
+#define SAVE_STRING yylval.string = unescape_string(yytext, yyleng);
 #define TOKEN(t) (yylval.token = t); return t;
 
-static int check_type(void);
 %}
 
 %x COMMENT
@@ -98,7 +100,7 @@ static int check_type(void);
 {HP}{H}*"."{H}+{P}{FS}?			    { SAVE_TOKEN; return F_CONSTANT; }
 {HP}{H}+"."{P}{FS}?			        { SAVE_TOKEN; return F_CONSTANT; }
 
-({SP}?\"([^"\\\n]|{ES})*\"{WS}*)+	{ SAVE_TOKEN; return STRING_LITERAL; }
+({SP}?\"([^"\\\n]|{ES})*\"{WS}*)+	{ SAVE_STRING; return STRING_LITERAL; }
 
 "..."					{ TOKEN(ELLIPSIS); }
 ">>="					{ TOKEN(RIGHT_ASSIGN); }
@@ -157,4 +159,30 @@ static int check_type(void);
 static int check_type(void)
 {
     return IDENTIFIER;
+}
+
+static char* unescape_string(const char* yytext, int yyleng) {
+    char* result = (char*)malloc(yyleng);
+    char* dst = result;
+    const char* src = yytext + 1;
+
+    while (*src && *(src) != '"') {
+        if (*src == '\\') {
+            src++;
+            switch (*src) {
+                case 'n': *dst++ = '\n'; break;
+                case 't': *dst++ = '\t'; break;
+                case 'r': *dst++ = '\r'; break;
+                case '\\': *dst++ = '\\'; break;
+                case '"': *dst++ = '"'; break;
+                default: *dst++ = *src; break;
+            }
+        } else {
+            *dst++ = *src;
+        }
+        src++;
+    }
+    *dst = '\0';
+
+    return result;
 }
