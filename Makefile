@@ -15,7 +15,7 @@ LLVM_CXXFLAGS = $(shell llvm-config --includedir)
 LLVM_LDFLAGS = $(shell llvm-config --ldflags)
 LLVM_LIB = $(shell llvm-config --libs)
 
-FLAGS = -I$(INCDIR) -I$(LLVM_CXXFLAGS) -std=c++17
+FLAGS = -g -I$(INCDIR) -I$(LLVM_CXXFLAGS) -std=c++17
 LDFLAGS = $(LLVM_LDFLAGS) $(LLVM_LIB)
 
 all: toyc
