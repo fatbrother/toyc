@@ -8,7 +8,7 @@ class ObjectGenner {
 public:
     ObjectGenner() = default;
 
-    bool generate(llvm::Module& module);
+    bool generate(llvm::Module& module, const std::string& outputFileName);
 };
 
 } // namespace toyc::obj

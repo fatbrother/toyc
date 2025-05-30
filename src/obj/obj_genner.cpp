@@ -12,7 +12,7 @@
 
 namespace toyc::obj {
 
-bool ObjectGenner::generate(llvm::Module& module) {
+bool ObjectGenner::generate(llvm::Module& module, const std::string& outputFileName) {
     auto triple = llvm::sys::getDefaultTargetTriple();
     module.setTargetTriple(triple);
 
@@ -39,9 +39,8 @@ bool ObjectGenner::generate(llvm::Module& module) {
     module.setTargetTriple(triple);
 
     // Emit object file
-    std::string objFile = "output.o";
     std::error_code EC;
-    llvm::raw_fd_ostream dest(objFile, EC, llvm::sys::fs::OF_None);
+    llvm::raw_fd_ostream dest(outputFileName, EC, llvm::sys::fs::OF_None);
     if (EC) {
         llvm::errs() << "Could not open object file: " << EC.message() << "\n";
         return false;

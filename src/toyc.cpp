@@ -11,33 +11,39 @@
 
 extern toyc::ast::NExternalDeclaration *program;
 
+#define TMP_FILE_NAME "%%%%TMP%%%%.o"
+
 void help() {
     std::cout << "Usage: toyc <filename>" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  -h, --help     Show this help message" << std::endl;
     std::cout << "  -o, --output   Specify output file" << std::endl;
+    std::cout << "  -l, --emit-llvm  Emit LLVM IR to the specified file" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
     int res = 0;
     std::string inputFileName;
     std::string outputFileName;
-    std::string tmpFileChar = "abcdefghijklmnopqrstuvwxyz";
     char flag;
     bool isOutputFile = false;
+    bool emitLLVM = false;
 
     if (argc < 2) {
         help();
         return -1;
     }
 
-    while ((flag = getopt(argc, argv, "ho:")) != -1) {
+    while ((flag = getopt(argc, argv, "hlo:")) != -1) {
         switch (flag) {
             case 'h':
                 help();
                 return 0;
             case 'o':
                 outputFileName = std::string(optarg);
+                break;
+            case 'l':
+                emitLLVM = true;
                 break;
             case '?':
             default:
@@ -46,6 +52,7 @@ int main(int argc, char *argv[]) {
         }
     }
     inputFileName = argv[optind];
+    outputFileName = outputFileName.empty() ? inputFileName.substr(0, inputFileName.find_last_of('.')) : outputFileName;
 
     if (inputFileName.empty()) {
         std::cerr << "Error: No input file specified." << std::endl;
@@ -75,24 +82,46 @@ int main(int argc, char *argv[]) {
         decl->codegen(context, module, builder);
     }
 
-    // llvm::legacy::PassManager passManager;
-    // passManager.add(llvm::createPromoteMemoryToRegisterPass());
-    // passManager.add(llvm::createInstructionNamerPass());
-    // passManager.add(llvm::createReassociatePass());
-    // passManager.add(llvm::createGVNPass());
-    // passManager.add(llvm::createCFGSimplificationPass());
-    // passManager.run(module);
+    llvm::legacy::PassManager passManager;
+    passManager.add(llvm::createPromoteMemoryToRegisterPass());
+    passManager.add(llvm::createInstructionNamerPass());
+    passManager.add(llvm::createReassociatePass());
+    passManager.add(llvm::createGVNPass());
+    passManager.add(llvm::createCFGSimplificationPass());
+    passManager.run(module);
 
-    // print module
-    module.print(llvm::outs(), nullptr);
+    if (emitLLVM) {
+        std::string llvmFileName = outputFileName + ".ll";
+        std::error_code EC;
+        llvm::raw_fd_ostream llvmFile(llvmFileName, EC);
+        if (EC) {
+            std::cerr << "Error opening file for writing: " << EC.message() << std::endl;
+            return -1;
+        }
+        module.print(llvmFile, nullptr);
+        llvmFile.close();
+        return 0;
+    }
 
     // generate object file
     toyc::obj::ObjectGenner objectGenner;
-    isOutputFile = objectGenner.generate(module);
+    isOutputFile = objectGenner.generate(module, TMP_FILE_NAME);
     if (!isOutputFile) {
         std::cerr << "Failed to generate object file." << std::endl;
         return -1;
     }
+
+    // generate executable file
+    std::string command = "gcc -o " + outputFileName + " " TMP_FILE_NAME " -lm";
+    int ret = system(command.c_str());
+    if (ret == -1) {
+        std::cerr << "Failed to generate executable file." << std::endl;
+        return -1;
+    }
+
+    // remove object file
+    command = "rm -f " TMP_FILE_NAME;
+    ret = system(command.c_str());
 
     return 0;
 }
