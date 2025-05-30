@@ -8,8 +8,10 @@
 #include "ast/node.hpp"
 #include "obj/object_genner.hpp"
 #include "utility/parse_file.hpp"
+#include "utility/error_handler.hpp"
 
 extern toyc::ast::NExternalDeclaration *program;
+extern toyc::utility::ErrorHandler *error_handler;
 
 #define TMP_FILE_NAME "%%%%TMP%%%%.o"
 
@@ -60,18 +62,10 @@ int main(int argc, char *argv[]) {
     }
     // Parse the file
     res = toyc::parser::parseFile(inputFileName);
-    if (res != 0) {
-        std::cerr << "Failed to parse file: " << inputFileName << std::endl;
+    if (res != 0 && error_handler != nullptr) {
+        error_handler->setFileName(inputFileName);
+        error_handler->logError();
         return -1;
-    }
-
-    if (outputFileName.empty()) {
-        for (int i = 0; i < tmpFileChar.size(); ++i) {
-            outputFileName += tmpFileChar[i];
-            if (access(outputFileName.c_str(), F_OK) == -1) {
-                break;
-            }
-        }
     }
 
     llvm::LLVMContext context;

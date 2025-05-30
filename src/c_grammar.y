@@ -6,8 +6,11 @@
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
 #include "ast/external_definition.hpp"
+#include "utility/error_handler.hpp"
 
 // #include <unordered_map>
+
+#define YYERROR_VERBOSE 1
 
 void yyerror(const char *s);
 extern "C" int yylex(void);
@@ -17,8 +20,10 @@ extern int yyparse();
 extern int yylineno;
 extern int yycolumn;
 extern char* yytext;
+extern int yyleng;
 
 toyc::ast::NExternalDeclaration *program;
+toyc::utility::ErrorHandler *error_handler = nullptr;
 
 %}
 
@@ -458,9 +463,9 @@ type
 %%
 #include <stdio.h>
 
-void yyerror(const char *s)
+void yyerror(const char *str)
 {
-	std::cerr << yylineno << ":" << yycolumn << " " << "Error: " << s << " \"" << yytext << "\"" << std::endl;
+    error_handler = new toyc::utility::ErrorHandler(std::string(str), yylineno, yycolumn - yyleng);
 }
 
 /* void insert_symbol(const std::string &s, int type)
