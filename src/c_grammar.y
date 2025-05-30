@@ -341,6 +341,12 @@ unary_expression:
 	| DEC_OP unary_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::L_DEC, $2);
 	  }
+	| '&' unary_expression {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::ADDR, $2);
+	  }
+	| '*' unary_expression {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::DEREF, $2);
+	  }
 	;
 
 postfix_expression:

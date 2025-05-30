@@ -45,7 +45,9 @@ enum UnaryOperator {
     R_INC,
     L_DEC,
     R_DEC,
-    NOT
+    NOT,
+    ADDR,
+    DEREF,
 };
 
 #define SAFE_DELETE(ptr) \

@@ -80,6 +80,17 @@ llvm::Value *NUnaryExpression::codegen(llvm::LLVMContext &context, llvm::Module 
                 tmp = builder.CreateSub(value, one, "dec");
                 builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
                 break;
+            case ADDR:
+                value = expr->allocgen(context, module, builder, parent);
+                break;
+            case DEREF:
+                value = expr->codegen(context, module, builder, parent);
+                if (nullptr == value) {
+                    std::cerr << "Error: Dereference failed" << std::endl;
+                    return nullptr;
+                }
+                value = builder.CreateLoad(value->getType()->getPointerElementType(), value, "deref");
+                break;
             default:
                 std::cerr << "Unknown unary operator: " << op << std::endl;
                 return nullptr;
