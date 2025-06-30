@@ -100,6 +100,54 @@ llvm::Value *NUnaryExpression::codegen(llvm::LLVMContext &context, llvm::Module 
     return value;
 }
 
+llvm::Value *NConditionalExpression::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+    if (nullptr == condition || nullptr == trueExpr || nullptr == falseExpr) {
+        std::cerr << "Error: One of the expressions is null" << std::endl;
+        return nullptr;
+    }
+
+    llvm::Value *condValue = condition->codegen(context, module, builder, parent);
+    if (nullptr == condValue) {
+        std::cerr << "Error: Condition code generation failed" << std::endl;
+        return nullptr;
+    }
+
+    condValue = builder.CreateICmpNE(condValue, llvm::ConstantInt::get(condValue->getType(), 0), "cond");
+
+    llvm::Function *function = builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *trueBlock = llvm::BasicBlock::Create(context, "true", function);
+    llvm::BasicBlock *falseBlock = llvm::BasicBlock::Create(context, "false", function);
+    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(context, "merge", function);
+
+    builder.CreateCondBr(condValue, trueBlock, falseBlock);
+
+    builder.SetInsertPoint(trueBlock);
+    llvm::Value *trueValue = trueExpr->codegen(context, module, builder, parent);
+    if (nullptr == trueValue) {
+        std::cerr << "Error: True expression code generation failed" << std::endl;
+        return nullptr;
+    }
+    builder.CreateBr(mergeBlock);
+
+    builder.SetInsertPoint(falseBlock);
+    llvm::Value *falseValue = falseExpr->codegen(context, module, builder, parent);
+    if (nullptr == falseValue) {
+        std::cerr << "Error: False expression code generation failed" << std::endl;
+        return nullptr;
+    }
+    builder.CreateBr(mergeBlock);
+
+    builder.SetInsertPoint(mergeBlock);
+
+    // Merge the two branches
+    llvm::PHINode * phiNode = builder.CreatePHI(trueValue->getType(), 2, "phi");
+
+    phiNode->addIncoming(trueValue, trueBlock);
+    phiNode->addIncoming(falseValue, falseBlock);
+
+    return phiNode;
+}
+
 llvm::Value *NIdentifier::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
     if (nullptr == parent) {
         std::cerr << "Error: Parent block is null" << std::endl;

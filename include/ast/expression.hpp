@@ -41,6 +41,24 @@ private:
     NExpression *expr;
 };
 
+class NConditionalExpression : public NExpression {
+public:
+    NConditionalExpression(NExpression *condition, NExpression *trueExpr, NExpression *falseExpr)
+        : condition(condition), trueExpr(trueExpr), falseExpr(falseExpr) {}
+    ~NConditionalExpression() {
+        SAFE_DELETE(condition);
+        SAFE_DELETE(trueExpr);
+        SAFE_DELETE(falseExpr);
+    }
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) override;
+    virtual std::string getType() const override { return "ConditionalExpression"; }
+
+private:
+    NExpression *condition;
+    NExpression *trueExpr;
+    NExpression *falseExpr;
+};
+
 class NIdentifier : public NExpression {
 public:
     NIdentifier(const std::string &name) : name(name) {}

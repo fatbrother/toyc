@@ -45,8 +45,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 
 
 %token	<string> IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL TYPEDEF_NAME
-%token	INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP PTR_OP
-%token	AND_OP OR_OP XOR_OP BIT_AND_OP BIT_OR_OP
+%token	INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP PTR_OP AND_OP OR_OP
 %token	MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token	XOR_ASSIGN OR_ASSIGN
@@ -58,7 +57,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
-%type	<expression> expression unary_expression assignment_expression relational_expression equality_expression additive_expression multiplicative_expression primary_expression numeric postfix_expression
+%type	<expression> expression unary_expression assignment_expression relational_expression equality_expression additive_expression multiplicative_expression primary_expression numeric postfix_expression conditional_expression logical_or_expression logical_and_expression inclusive_or_expression exclusive_or_expression and_expression
 %type   <type> type
 %type	<bop> relational_expression_op
 %type   <declarator> declarator declarator_list
@@ -252,22 +251,16 @@ expression_statement
 	}
 	;
 
-expression:
-      assignment_expression AND_OP expression {
-        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::AND, $3);
-      }
-    | assignment_expression OR_OP expression {
-        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::OR, $3);
-      }
-    | assignment_expression {
-        $$ = $1;
-      }
-    ;
+expression
+	: assignment_expression {
+		$$ = $1;
+	  }
+	;
 
 assignment_expression
-	: equality_expression {
+	: conditional_expression {
 		$$ = $1;
-      }
+	  }
 	| unary_expression '=' assignment_expression {
 		$$ = new toyc::ast::NAssignment($1, $3);
 	  }
@@ -288,8 +281,62 @@ assignment_expression
 	  }
 	;
 
-equality_expression:
-	  equality_expression EQ_OP relational_expression {
+conditional_expression
+	: logical_or_expression {
+		$$ = $1;
+	  }
+	| logical_or_expression '?' expression ':' conditional_expression {
+		$$ = new toyc::ast::NConditionalExpression($1, $3, $5);
+	  }
+	;
+
+logical_or_expression
+	: logical_and_expression {
+		$$ = $1;
+	  }
+	| logical_or_expression OR_OP expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::OR, $3);
+	  }
+	;
+
+logical_and_expression
+	: inclusive_or_expression {
+		$$ = $1;
+	  }
+	| logical_and_expression  AND_OP expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::AND, $3);
+	  }
+	;
+
+inclusive_or_expression
+	: exclusive_or_expression {
+		$$ = $1;
+	  }
+	| inclusive_or_expression '|' exclusive_or_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::BIT_OR, $3);
+	  }
+	;
+
+exclusive_or_expression
+	: and_expression {
+		$$ = $1;
+	  }
+	| exclusive_or_expression '^' and_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::XOR, $3);
+	  }
+	;
+
+and_expression
+	: equality_expression {
+		$$ = $1;
+	  }
+	| and_expression '&' equality_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::BIT_AND, $3);
+	  }
+	;
+
+equality_expression
+	: equality_expression EQ_OP relational_expression {
 		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::EQ, $3);
 	  }
 	| equality_expression NE_OP relational_expression {
@@ -300,44 +347,44 @@ equality_expression:
 	  }
 	;
 
-relational_expression:
-      relational_expression relational_expression_op additive_expression {
-        $$ = new toyc::ast::NBinaryOperator($1, $2, $3);
-      }
-    | additive_expression {
-        $$ = $1;
-      }
-    ;
+relational_expression
+	: relational_expression relational_expression_op additive_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, $2, $3);
+	  }
+	| additive_expression {
+		$$ = $1;
+	  }
+	;
 
-additive_expression:
-      multiplicative_expression {
-        $$ = $1;
-      }
-    | additive_expression '+' multiplicative_expression {
-        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::ADD, $3);
-      }
-    | additive_expression '-' multiplicative_expression {
-        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::SUB, $3);
-      }
-    ;
+additive_expression
+	: multiplicative_expression {
+		$$ = $1;
+	  }
+	| additive_expression '+' multiplicative_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::ADD, $3);
+	  }
+	| additive_expression '-' multiplicative_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::SUB, $3);
+	  }
+	;
 
-multiplicative_expression:
-      unary_expression {
-        $$ = $1;
-      }
-    | multiplicative_expression '*' unary_expression {
-        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MUL, $3);
-      }
-    | multiplicative_expression '/' unary_expression {
-        $$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::DIV, $3);
-      }
+multiplicative_expression
+	: unary_expression {
+		$$ = $1;
+	  }
+	| multiplicative_expression '*' unary_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MUL, $3);
+	  }
+	| multiplicative_expression '/' unary_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::DIV, $3);
+	  }
 	| multiplicative_expression '%' unary_expression {
 		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MOD, $3);
 	  }
-    ;
+	;
 
-unary_expression:
-	  postfix_expression {
+unary_expression
+	: postfix_expression {
 		$$ = $1;
 	  }
 	| INC_OP unary_expression {
@@ -354,12 +401,12 @@ unary_expression:
 	  }
 	;
 
-postfix_expression:
-	  primary_expression {
+postfix_expression
+	: primary_expression {
 		$$ = $1;
 	  }
 	| postfix_expression INC_OP {
-	$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::R_INC, $1);
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::R_INC, $1);
 	  }
 	| postfix_expression DEC_OP {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::R_DEC, $1);
@@ -374,6 +421,10 @@ postfix_expression:
 	  }
 	;
 
+/* constant_expression
+	: conditional_expression
+	; */
+
 argument_expression_list
 	: assignment_expression {
 		$$ = new toyc::ast::NArguments($1);
@@ -384,8 +435,8 @@ argument_expression_list
 	}
 	;
 
-primary_expression:
-	  '(' expression ')' {
+primary_expression
+	: '(' expression ')' {
 		$$ = $2;
 	  }
 	| IDENTIFIER {
@@ -400,8 +451,8 @@ primary_expression:
 		delete $1;
       }
 
-numeric:
-      I_CONSTANT {
+numeric
+    : I_CONSTANT {
         $$ = new toyc::ast::NInteger(atoi($1));
 		delete $1;
       }
