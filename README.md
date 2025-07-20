@@ -74,16 +74,13 @@ The compiler supports function definitions with parameters and return types, inc
 ### Expressions and Operators
 The compiler supports a comprehensive set of expressions including:
 
-**Binary Operators:**
+**Operators:**
 - Arithmetic: `+`, `-`, `*`, `/`, `%`
 - Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
 - Logical: `&&`, `||`
-
-**Unary Operators:**
+- Ternary conditional: `? :`
 - Increment/decrement: `++`, `--` (both prefix and postfix)
 - Address and dereference: `&`, `*`
-
-**Assignment Operators:**
 - Basic assignment: `=`
 - Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
 
