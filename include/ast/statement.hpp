@@ -153,4 +153,27 @@ private:
     NBlock *bodyNode;
 };
 
+class NWhileStatement : public NParentStatement {
+public:
+    NWhileStatement(NExpression *conditionNode, NStatement *bodyNode, bool isDoWhile = false)
+        : conditionNode(conditionNode), isDoWhile(isDoWhile) {
+            if ("Block" == bodyNode->getType()) {
+                this->bodyNode = static_cast<NBlock *>(bodyNode);
+            } else {
+                this->bodyNode = new NBlock(bodyNode);
+            }
+        }
+    ~NWhileStatement() {
+        SAFE_DELETE(conditionNode);
+        SAFE_DELETE(bodyNode);
+    }
+    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override;
+    virtual std::string getType() const override { return "WhileStatement"; }
+
+private:
+    NExpression *conditionNode;
+    NBlock *bodyNode;
+    bool isDoWhile; // true if this is a do-while loop
+};
+
 } // namespace toyc::ast

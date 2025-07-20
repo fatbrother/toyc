@@ -63,7 +63,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 %type   <declarator> declarator declarator_list
 %type   <parameter> parameter_list parameter_declaration
 %type   <statement> statement statement_list declaration_statement expression_statement jump_statement for_statement_init_declaration
-%type   <parent_statement>  if_statement for_statement
+%type   <parent_statement>  if_statement for_statement while_statement do_while_statement
 %type   <block> compound_statement
 %type   <external_declaration> program external_declaration external_declaration_list function_definition
 %type   <arguments> argument_expression_list
@@ -178,6 +178,12 @@ statement
 	| for_statement {
 		$$ = $1;
 	}
+	| while_statement {
+		$$ = $1;
+	}
+	| do_while_statement {
+		$$ = $1;
+	}
 	;
 
 for_statement_init_declaration
@@ -192,6 +198,18 @@ for_statement_init_declaration
 for_statement
 	: FOR '(' for_statement_init_declaration expression ';' expression ')' statement {
 		$$ = new toyc::ast::NForStatement($3, $4, $6, $8);
+	}
+	;
+
+while_statement
+	: WHILE '(' expression ')' statement {
+		$$ = new toyc::ast::NWhileStatement($3, $5);
+	}
+	;
+
+do_while_statement
+	: DO statement WHILE '(' expression ')' ';' {
+		$$ = new toyc::ast::NWhileStatement($5, $2, true);
 	}
 	;
 

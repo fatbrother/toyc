@@ -158,11 +158,49 @@ llvm::Value *NForStatement::codegen(llvm::LLVMContext &context, llvm::Module &mo
     llvm::Value *incrementValue = incrementNode->codegen(context, module, builder, this);
     builder.CreateBr(loopCondition);
     builder.SetInsertPoint(loopCondition);
-    llvm::Value *conditionValue = conditionNode->codegen(context, module, builder, this);
+    llvm::Value *conditionValue = typeCast(conditionNode->codegen(context, module, builder, this), VAR_TYPE_BOOL, context, builder);
     if (nullptr == conditionValue) {
         builder.CreateBr(loopBody);
     } else {
         builder.CreateCondBr(conditionValue, loopBody, afterBlock);
+    }
+
+    builder.SetInsertPoint(afterBlock);
+
+    return afterBlock;
+}
+
+llvm::Value *NWhileStatement::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) {
+    llvm::Function *function = builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *loopCondition = llvm::BasicBlock::Create(context, "while_condition", function);
+    llvm::BasicBlock *loopBody = nullptr;
+    llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(context, "while_after", function);
+    llvm::BasicBlock *previousBlock = builder.GetInsertBlock();
+
+    builder.SetInsertPoint(loopCondition);
+    llvm::Value *conditionValue = typeCast(conditionNode->codegen(context, module, builder, this), VAR_TYPE_BOOL, context, builder);
+    if (nullptr == conditionValue) {
+        std::cerr << "Error: Condition value is null" << std::endl;
+        return nullptr;
+    }
+
+    bodyNode->setParent(this);
+    bodyNode->setName("while_body");
+    bodyNode->setNextBlock(loopCondition);
+    loopBody = static_cast<llvm::BasicBlock *>(bodyNode->codegen(context, module, builder));
+    if (nullptr == loopBody) {
+        std::cerr << "Error: Loop body is null" << std::endl;
+        return nullptr;
+    }
+
+    builder.SetInsertPoint(loopCondition);
+    builder.CreateCondBr(conditionValue, loopBody, afterBlock);
+
+    builder.SetInsertPoint(previousBlock);
+    if (true == isDoWhile) {
+        builder.CreateBr(loopBody);
+    } else {
+        builder.CreateBr(loopCondition);
     }
 
     builder.SetInsertPoint(afterBlock);
