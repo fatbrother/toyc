@@ -68,7 +68,7 @@ The compiler supports function definitions with parameters and return types, inc
 
 ### Control Flow Statements
 - `if`/`else` statements
-- `for` loops
+- `for`/`while`/`do-while` loops
 - `return` statements
 
 ### Expressions and Operators
@@ -100,7 +100,6 @@ This is a educational/toy C compiler that implements a significant subset of C f
 - Arrays and array indexing
 - Struct/union definitions
 - Switch statements
-- While/do-while loops
 - Break/continue statements (tokens defined but not implemented in grammar)
 - Preprocessing directives
 - Complex pointer arithmetic beyond basic dereference
