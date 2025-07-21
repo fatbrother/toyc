@@ -54,47 +54,73 @@ llvm::Value *NUnaryExpression::codegen(llvm::LLVMContext &context, llvm::Module 
         return nullptr;
     }
 
-    if (NOT == op) {
-        value = expr->codegen(context, module, builder, parent);
-        value = builder.CreateNot(value, "not");
-    } else {
-        llvm::Value *tmp = nullptr;
-        switch (op) {
-            case L_INC:
-                value = expr->codegen(context, module, builder, parent);
-                value = builder.CreateAdd(value, one, "inc");
-                builder.CreateStore(value, expr->allocgen(context, module, builder, parent));
-                break;
-            case R_INC:
-                value = expr->codegen(context, module, builder, parent);
-                tmp = builder.CreateAdd(value, one, "inc");
-                builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
-                break;
-            case L_DEC:
-                value = expr->codegen(context, module, builder, parent);
-                value = builder.CreateSub(value, one, "dec");
-                builder.CreateStore(value, expr->allocgen(context, module, builder, parent));
-                break;
-            case R_DEC:
-                value = expr->codegen(context, module, builder, parent);
-                tmp = builder.CreateSub(value, one, "dec");
-                builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
-                break;
-            case ADDR:
-                value = expr->allocgen(context, module, builder, parent);
-                break;
-            case DEREF:
-                value = expr->codegen(context, module, builder, parent);
-                if (nullptr == value) {
-                    std::cerr << "Error: Dereference failed" << std::endl;
-                    return nullptr;
-                }
-                value = builder.CreateLoad(value->getType()->getPointerElementType(), value, "deref");
-                break;
-            default:
-                std::cerr << "Unknown unary operator: " << op << std::endl;
+    llvm::Value *tmp = nullptr;
+    switch (op) {
+        case L_INC:
+            value = expr->codegen(context, module, builder, parent);
+            value = builder.CreateAdd(value, one, "inc");
+            builder.CreateStore(value, expr->allocgen(context, module, builder, parent));
+            break;
+        case R_INC:
+            value = expr->codegen(context, module, builder, parent);
+            tmp = builder.CreateAdd(value, one, "inc");
+            builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
+            break;
+        case L_DEC:
+            value = expr->codegen(context, module, builder, parent);
+            value = builder.CreateSub(value, one, "dec");
+            builder.CreateStore(value, expr->allocgen(context, module, builder, parent));
+            break;
+        case R_DEC:
+            value = expr->codegen(context, module, builder, parent);
+            tmp = builder.CreateSub(value, one, "dec");
+            builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
+            break;
+        case ADDR:
+            value = expr->allocgen(context, module, builder, parent);
+            break;
+        case DEREF:
+            value = expr->codegen(context, module, builder, parent);
+            if (nullptr == value) {
+                std::cerr << "Error: Dereference failed" << std::endl;
                 return nullptr;
-        }
+            }
+            value = builder.CreateLoad(value->getType()->getPointerElementType(), value, "deref");
+            break;
+        case PLUS:
+            value = expr->codegen(context, module, builder, parent);
+            if (nullptr == value) {
+                std::cerr << "Error: Unary plus failed" << std::endl;
+                return nullptr;
+            }
+            break;
+        case MINUS:
+            value = expr->codegen(context, module, builder, parent);
+            if (nullptr == value) {
+                std::cerr << "Error: Unary minus failed" << std::endl;
+                return nullptr;
+            }
+            value = builder.CreateNeg(value, "neg");
+            break;
+        case BIT_NOT:
+            value = expr->codegen(context, module, builder, parent);
+            if (nullptr == value) {
+                std::cerr << "Error: Bitwise NOT failed" << std::endl;
+                return nullptr;
+            }
+            value = builder.CreateXor(value, llvm::ConstantInt::get(value->getType(), -1), "bit_not");
+            break;
+        case LOG_NOT:
+            value = typeCast(expr->codegen(context, module, builder, parent), VarType::VAR_TYPE_INT, context, builder);
+            if (nullptr == value) {
+                std::cerr << "Error: Logical NOT failed" << std::endl;
+                return nullptr;
+            }
+            value = builder.CreateICmpEQ(value, llvm::ConstantInt::get(value->getType(), 0), "log_not");
+            break;
+        default:
+            std::cerr << "Unknown unary operator: " << op << std::endl;
+            break;
     }
 
     return value;

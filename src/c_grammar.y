@@ -417,6 +417,18 @@ unary_expression
 	| '*' unary_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::DEREF, $2);
 	  }
+	| '+' unary_expression {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::PLUS, $2);
+	  }
+	| '-' unary_expression {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::MINUS, $2);
+	  }
+	| '~' unary_expression {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::BIT_NOT, $2);
+	  }
+	| '!' unary_expression {
+		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::LOG_NOT, $2);
+	  }
 	;
 
 postfix_expression
