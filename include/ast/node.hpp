@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <stack>
+#include <map>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
 
@@ -59,6 +61,51 @@ enum UnaryOperator {
         ptr = nullptr;   \
     }
 
+class NBlock;
+class NParentStatement;
+class NFunctionDefinition;
+
+struct VariableTable {
+    std::map<std::string, llvm::AllocaInst *> variables;
+    VariableTable *parent = nullptr;
+
+    llvm::AllocaInst *lookupVariable(const std::string &name) {
+        auto it = variables.find(name);
+        if (it != variables.end()) {
+            return it->second;
+        }
+        return nullptr == parent ? nullptr : parent->lookupVariable(name);
+    }
+    void insertVariable(const std::string &name, llvm::AllocaInst *allocaInst) {
+        variables[name] = allocaInst;
+    }
+};
+
+struct ASTContext {
+    llvm::LLVMContext llvmContext;
+    llvm::Module module;
+    llvm::IRBuilder<> builder;
+    NFunctionDefinition *currentFunction = nullptr;
+    VariableTable *variableTable = nullptr;
+    bool isInitializingFunction = false;
+
+    ASTContext() : module("toyc", llvmContext), builder(llvmContext) {}
+
+    void pushVariableTable() {
+        VariableTable *newTable = new VariableTable();
+        newTable->parent = variableTable;
+        variableTable = newTable;
+    }
+
+    void popVariableTable() {
+        if (variableTable) {
+            VariableTable *oldTable = variableTable;
+            variableTable = variableTable->parent;
+            delete oldTable;
+        }
+    }
+};
+
 class BasicNode {
 public:
     virtual ~BasicNode() = default;
@@ -112,13 +159,10 @@ static llvm::Value *typeCast(llvm::Value *value, const VarType toType, llvm::LLV
     return value;
 }
 
-class NBlock;
-class NParentStatement;
-
 class NExpression : public BasicNode {
 public:
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) = 0;
-    virtual llvm::AllocaInst *allocgen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+    virtual llvm::Value *codegen(ASTContext &context) = 0;
+    virtual llvm::AllocaInst *allocgen(ASTContext &context) {
         throw std::runtime_error("Expression is not a valid left value");
     };
     virtual std::string getType() const override { return "Expression"; }
@@ -129,11 +173,52 @@ public:
     virtual ~NExternalDeclaration() {
         SAFE_DELETE(next);
     }
-    virtual void codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) = 0;
+    virtual void codegen(ASTContext &context) = 0;
 
 public:
     NExternalDeclaration *next = nullptr;
 };
 
+class NParameter : public BasicNode {
+public:
+    NParameter(NType *type, const std::string &name, bool isVarArg = false)
+        : type(type), name(name), isVarArg(isVarArg) {}
+    ~NParameter() {
+        SAFE_DELETE(type);
+        SAFE_DELETE(next);
+    }
+    virtual std::string getType() const override { return "Parameter"; }
+    llvm::Type *getLLVMType(llvm::LLVMContext &context) const {
+        return type->getLLVMType(context);
+    }
+    std::string getName() const { return name; }
+
+public:
+    NParameter *next = nullptr;
+    bool isVarArg = false;
+
+private:
+    NType *type;
+    std::string name;
+};
+
+
+class NFunctionDefinition : public NExternalDeclaration {
+public:
+    NFunctionDefinition(NType *returnType, const std::string &name, NParameter *params, NBlock *body)
+        : returnType(returnType), name(name), params(params), body(body) {}
+    ~NFunctionDefinition();
+    virtual void codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "FunctionDefinition"; }
+    llvm::Function *getFunction() const { return llvmFunction; }
+    NType *getReturnType() const { return returnType; }
+
+private:
+    llvm::Function *llvmFunction = nullptr;
+    std::string name;
+    NType *returnType;
+    NParameter *params;
+    NBlock *body;
+};
 
 } // namespace toyc::ast

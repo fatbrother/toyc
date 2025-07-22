@@ -6,9 +6,9 @@
 
 using namespace toyc::ast;
 
-llvm::Value *NBinaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
-    llvm::Value *lhsValue = lhs->codegen(context, module, builder, parent);
-    llvm::Value *rhsValue = rhs->codegen(context, module, builder, parent);
+llvm::Value *NBinaryOperator::codegen(ASTContext &context) {
+    llvm::Value *lhsValue = lhs->codegen(context);
+    llvm::Value *rhsValue = rhs->codegen(context);
     llvm::Value *result = nullptr;
 
     if (nullptr == lhsValue || nullptr == rhsValue) {
@@ -37,7 +37,7 @@ llvm::Value *NBinaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &
     };
 
     if (0 != binaryOps.count(op)) {
-        result = binaryOps[op](builder, lhsValue, rhsValue);
+        result = binaryOps[op](context.builder, lhsValue, rhsValue);
     } else {
         std::cerr << "Unknown binary operator: " << op << std::endl;
         return nullptr;
@@ -45,9 +45,9 @@ llvm::Value *NBinaryOperator::codegen(llvm::LLVMContext &context, llvm::Module &
     return result;
 }
 
-llvm::Value *NUnaryExpression::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+llvm::Value *NUnaryExpression::codegen(ASTContext &context) {
     llvm::Value *value = nullptr;
-    llvm::Value *one = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1);
+    llvm::Value *one = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), 1);
 
     if (nullptr == expr) {
         std::cerr << "Error: Expression is null" << std::endl;
@@ -57,66 +57,66 @@ llvm::Value *NUnaryExpression::codegen(llvm::LLVMContext &context, llvm::Module 
     llvm::Value *tmp = nullptr;
     switch (op) {
         case L_INC:
-            value = expr->codegen(context, module, builder, parent);
-            value = builder.CreateAdd(value, one, "inc");
-            builder.CreateStore(value, expr->allocgen(context, module, builder, parent));
+            value = expr->codegen(context);
+            value = context.builder.CreateAdd(value, one, "inc");
+            context.builder.CreateStore(value, expr->allocgen(context));
             break;
         case R_INC:
-            value = expr->codegen(context, module, builder, parent);
-            tmp = builder.CreateAdd(value, one, "inc");
-            builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
+            value = expr->codegen(context);
+            tmp = context.builder.CreateAdd(value, one, "inc");
+            context.builder.CreateStore(tmp, expr->allocgen(context));
             break;
         case L_DEC:
-            value = expr->codegen(context, module, builder, parent);
-            value = builder.CreateSub(value, one, "dec");
-            builder.CreateStore(value, expr->allocgen(context, module, builder, parent));
+            value = expr->codegen(context);
+            value = context.builder.CreateSub(value, one, "dec");
+            context.builder.CreateStore(value, expr->allocgen(context));
             break;
         case R_DEC:
-            value = expr->codegen(context, module, builder, parent);
-            tmp = builder.CreateSub(value, one, "dec");
-            builder.CreateStore(tmp, expr->allocgen(context, module, builder, parent));
+            value = expr->codegen(context);
+            tmp = context.builder.CreateSub(value, one, "dec");
+            context.builder.CreateStore(tmp, expr->allocgen(context));
             break;
         case ADDR:
-            value = expr->allocgen(context, module, builder, parent);
+            value = expr->allocgen(context);
             break;
         case DEREF:
-            value = expr->codegen(context, module, builder, parent);
+            value = expr->codegen(context);
             if (nullptr == value) {
                 std::cerr << "Error: Dereference failed" << std::endl;
                 return nullptr;
             }
-            value = builder.CreateLoad(value->getType()->getPointerElementType(), value, "deref");
+            value = context.builder.CreateLoad(value->getType()->getPointerElementType(), value, "deref");
             break;
         case PLUS:
-            value = expr->codegen(context, module, builder, parent);
+            value = expr->codegen(context);
             if (nullptr == value) {
                 std::cerr << "Error: Unary plus failed" << std::endl;
                 return nullptr;
             }
             break;
         case MINUS:
-            value = expr->codegen(context, module, builder, parent);
+            value = expr->codegen(context);
             if (nullptr == value) {
                 std::cerr << "Error: Unary minus failed" << std::endl;
                 return nullptr;
             }
-            value = builder.CreateNeg(value, "neg");
+            value = context.builder.CreateNeg(value, "neg");
             break;
         case BIT_NOT:
-            value = expr->codegen(context, module, builder, parent);
+            value = expr->codegen(context);
             if (nullptr == value) {
                 std::cerr << "Error: Bitwise NOT failed" << std::endl;
                 return nullptr;
             }
-            value = builder.CreateXor(value, llvm::ConstantInt::get(value->getType(), -1), "bit_not");
+            value = context.builder.CreateXor(value, llvm::ConstantInt::get(value->getType(), -1), "bit_not");
             break;
         case LOG_NOT:
-            value = typeCast(expr->codegen(context, module, builder, parent), VarType::VAR_TYPE_INT, context, builder);
+            value = typeCast(expr->codegen(context), VarType::VAR_TYPE_INT, context.llvmContext, context.builder);
             if (nullptr == value) {
                 std::cerr << "Error: Logical NOT failed" << std::endl;
                 return nullptr;
             }
-            value = builder.CreateICmpEQ(value, llvm::ConstantInt::get(value->getType(), 0), "log_not");
+            value = context.builder.CreateICmpEQ(value, llvm::ConstantInt::get(value->getType(), 0), "log_not");
             break;
         default:
             std::cerr << "Unknown unary operator: " << op << std::endl;
@@ -126,47 +126,47 @@ llvm::Value *NUnaryExpression::codegen(llvm::LLVMContext &context, llvm::Module 
     return value;
 }
 
-llvm::Value *NConditionalExpression::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+llvm::Value *NConditionalExpression::codegen(ASTContext &context) {
     if (nullptr == condition || nullptr == trueExpr || nullptr == falseExpr) {
         std::cerr << "Error: One of the expressions is null" << std::endl;
         return nullptr;
     }
 
-    llvm::Value *condValue = condition->codegen(context, module, builder, parent);
+    llvm::Value *condValue = condition->codegen(context);
     if (nullptr == condValue) {
         std::cerr << "Error: Condition code generation failed" << std::endl;
         return nullptr;
     }
 
-    condValue = builder.CreateICmpNE(condValue, llvm::ConstantInt::get(condValue->getType(), 0), "cond");
+    condValue = context.builder.CreateICmpNE(condValue, llvm::ConstantInt::get(condValue->getType(), 0), "cond");
 
-    llvm::Function *function = builder.GetInsertBlock()->getParent();
-    llvm::BasicBlock *trueBlock = llvm::BasicBlock::Create(context, "true", function);
-    llvm::BasicBlock *falseBlock = llvm::BasicBlock::Create(context, "false", function);
-    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(context, "merge", function);
+    llvm::Function *function = context.builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *trueBlock = llvm::BasicBlock::Create(context.llvmContext, "true", function);
+    llvm::BasicBlock *falseBlock = llvm::BasicBlock::Create(context.llvmContext, "false", function);
+    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(context.llvmContext, "merge", function);
 
-    builder.CreateCondBr(condValue, trueBlock, falseBlock);
+    context.builder.CreateCondBr(condValue, trueBlock, falseBlock);
 
-    builder.SetInsertPoint(trueBlock);
-    llvm::Value *trueValue = trueExpr->codegen(context, module, builder, parent);
+    context.builder.SetInsertPoint(trueBlock);
+    llvm::Value *trueValue = trueExpr->codegen(context);
     if (nullptr == trueValue) {
         std::cerr << "Error: True expression code generation failed" << std::endl;
         return nullptr;
     }
-    builder.CreateBr(mergeBlock);
+    context.builder.CreateBr(mergeBlock);
 
-    builder.SetInsertPoint(falseBlock);
-    llvm::Value *falseValue = falseExpr->codegen(context, module, builder, parent);
+    context.builder.SetInsertPoint(falseBlock);
+    llvm::Value *falseValue = falseExpr->codegen(context);
     if (nullptr == falseValue) {
         std::cerr << "Error: False expression code generation failed" << std::endl;
         return nullptr;
     }
-    builder.CreateBr(mergeBlock);
+    context.builder.CreateBr(mergeBlock);
 
-    builder.SetInsertPoint(mergeBlock);
+    context.builder.SetInsertPoint(mergeBlock);
 
     // Merge the two branches
-    llvm::PHINode * phiNode = builder.CreatePHI(trueValue->getType(), 2, "phi");
+    llvm::PHINode * phiNode = context.builder.CreatePHI(trueValue->getType(), 2, "phi");
 
     phiNode->addIncoming(trueValue, trueBlock);
     phiNode->addIncoming(falseValue, falseBlock);
@@ -174,20 +174,15 @@ llvm::Value *NConditionalExpression::codegen(llvm::LLVMContext &context, llvm::M
     return phiNode;
 }
 
-llvm::Value *NIdentifier::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
-    if (nullptr == parent) {
-        std::cerr << "Error: Parent block is null" << std::endl;
-        return nullptr;
-    }
-
-    llvm::AllocaInst *allocaInst = parent->lookupVariable(name);
+llvm::Value *NIdentifier::codegen(ASTContext &context) {
+    llvm::AllocaInst *allocaInst = context.variableTable->lookupVariable(name);
     llvm::Value *value = nullptr;
     if (nullptr == allocaInst) {
         std::cerr << "Error: Variable not found: " << name << std::endl;
         return nullptr;
     }
 
-    value = builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
+    value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
     if (nullptr == value) {
         std::cerr << "Error: Load failed for variable: " << name << std::endl;
     }
@@ -195,13 +190,8 @@ llvm::Value *NIdentifier::codegen(llvm::LLVMContext &context, llvm::Module &modu
     return value;
 }
 
-llvm::AllocaInst *NIdentifier::allocgen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
-    if (nullptr == parent) {
-        std::cerr << "Error: Parent block is null" << std::endl;
-        return nullptr;
-    }
-
-    llvm::AllocaInst *allocaInst = parent->lookupVariable(name);
+llvm::AllocaInst *NIdentifier::allocgen(ASTContext &context) {
+    llvm::AllocaInst *allocaInst = context.variableTable->lookupVariable(name);
     if (nullptr == allocaInst) {
         std::cerr << "Error: Variable not found: " << name << std::endl;
         return nullptr;
@@ -210,9 +200,9 @@ llvm::AllocaInst *NIdentifier::allocgen(llvm::LLVMContext &context, llvm::Module
     return allocaInst;
 }
 
-llvm::Value *NAssignment::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
-    llvm::AllocaInst *lhsAlloca = lhs->allocgen(context, module, builder, parent);
-    llvm::Value *rhsValue = rhs->codegen(context, module, builder, parent);
+llvm::Value *NAssignment::codegen(ASTContext &context) {
+    llvm::AllocaInst *lhsAlloca = lhs->allocgen(context);
+    llvm::Value *rhsValue = rhs->codegen(context);
     if (nullptr == rhsValue || nullptr == lhsAlloca) {
         std::cerr << "Error: Assignment failed due to null values" << std::endl;
         return nullptr;
@@ -222,21 +212,21 @@ llvm::Value *NAssignment::codegen(llvm::LLVMContext &context, llvm::Module &modu
         std::cerr << "Error: Type mismatch in assignment" << std::endl;
         return nullptr;
     }
-    builder.CreateStore(rhsValue, lhsAlloca);
+    context.builder.CreateStore(rhsValue, lhsAlloca);
     return rhsValue;
 }
 
-llvm::Value *NArguments::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+llvm::Value *NArguments::codegen(ASTContext &context) {
     if (nullptr == expr) {
         std::cerr << "Error: Expression is null" << std::endl;
         return nullptr;
     }
-    return expr->codegen(context, module, builder, parent);
+    return expr->codegen(context);
 }
 
-llvm::Value *NFunctionCall::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
+llvm::Value *NFunctionCall::codegen(ASTContext &context) {
     std::vector<llvm::Value *> args;
-    llvm::Function *function = module.getFunction(name);
+    llvm::Function *function = context.module.getFunction(name);
     llvm::Value *res = nullptr;
     if (nullptr == function) {
         std::cerr << "Error: Function not found: " << name << std::endl;
@@ -244,7 +234,7 @@ llvm::Value *NFunctionCall::codegen(llvm::LLVMContext &context, llvm::Module &mo
     }
 
     for (NArguments *argNode = argNodes; argNode != nullptr; argNode = argNode->next) {
-        llvm::Value *argValue = argNode->codegen(context, module, builder, parent);
+        llvm::Value *argValue = argNode->codegen(context);
         if (nullptr == argValue) {
             std::cerr << "Error: Argument value is null" << std::endl;
             return nullptr;
@@ -253,22 +243,22 @@ llvm::Value *NFunctionCall::codegen(llvm::LLVMContext &context, llvm::Module &mo
     }
 
     if (function->getReturnType()->isVoidTy()) {
-        res = builder.CreateCall(function, args);
+        res = context.builder.CreateCall(function, args);
     } else {
-        res = builder.CreateCall(function, args, "calltmp");
+        res = context.builder.CreateCall(function, args, "calltmp");
     }
 
     return res;
 }
 
-llvm::Value *NInteger::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
-    return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), value);
+llvm::Value *NInteger::codegen(ASTContext &context) {
+    return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), value);
 }
 
-llvm::Value *NFloat::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
-    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(context), value);
+llvm::Value *NFloat::codegen(ASTContext &context) {
+    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.llvmContext), value);
 }
 
-llvm::Value *NString::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder, NParentStatement *parent) {
-    return builder.CreateGlobalStringPtr(value, "str");
+llvm::Value *NString::codegen(ASTContext &context) {
+    return context.builder.CreateGlobalStringPtr(value, "str");
 }

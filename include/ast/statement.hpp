@@ -10,22 +10,13 @@ namespace toyc::ast {
 class NStatement : public BasicNode {
 public:
     virtual ~NStatement() override;
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) = 0;
+    virtual llvm::Value *codegen(ASTContext &context) = 0;
     virtual std::string getType() const override { return "Statement"; }
-    void setParent(NParentStatement *parent) { this->parent = parent; }
+    void setParent(NStatement *parent) { this->parent = parent; }
 
 public:
-    NParentStatement *parent = nullptr;
+    NStatement *parent = nullptr;
     NStatement *next = nullptr;
-};
-
-class NParentStatement : public NStatement {
-public:
-    llvm::AllocaInst *lookupVariable(const std::string &name);
-    void insertVariable(const std::string &name, llvm::AllocaInst *allocaInst);
-
-protected:
-    std::map<std::string, llvm::AllocaInst *> variables;
 };
 
 class NDeclarationStatement : public NStatement {
@@ -37,7 +28,7 @@ public:
         SAFE_DELETE(type);
         SAFE_DELETE(declarator);
     }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override;
+    virtual llvm::Value *codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "DeclarationStatement"; }
 
 private:
@@ -48,29 +39,25 @@ private:
 class NExpressionStatement : public NStatement {
 public:
     NExpressionStatement(NExpression *expression) : expression(expression) {}
-    ~NExpressionStatement() { delete expression; }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override {
-        if (nullptr != expression) {
-            return expression->codegen(context, module, builder, parent);
-        }
-        return nullptr;
+    ~NExpressionStatement() {
+        SAFE_DELETE(expression);
     }
+    virtual llvm::Value *codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ExpressionStatement"; }
 
 private:
     NExpression *expression;
 };
 
-class NBlock : public NParentStatement
+class NBlock : public NStatement
 {
 public:
     NBlock(NStatement *statements = nullptr) : statements(statements) {}
     ~NBlock() {
         SAFE_DELETE(statements);
     }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override;
+    virtual llvm::Value *codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Block"; }
-    void setParentFunction(llvm::Function *parent) { this->parentFunction = parent; }
     void setName(const std::string &name) { this->name = name; }
     void setNextBlock(llvm::BasicBlock *nextBlock) { this->nextBlock = nextBlock; }
 
@@ -78,7 +65,6 @@ private:
     std::string name;
     NStatement *statements;
     llvm::BasicBlock *nextBlock = nullptr;
-    llvm::Function *parentFunction = nullptr;
 };
 
 class NReturnStatement : public NStatement {
@@ -87,14 +73,14 @@ public:
     ~NReturnStatement() {
         SAFE_DELETE(expression);
     }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override;
+    virtual llvm::Value *codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ReturnStatement"; }
 
 private:
     NExpression *expression;
 };
 
-class NIfStatement : public NParentStatement {
+class NIfStatement : public NStatement {
 public:
     NIfStatement(NExpression *conditionNode, NStatement *thenBlockNode, NStatement *elseBlockNode = nullptr)
         : conditionNode(conditionNode) {
@@ -118,7 +104,7 @@ public:
         SAFE_DELETE(thenBlockNode);
         SAFE_DELETE(elseBlockNode);
     }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override;
+    virtual llvm::Value *codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "IfStatement"; }
 
 private:
@@ -127,7 +113,7 @@ private:
     NBlock *elseBlockNode;
 };
 
-class NForStatement : public NParentStatement {
+class NForStatement : public NStatement {
 public:
     NForStatement(NStatement *initializationNode, NExpression *conditionNode, NExpression *incrementNode, NStatement *body)
         : initializationNode(initializationNode), conditionNode(conditionNode), incrementNode(incrementNode) {
@@ -143,7 +129,7 @@ public:
         SAFE_DELETE(incrementNode);
         SAFE_DELETE(bodyNode);
     }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override;
+    virtual llvm::Value *codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ForStatement"; }
 
 private:
@@ -153,7 +139,7 @@ private:
     NBlock *bodyNode;
 };
 
-class NWhileStatement : public NParentStatement {
+class NWhileStatement : public NStatement {
 public:
     NWhileStatement(NExpression *conditionNode, NStatement *bodyNode, bool isDoWhile = false)
         : conditionNode(conditionNode), isDoWhile(isDoWhile) {
@@ -167,7 +153,7 @@ public:
         SAFE_DELETE(conditionNode);
         SAFE_DELETE(bodyNode);
     }
-    virtual llvm::Value *codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) override;
+    virtual llvm::Value *codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "WhileStatement"; }
 
 private:

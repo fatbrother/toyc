@@ -9,21 +9,15 @@ NStatement::~NStatement() {
     SAFE_DELETE(next);
 }
 
-llvm::AllocaInst *NParentStatement::lookupVariable(const std::string &name) {
-    auto it = variables.find(name);
-    if (it != variables.end()) {
-        return it->second;
+llvm::Value *NExpressionStatement::codegen(ASTContext &context) {
+    if (nullptr != expression) {
+        return expression->codegen(context);
     }
-
-    return (nullptr != parent) ? parent->lookupVariable(name) : nullptr;
+    return nullptr;
 }
 
-void NParentStatement::insertVariable(const std::string &name, llvm::AllocaInst *allocaInst) {
-    variables[name] = allocaInst;
-}
-
-llvm::Value *NDeclarationStatement::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) {
-    llvm::Type *llvmType = type->getLLVMType(context);
+llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
+    llvm::Type *llvmType = type->getLLVMType(context.llvmContext);
 
     if (nullptr == llvmType) {
         std::cerr << "Error: Type is null" << std::endl;
@@ -31,8 +25,8 @@ llvm::Value *NDeclarationStatement::codegen(llvm::LLVMContext &context, llvm::Mo
     }
 
     for (auto currentDeclarator = declarator; currentDeclarator != nullptr; currentDeclarator = currentDeclarator->next) {
-        llvm::Value *value = currentDeclarator->codegen(context, module, builder, parent);
-        llvm::AllocaInst *allocaInst = builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
+        llvm::Value *value = currentDeclarator->codegen(context);
+        llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
 
         if (nullptr == allocaInst) {
             std::cerr << "Error: AllocaInst is null" << std::endl;
@@ -40,70 +34,78 @@ llvm::Value *NDeclarationStatement::codegen(llvm::LLVMContext &context, llvm::Mo
         }
 
         if (nullptr != value) {
-            builder.CreateStore(value, allocaInst);
+            context.builder.CreateStore(value, allocaInst);
         }
 
-        if (nullptr != parent) {
-            parent->insertVariable(currentDeclarator->getName(), allocaInst);
-        }
+        context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst);
     }
 
     return nullptr;
 }
 
-llvm::Value *NBlock::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) {
-    llvm::Function *parent = (nullptr == parentFunction) ? builder.GetInsertBlock()->getParent() : parentFunction;
-    llvm::BasicBlock *block = llvm::BasicBlock::Create(context, name, parent);
+llvm::Value *NBlock::codegen(ASTContext &context) {
+    llvm::Function *parentFunction = context.currentFunction->getFunction();
+    llvm::BasicBlock *block = llvm::BasicBlock::Create(context.llvmContext, name, parentFunction);
 
-    builder.SetInsertPoint(block);
+    context.builder.SetInsertPoint(block);
+    context.pushVariableTable();
 
-    if (nullptr != parentFunction) {
-        for (auto &arg : parentFunction->args()) {
-            llvm::AllocaInst *allocaInst = builder.CreateAlloca(arg.getType(), nullptr, arg.getName());
-            builder.CreateStore(&arg, allocaInst);
-            variables[arg.getName().str()] = allocaInst;
+    if (true == context.isInitializingFunction) {
+        for (auto &arg : context.currentFunction->getFunction()->args()) {
+            llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(arg.getType(), nullptr, arg.getName());
+            context.builder.CreateStore(&arg, allocaInst);
+            context.variableTable->insertVariable(arg.getName().str(), allocaInst);
         }
     }
+    context.isInitializingFunction = false;
 
     for (NStatement *stmt = statements; stmt != nullptr; stmt = stmt->next) {
-        stmt->setParent(this);
-        stmt->codegen(context, module, builder);
+        if (nullptr != parent) {
+            stmt->setParent(parent);
+        }
+        stmt->codegen(context);
     }
 
+    context.popVariableTable();
+
     if (nullptr != nextBlock) {
-        builder.CreateBr(nextBlock);
-        builder.SetInsertPoint(nextBlock);
+        context.builder.CreateBr(nextBlock);
+        context.builder.SetInsertPoint(nextBlock);
     }
 
     return block;
 }
 
-llvm::Value *NReturnStatement::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) {
+llvm::Value *NReturnStatement::codegen(ASTContext &context) {
     if (nullptr != expression) {
-        llvm::Value *value = expression->codegen(context, module, builder, parent);
+        llvm::Value *value = typeCast(
+            expression->codegen(context),
+            context.currentFunction->getReturnType()->getVarType(),
+            context.llvmContext,
+            context.builder);
         if (nullptr == value) {
             std::cerr << "Error: Return value is null" << std::endl;
             return nullptr;
         }
-        builder.CreateRet(value);
+        context.builder.CreateRet(value);
     } else {
-        builder.CreateRetVoid();
+        context.builder.CreateRetVoid();
     }
 
     return nullptr;
 }
 
-llvm::Value *NIfStatement::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) {
-    llvm::Function *function = builder.GetInsertBlock()->getParent();
+llvm::Value *NIfStatement::codegen(ASTContext &context) {
+    llvm::Function *function = context.currentFunction->getFunction();
     llvm::BasicBlock *thenBlock = nullptr;
     llvm::BasicBlock *elseBlock = nullptr;
-    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(context, "if_merge", function);
-    llvm::BasicBlock *conditionBlock = llvm::BasicBlock::Create(context, "if_condition", function);
+    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(context.llvmContext, "if_merge", function);
+    llvm::BasicBlock *conditionBlock = llvm::BasicBlock::Create(context.llvmContext, "if_condition", function);
     llvm::Value *conditionValue = nullptr;
 
-    builder.CreateBr(conditionBlock);
-    builder.SetInsertPoint(conditionBlock);
-    conditionValue = conditionNode->codegen(context, module, builder, this);
+    context.builder.CreateBr(conditionBlock);
+    context.builder.SetInsertPoint(conditionBlock);
+    conditionValue = conditionNode->codegen(context);
     if (nullptr == conditionValue) {
         std::cerr << "Error: Condition value is null" << std::endl;
         return nullptr;
@@ -112,7 +114,7 @@ llvm::Value *NIfStatement::codegen(llvm::LLVMContext &context, llvm::Module &mod
     thenBlockNode->setParent(parent);
     thenBlockNode->setName("if_then");
     thenBlockNode->setNextBlock(mergeBlock);
-    thenBlock = static_cast<llvm::BasicBlock *>(thenBlockNode->codegen(context, module, builder));
+    thenBlock = static_cast<llvm::BasicBlock *>(thenBlockNode->codegen(context));
     if (nullptr == thenBlock) {
         std::cerr << "Error: Then block is null" << std::endl;
         return nullptr;
@@ -122,63 +124,63 @@ llvm::Value *NIfStatement::codegen(llvm::LLVMContext &context, llvm::Module &mod
         elseBlockNode->setParent(parent);
         elseBlockNode->setName("if_else");
         elseBlockNode->setNextBlock(mergeBlock);
-        elseBlock = static_cast<llvm::BasicBlock *>(elseBlockNode->codegen(context, module, builder));
+        elseBlock = static_cast<llvm::BasicBlock *>(elseBlockNode->codegen(context));
         if (nullptr == elseBlock) {
             std::cerr << "Error: Else block is null" << std::endl;
             return nullptr;
         }
     }
 
-    builder.SetInsertPoint(conditionBlock);
-    builder.CreateCondBr(conditionValue, thenBlock, (nullptr != elseBlock) ? elseBlock : mergeBlock);
-    builder.SetInsertPoint(mergeBlock);
+    context.builder.SetInsertPoint(conditionBlock);
+    context.builder.CreateCondBr(conditionValue, thenBlock, (nullptr != elseBlock) ? elseBlock : mergeBlock);
+    context.builder.SetInsertPoint(mergeBlock);
     return mergeBlock;
 }
 
-llvm::Value *NForStatement::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) {
-    llvm::Function *function = builder.GetInsertBlock()->getParent();
-    llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(context, "for_after", function);
-    llvm::BasicBlock *loopCondition = llvm::BasicBlock::Create(context, "for_condition", function);
-    llvm::BasicBlock *loopIncrement = llvm::BasicBlock::Create(context, "for_increment", function);
+llvm::Value *NForStatement::codegen(ASTContext &context) {
+    llvm::Function *function = context.currentFunction->getFunction();
+    llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(context.llvmContext, "for_after", function);
+    llvm::BasicBlock *loopCondition = llvm::BasicBlock::Create(context.llvmContext, "for_condition", function);
+    llvm::BasicBlock *loopIncrement = llvm::BasicBlock::Create(context.llvmContext, "for_increment", function);
     llvm::BasicBlock *loopBody = nullptr;
 
     initializationNode->setParent(this);
-    llvm::Value *initValue = initializationNode->codegen(context, module, builder);
-    builder.CreateBr(loopCondition);
+    llvm::Value *initValue = initializationNode->codegen(context);
+    context.builder.CreateBr(loopCondition);
 
     bodyNode->setParent(this);
     bodyNode->setName("for_body");
     bodyNode->setNextBlock(loopIncrement);
-    loopBody = static_cast<llvm::BasicBlock *>(bodyNode->codegen(context, module, builder));
+    loopBody = static_cast<llvm::BasicBlock *>(bodyNode->codegen(context));
     if (nullptr == loopBody) {
         std::cerr << "Error: Loop body is null" << std::endl;
         return nullptr;
     }
 
-    llvm::Value *incrementValue = incrementNode->codegen(context, module, builder, this);
-    builder.CreateBr(loopCondition);
-    builder.SetInsertPoint(loopCondition);
-    llvm::Value *conditionValue = typeCast(conditionNode->codegen(context, module, builder, this), VAR_TYPE_BOOL, context, builder);
+    llvm::Value *incrementValue = incrementNode->codegen(context);
+    context.builder.CreateBr(loopCondition);
+    context.builder.SetInsertPoint(loopCondition);
+    llvm::Value *conditionValue = typeCast(conditionNode->codegen(context), VAR_TYPE_BOOL, context.llvmContext, context.builder);
     if (nullptr == conditionValue) {
-        builder.CreateBr(loopBody);
+        context.builder.CreateBr(loopBody);
     } else {
-        builder.CreateCondBr(conditionValue, loopBody, afterBlock);
+        context.builder.CreateCondBr(conditionValue, loopBody, afterBlock);
     }
 
-    builder.SetInsertPoint(afterBlock);
+    context.builder.SetInsertPoint(afterBlock);
 
     return afterBlock;
 }
 
-llvm::Value *NWhileStatement::codegen(llvm::LLVMContext &context, llvm::Module &module, llvm::IRBuilder<> &builder) {
-    llvm::Function *function = builder.GetInsertBlock()->getParent();
-    llvm::BasicBlock *loopCondition = llvm::BasicBlock::Create(context, "while_condition", function);
+llvm::Value *NWhileStatement::codegen(ASTContext &context) {
+    llvm::Function *function = context.builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *loopCondition = llvm::BasicBlock::Create(context.llvmContext, "while_condition", function);
     llvm::BasicBlock *loopBody = nullptr;
-    llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(context, "while_after", function);
-    llvm::BasicBlock *previousBlock = builder.GetInsertBlock();
+    llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(context.llvmContext, "while_after", function);
+    llvm::BasicBlock *previousBlock = context.builder.GetInsertBlock();
 
-    builder.SetInsertPoint(loopCondition);
-    llvm::Value *conditionValue = typeCast(conditionNode->codegen(context, module, builder, this), VAR_TYPE_BOOL, context, builder);
+    context.builder.SetInsertPoint(loopCondition);
+    llvm::Value *conditionValue = typeCast(conditionNode->codegen(context), VAR_TYPE_BOOL, context.llvmContext, context.builder);
     if (nullptr == conditionValue) {
         std::cerr << "Error: Condition value is null" << std::endl;
         return nullptr;
@@ -187,23 +189,23 @@ llvm::Value *NWhileStatement::codegen(llvm::LLVMContext &context, llvm::Module &
     bodyNode->setParent(this);
     bodyNode->setName("while_body");
     bodyNode->setNextBlock(loopCondition);
-    loopBody = static_cast<llvm::BasicBlock *>(bodyNode->codegen(context, module, builder));
+    loopBody = static_cast<llvm::BasicBlock *>(bodyNode->codegen(context));
     if (nullptr == loopBody) {
         std::cerr << "Error: Loop body is null" << std::endl;
         return nullptr;
     }
 
-    builder.SetInsertPoint(loopCondition);
-    builder.CreateCondBr(conditionValue, loopBody, afterBlock);
+    context.builder.SetInsertPoint(loopCondition);
+    context.builder.CreateCondBr(conditionValue, loopBody, afterBlock);
 
-    builder.SetInsertPoint(previousBlock);
+    context.builder.SetInsertPoint(previousBlock);
     if (true == isDoWhile) {
-        builder.CreateBr(loopBody);
+        context.builder.CreateBr(loopBody);
     } else {
-        builder.CreateBr(loopCondition);
+        context.builder.CreateBr(loopCondition);
     }
 
-    builder.SetInsertPoint(afterBlock);
+    context.builder.SetInsertPoint(afterBlock);
 
     return afterBlock;
 }

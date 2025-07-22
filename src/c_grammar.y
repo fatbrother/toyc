@@ -5,7 +5,6 @@
 #include "ast/node.hpp"
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
-#include "ast/external_definition.hpp"
 #include "utility/error_handler.hpp"
 
 // #include <unordered_map>
@@ -34,7 +33,6 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 	toyc::ast::NDeclarator *declarator;
 	toyc::ast::NStatement *statement;
 	toyc::ast::NBlock *block;
-	toyc::ast::NParentStatement *parent_statement;
 	toyc::ast::NExternalDeclaration *external_declaration;
 	toyc::ast::NParameter *parameter;
 	toyc::ast::NArguments *arguments;
@@ -63,7 +61,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 %type   <declarator> declarator declarator_list
 %type   <parameter> parameter_list parameter_declaration
 %type   <statement> statement statement_list declaration_statement expression_statement jump_statement for_statement_init_declaration
-%type   <parent_statement>  if_statement for_statement while_statement do_while_statement
+%type   <statement>  if_statement for_statement while_statement do_while_statement
 %type   <block> compound_statement
 %type   <external_declaration> program external_declaration external_declaration_list function_definition
 %type   <arguments> argument_expression_list

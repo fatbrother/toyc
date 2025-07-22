@@ -68,12 +68,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    llvm::LLVMContext context;
-    llvm::Module module(inputFileName, context);
-    llvm::IRBuilder<> builder(context);
-
+    toyc::ast::ASTContext astContext;
     for (auto &decl = program; decl != nullptr; decl = decl->next) {
-        decl->codegen(context, module, builder);
+        decl->codegen(astContext);
     }
 
     llvm::legacy::PassManager passManager;
@@ -82,7 +79,7 @@ int main(int argc, char *argv[]) {
     passManager.add(llvm::createReassociatePass());
     passManager.add(llvm::createGVNPass());
     passManager.add(llvm::createCFGSimplificationPass());
-    passManager.run(module);
+    passManager.run(astContext.module);
 
     if (emitLLVM) {
         std::string llvmFileName = outputFileName + ".ll";
@@ -92,14 +89,14 @@ int main(int argc, char *argv[]) {
             std::cerr << "Error opening file for writing: " << EC.message() << std::endl;
             return -1;
         }
-        module.print(llvmFile, nullptr);
+        astContext.module.print(llvmFile, nullptr);
         llvmFile.close();
         return 0;
     }
 
     // generate object file
     toyc::obj::ObjectGenner objectGenner;
-    isOutputFile = objectGenner.generate(module, TMP_FILE_NAME);
+    isOutputFile = objectGenner.generate(astContext.module, TMP_FILE_NAME);
     if (!isOutputFile) {
         std::cerr << "Failed to generate object file." << std::endl;
         return -1;
