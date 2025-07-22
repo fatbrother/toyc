@@ -4,11 +4,13 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <unistd.h>
+#include <vector>
 
 #include "ast/node.hpp"
 #include "obj/object_genner.hpp"
 #include "utility/parse_file.hpp"
 #include "utility/error_handler.hpp"
+#include "utility/preprocessor.hpp"
 
 extern toyc::ast::NExternalDeclaration *program;
 extern toyc::utility::ErrorHandler *error_handler;
@@ -21,6 +23,9 @@ void help() {
     std::cout << "  -h, --help     Show this help message" << std::endl;
     std::cout << "  -o, --output   Specify output file" << std::endl;
     std::cout << "  -l, --emit-llvm  Emit LLVM IR to the specified file" << std::endl;
+    std::cout << "  -E             Run only the preprocessor" << std::endl;
+    std::cout << "  -D <macro>     Define a macro" << std::endl;
+    std::cout << "  -I <path>      Add include path" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
@@ -30,13 +35,16 @@ int main(int argc, char *argv[]) {
     char flag;
     bool isOutputFile = false;
     bool emitLLVM = false;
+    bool preprocessOnly = false;
+    std::vector<std::pair<std::string, std::string>> macroDefines;
+    std::vector<std::string> includePaths;
 
     if (argc < 2) {
         help();
         return -1;
     }
 
-    while ((flag = getopt(argc, argv, "hlo:")) != -1) {
+    while ((flag = getopt(argc, argv, "hlEo:D:I:")) != -1) {
         switch (flag) {
             case 'h':
                 help();
@@ -46,6 +54,22 @@ int main(int argc, char *argv[]) {
                 break;
             case 'l':
                 emitLLVM = true;
+                break;
+            case 'E':
+                preprocessOnly = true;
+                break;
+            case 'D': {
+                std::string define = std::string(optarg);
+                size_t equalPos = define.find('=');
+                if (equalPos != std::string::npos) {
+                    macroDefines.push_back({define.substr(0, equalPos), define.substr(equalPos + 1)});
+                } else {
+                    macroDefines.push_back({define, "1"});
+                }
+                break;
+            }
+            case 'I':
+                includePaths.push_back(std::string(optarg));
                 break;
             case '?':
             default:
@@ -60,8 +84,28 @@ int main(int argc, char *argv[]) {
         std::cerr << "Error: No input file specified." << std::endl;
         return -1;
     }
-    // Parse the file
-    res = toyc::parser::parseFile(inputFileName);
+
+    // Handle preprocessor-only mode
+    if (preprocessOnly) {
+        toyc::utility::Preprocessor preprocessor;
+
+        // Add user-defined macros
+        for (const auto& macro : macroDefines) {
+            preprocessor.addPredefinedMacro(macro.first, macro.second);
+        }
+
+        // Add include paths
+        for (const auto& path : includePaths) {
+            preprocessor.addIncludePath(path);
+        }
+
+        std::string preprocessedContent = preprocessor.preprocess(inputFileName);
+        std::cout << preprocessedContent;
+        return 0;
+    }
+
+    // Parse the file with preprocessor
+    res = toyc::parser::parseFileWithPreprocessor(inputFileName, macroDefines, includePaths);
     if (res != 0 && error_handler != nullptr) {
         error_handler->setFileName(inputFileName);
         error_handler->logError();
@@ -73,13 +117,13 @@ int main(int argc, char *argv[]) {
         decl->codegen(astContext);
     }
 
-    llvm::legacy::PassManager passManager;
-    passManager.add(llvm::createPromoteMemoryToRegisterPass());
-    passManager.add(llvm::createInstructionNamerPass());
-    passManager.add(llvm::createReassociatePass());
-    passManager.add(llvm::createGVNPass());
-    passManager.add(llvm::createCFGSimplificationPass());
-    passManager.run(astContext.module);
+    // llvm::legacy::PassManager passManager;
+    // passManager.add(llvm::createPromoteMemoryToRegisterPass());
+    // passManager.add(llvm::createInstructionNamerPass());
+    // passManager.add(llvm::createReassociatePass());
+    // passManager.add(llvm::createGVNPass());
+    // passManager.add(llvm::createCFGSimplificationPass());
+    // passManager.run(astContext.module);
 
     if (emitLLVM) {
         std::string llvmFileName = outputFileName + ".ll";

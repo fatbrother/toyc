@@ -25,8 +25,10 @@ llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
     }
 
     for (auto currentDeclarator = declarator; currentDeclarator != nullptr; currentDeclarator = currentDeclarator->next) {
-        llvm::Value *value = currentDeclarator->codegen(context);
         llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
+        context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst);
+
+        llvm::Value *value = currentDeclarator->codegen(context);
 
         if (nullptr == allocaInst) {
             std::cerr << "Error: AllocaInst is null" << std::endl;
@@ -37,7 +39,6 @@ llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
             context.builder.CreateStore(value, allocaInst);
         }
 
-        context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst);
     }
 
     return nullptr;
