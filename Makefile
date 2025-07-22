@@ -1,12 +1,19 @@
 SRCDIR = src
 INCDIR = include
 BUILDDIR = build
+TESTDIR = tests
 
 SOURCES = $(shell find $(SRCDIR) -name "*.cpp")
 INCLUDES = $(shell find $(INCDIR) -name "*.hpp")
 SRC_OBJS = $(SOURCES:$(SRCDIR)/%.cpp=$(BUILDDIR)/%.o)
 GENERATED_OBJS = $(BUILDDIR)/lex.yy.o $(BUILDDIR)/y.tab.o
 OBJS = $(GENERATED_OBJS) $(SRC_OBJS)
+
+# Test-specific variables
+TEST_SOURCES = $(shell find $(TESTDIR) -name "*.cpp")
+TEST_OBJS = $(TEST_SOURCES:$(TESTDIR)/%.cpp=$(BUILDDIR)/tests/%.o)
+# Exclude main.cpp for tests (we need our own main in test files)
+LIB_OBJS = $(filter-out $(BUILDDIR)/toyc.o, $(SRC_OBJS)) $(GENERATED_OBJS)
 
 CXX = g++
 LEX = lex
@@ -17,6 +24,8 @@ LLVM_LIB = $(shell llvm-config --libs)
 
 FLAGS = -g -I$(INCDIR) -I$(LLVM_CXXFLAGS) -std=c++17
 LDFLAGS = $(LLVM_LDFLAGS) $(LLVM_LIB)
+TEST_FLAGS = $(FLAGS) -lgtest -lgmock -pthread
+TEST_LDFLAGS = $(LDFLAGS) -lgtest -lgmock -pthread
 
 all: toyc
 
@@ -32,6 +41,10 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(INCLUDES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(FLAGS) -c $< -o $@ $(LDFLAGS)
 
+$(BUILDDIR)/tests/%.o: $(TESTDIR)/%.cpp $(INCLUDES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(TEST_FLAGS) -c $< -o $@
+
 $(BUILDDIR)/y.tab.o: $(BUILDDIR)/y.tab.cpp
 	$(CXX) $(FLAGS) -c $< -o $@ $(LDFLAGS)
 
@@ -41,5 +54,20 @@ $(BUILDDIR)/lex.yy.o: $(BUILDDIR)/lex.yy.cpp $(BUILDDIR)/y.tab.hpp
 toyc: $(OBJS)
 	$(CXX) $(FLAGS) $(OBJS) -o $@ $(LDFLAGS)
 
+# Test targets
+tests: $(TEST_OBJS) $(LIB_OBJS)
+	@mkdir -p $(BUILDDIR)/tests
+	$(CXX) $(TEST_FLAGS) $(TEST_OBJS) $(LIB_OBJS) -o $(BUILDDIR)/tests/test_preprocessor $(TEST_LDFLAGS)
+
+run-tests: tests
+	$(BUILDDIR)/tests/test_preprocessor
+
+install-test-deps:
+	sudo apt-get update
+	sudo apt-get install -y libgtest-dev libgmock-dev
+	cd /usr/src/gtest && sudo cmake . && sudo make && sudo cp *.a /usr/lib/
+
 clean:
 	rm -rf $(BUILDDIR) toyc
+
+.PHONY: all tests run-tests install-test-deps clean
