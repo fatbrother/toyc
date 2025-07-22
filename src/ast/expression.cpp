@@ -16,8 +16,32 @@ llvm::Value *NBinaryOperator::codegen(ASTContext &context) {
     }
 
     std::map<BineryOperator, std::function<llvm::Value *(llvm::IRBuilder<> &, llvm::Value *, llvm::Value *)>> binaryOps = {
-        {AND, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateAnd(lhs, rhs, "and"); }},
-        {OR, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateOr(lhs, rhs, "or"); }},
+        {AND, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
+            return typeCast(
+                builder.CreateLogicalAnd(lhs, typeCast(rhs, VarType::VAR_TYPE_BOOL, builder.getContext(), builder), "and"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
+        }},
+        {OR, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
+            return typeCast(
+                builder.CreateLogicalOr(lhs, typeCast(rhs, VarType::VAR_TYPE_BOOL, builder.getContext(), builder), "or"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
+        }},
+        {EQ, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
+            return typeCast(builder.CreateICmpEQ(lhs, rhs, "eq"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
+        }},
+        {NE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
+            return typeCast(builder.CreateICmpNE(lhs, rhs, "ne"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
+        }},
+        {LE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
+            return typeCast(builder.CreateICmpSLE(lhs, rhs, "le"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
+        }},
+        {GE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
+            return typeCast(builder.CreateICmpSGE(lhs, rhs, "ge"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
+        }},
+        {L, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
+            return typeCast(builder.CreateICmpSLT(lhs, rhs, "lt"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
+        }},
+        {G, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
+            return typeCast(builder.CreateICmpSGT(lhs, rhs, "gt"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
+        }},
         {ADD, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateAdd(lhs, rhs, "add"); }},
         {SUB, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateSub(lhs, rhs, "sub"); }},
         {MUL, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateMul(lhs, rhs, "mul"); }},
@@ -25,12 +49,6 @@ llvm::Value *NBinaryOperator::codegen(ASTContext &context) {
         {MOD, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateSRem(lhs, rhs, "mod"); }},
         {LEFT, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateShl(lhs, rhs, "left"); }},
         {RIGHT, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateLShr(lhs, rhs, "right"); }},
-        {EQ, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateICmpEQ(lhs, rhs, "eq"); }},
-        {NE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateICmpNE(lhs, rhs, "ne"); }},
-        {LE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateICmpSLE(lhs, rhs, "le"); }},
-        {GE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateICmpSGE(lhs, rhs, "ge"); }},
-        {L, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateICmpSLT(lhs, rhs, "lt"); }},
-        {G, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateICmpSGT(lhs, rhs, "gt"); }},
         {BIT_AND, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateAnd(lhs, rhs, "bit_and"); }},
         {BIT_OR, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateOr(lhs, rhs, "bit_or"); }},
         {XOR, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateXor(lhs, rhs, "xor"); }}
