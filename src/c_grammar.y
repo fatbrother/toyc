@@ -544,7 +544,11 @@ type
 
 void yyerror(const char *str)
 {
-    error_handler = new toyc::utility::ErrorHandler(std::string(str), yylineno, yycolumn - yyleng);
+	if (error_handler != nullptr) {
+		delete error_handler;
+	}
+
+    error_handler = new toyc::utility::ErrorHandler(std::string(str), yylineno, yycolumn);
 }
 
 /* void insert_symbol(const std::string &s, int type)

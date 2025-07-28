@@ -52,12 +52,12 @@ yycolumn += yyleng;
 
 \/\/            { BEGIN COMMENT; }
 <COMMENT>[^\n]* { ; }
-<COMMENT>\n     { BEGIN 0; }
+<COMMENT>\n     { BEGIN 0; yycolumn = 0; }
 
 \/\*            { BEGIN MULTI_COMMENT; }
 <MULTI_COMMENT>[^*]* { ; }
 <MULTI_COMMENT>\*+[^*/]* { ; }
-<MULTI_COMMENT>\*+\/ { BEGIN 0; }
+<MULTI_COMMENT>\*+\/ { BEGIN 0; yycolumn = 0; }
 
 "break"					{ TOKEN(BREAK); }
 "bool"                  { TOKEN(BOOL); }
@@ -150,8 +150,8 @@ yycolumn += yyleng;
 "~"					    { yycolumn += yyleng; return '~'; }
 "?"					    { yycolumn += yyleng; return '?'; }
 
-[ \t\r]+                { yycolumn += yyleng; }
-\n                      { yycolumn = 1; }
+[ \t\r]+                { yycolumn++; }
+\n                      { yycolumn = 0; }
 
 .					    { yyterminate();}
 

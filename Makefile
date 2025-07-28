@@ -55,12 +55,12 @@ toyc: $(OBJS)
 	$(CXX) $(FLAGS) $(OBJS) -o $@ $(LDFLAGS)
 
 # Test targets
-tests: $(TEST_OBJS) $(LIB_OBJS)
+test-build: $(TEST_OBJS) $(LIB_OBJS)
 	@mkdir -p $(BUILDDIR)/tests
-	$(CXX) $(TEST_FLAGS) $(TEST_OBJS) $(LIB_OBJS) -o $(BUILDDIR)/tests/test_preprocessor $(TEST_LDFLAGS)
+	$(CXX) $(TEST_FLAGS) $(BUILDDIR)/tests/main_test.o $(BUILDDIR)/tests/test_preprocessor.o $(BUILDDIR)/tests/test_error_handler.o $(LIB_OBJS) -o $(BUILDDIR)/tests/all_tests $(TEST_LDFLAGS)
 
-run-tests: tests
-	$(BUILDDIR)/tests/test_preprocessor
+test: test-build
+	$(BUILDDIR)/tests/all_tests
 
 install-test-deps:
 	sudo apt-get update
@@ -70,4 +70,4 @@ install-test-deps:
 clean:
 	rm -rf $(BUILDDIR) toyc
 
-.PHONY: all tests run-tests install-test-deps clean
+.PHONY: all test install-test-deps clean
