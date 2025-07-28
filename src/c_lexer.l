@@ -17,6 +17,7 @@ WS  [ \t\v\n\f]
 %{
 
 #include <iostream>
+#include <string>
 #include "ast/node.hpp"
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
@@ -30,14 +31,12 @@ int yycolumn = 1;
 
 extern void yyerror(const char *);  /* prints grammar violation message */
 static int check_type(void);
-static char* unescape_string(const char* yytext, int yyleng);
+static std::string unescape_string(const char* yytext, int yyleng);
 
-#define SAVE_TOKEN yylval.string = new char[yyleng + 1]; \
-strncpy(yylval.string, yytext, yyleng); \
-yylval.string[yyleng] = '\0'; \
+#define SAVE_TOKEN yylval.string = new std::string(yytext, yyleng); \
 yycolumn += yyleng;
 
-#define SAVE_STRING yylval.string = unescape_string(yytext, yyleng); yycolumn += yyleng;
+#define SAVE_STRING yylval.string = new std::string(unescape_string(yytext, yyleng)); yycolumn += yyleng;
 #define TOKEN(t) (yylval.token = t); yycolumn += yyleng; return t;
 
 %}
@@ -162,28 +161,26 @@ static int check_type(void)
     return IDENTIFIER;
 }
 
-static char* unescape_string(const char* yytext, int yyleng) {
-    char* result = (char*)malloc(yyleng);
-    char* dst = result;
+static std::string unescape_string(const char* yytext, int yyleng) {
+    std::string result;
     const char* src = yytext + 1;
 
     while (*src && *(src) != '"') {
         if (*src == '\\') {
             src++;
             switch (*src) {
-                case 'n': *dst++ = '\n'; break;
-                case 't': *dst++ = '\t'; break;
-                case 'r': *dst++ = '\r'; break;
-                case '\\': *dst++ = '\\'; break;
-                case '"': *dst++ = '"'; break;
-                default: *dst++ = *src; break;
+                case 'n': result += '\n'; break;
+                case 't': result += '\t'; break;
+                case 'r': result += '\r'; break;
+                case '\\': result += '\\'; break;
+                case '"': result += '"'; break;
+                default: result += *src; break;
             }
         } else {
-            *dst++ = *src;
+            result += *src;
         }
         src++;
     }
-    *dst = '\0';
 
     return result;
 }

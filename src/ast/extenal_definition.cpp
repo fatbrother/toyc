@@ -12,11 +12,9 @@ NFunctionDefinition::~NFunctionDefinition() {
 }
 
 void NFunctionDefinition::codegen(ASTContext &context) {
-    unsigned int index = 0;
     llvm::Type *llvmReturnType = returnType->getLLVMType(context.llvmContext);
     std::vector<llvm::Type *> paramTypes;
     std::vector<std::string> paramNames;
-    NParameter *paramIt = nullptr;
     llvm::FunctionType *functionType = nullptr;
     bool isVarArg = false;
 
@@ -43,8 +41,8 @@ void NFunctionDefinition::codegen(ASTContext &context) {
         return;
     }
 
-    paramIt = params;
-    for (auto it = llvmFunction->arg_begin(); it != llvmFunction->arg_end(); ++it) {
+    NParameter* paramIt = params;
+    for (auto it = llvmFunction->arg_begin(); it != llvmFunction->arg_end() && paramIt != nullptr; ++it) {
         it->setName(paramIt->getName());
         paramIt = paramIt->next;
     }

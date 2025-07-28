@@ -146,7 +146,7 @@ llvm::Value *NForStatement::codegen(ASTContext &context) {
     llvm::BasicBlock *loopBody = nullptr;
 
     initializationNode->setParent(this);
-    llvm::Value *initValue = initializationNode->codegen(context);
+    initializationNode->codegen(context);
     context.builder.CreateBr(loopCondition);
 
     bodyNode->setParent(this);
@@ -158,7 +158,7 @@ llvm::Value *NForStatement::codegen(ASTContext &context) {
         return nullptr;
     }
 
-    llvm::Value *incrementValue = incrementNode->codegen(context);
+    incrementNode->codegen(context);
     context.builder.CreateBr(loopCondition);
     context.builder.SetInsertPoint(loopCondition);
     llvm::Value *conditionValue = typeCast(conditionNode->codegen(context), VAR_TYPE_BOOL, context.llvmContext, context.builder);

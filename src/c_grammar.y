@@ -35,7 +35,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 	toyc::ast::NParameter *parameter;
 	toyc::ast::NArguments *arguments;
 	toyc::ast::BineryOperator bop;
-	char *string;
+	std::string *string;
 	int token;
 }
 
@@ -92,27 +92,27 @@ external_declaration
 
 function_definition
 	: type IDENTIFIER '(' parameter_list ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), $4, $6);
+		$$ = new toyc::ast::NFunctionDefinition($1, *$2, $4, $6);
 		delete $2;
 	}
 	| type IDENTIFIER '(' ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), nullptr, $5);
+		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, $5);
 		delete $2;
 	}
 	| type IDENTIFIER '(' parameter_list ')' ';' {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), $4, nullptr);
+		$$ = new toyc::ast::NFunctionDefinition($1, *$2, $4, nullptr);
 		delete $2;
 	}
 	| type IDENTIFIER '(' VOID ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), nullptr, $6);
+		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, $6);
 		delete $2;
 	}
 	| type IDENTIFIER '(' VOID ')' ';' {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), nullptr, nullptr);
+		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, nullptr);
 		delete $2;
 	}
 	| type IDENTIFIER '(' ')' ';' {
-		$$ = new toyc::ast::NFunctionDefinition($1, std::string($2), nullptr, nullptr);
+		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, nullptr);
 		delete $2;
 	}
 	;
@@ -129,7 +129,7 @@ parameter_list
 
 parameter_declaration
 	: type IDENTIFIER {
-		$$ = new toyc::ast::NParameter($1, std::string($2));
+		$$ = new toyc::ast::NParameter($1, *$2);
 		delete $2;
 	}
 	| ELLIPSIS {
@@ -229,11 +229,11 @@ declaration_statement
 
 declarator
 	: IDENTIFIER {
-		$$ = new toyc::ast::NDeclarator(std::string($1), nullptr);
+		$$ = new toyc::ast::NDeclarator(*$1, nullptr);
 		delete $1;
 	}
 	| IDENTIFIER '=' expression {
-		$$ = new toyc::ast::NDeclarator(std::string($1), $3);
+		$$ = new toyc::ast::NDeclarator(*$1, $3);
 		delete $1;
 	}
 	;
@@ -439,11 +439,11 @@ postfix_expression
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::R_DEC, $1);
 	  }
 	| IDENTIFIER '(' argument_expression_list ')' {
-		$$ = new toyc::ast::NFunctionCall(std::string($1), $3);
+		$$ = new toyc::ast::NFunctionCall(*$1, $3);
 		delete $1;
 	  }
 	| IDENTIFIER '(' ')' {
-		$$ = new toyc::ast::NFunctionCall(std::string($1), nullptr);
+		$$ = new toyc::ast::NFunctionCall(*$1, nullptr);
 		delete $1;
 	  }
 	;
@@ -467,24 +467,24 @@ primary_expression
 		$$ = $2;
 	  }
 	| IDENTIFIER {
-		$$ = new toyc::ast::NIdentifier(std::string($1));
+		$$ = new toyc::ast::NIdentifier(*$1);
 		delete $1;
 	  }
     | numeric {
         $$ = $1;
       }
     | STRING_LITERAL {
-        $$ = new toyc::ast::NString(std::string($1));
+        $$ = new toyc::ast::NString(*$1);
 		delete $1;
       }
 
 numeric
     : I_CONSTANT {
-        $$ = new toyc::ast::NInteger(atoi($1));
+        $$ = new toyc::ast::NInteger(atoi($1->c_str()));
 		delete $1;
       }
     | F_CONSTANT {
-		$$ = new toyc::ast::NFloat(atof($1));
+		$$ = new toyc::ast::NFloat(atof($1->c_str()));
 		delete $1;
 	  }
     ;
@@ -509,7 +509,7 @@ type
 		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_PTR, $1);
 	}
 	| TYPEDEF_NAME {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_DEFINED, std::string($1));
+		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_DEFINED, *$1);
 		delete $1;
 	}
 	| BOOL {

@@ -156,7 +156,16 @@ int main(int argc, char *argv[]) {
 
     // remove object file
     command = "rm -f " TMP_FILE_NAME;
-    ret = system(command.c_str());
+    system(command.c_str());
+
+    // Clean up AST memory
+    toyc::ast::NExternalDeclaration *current = program;
+    while (current != nullptr) {
+        toyc::ast::NExternalDeclaration *next = current->next;
+        delete current;
+        current = next;
+    }
+    program = nullptr;
 
     return 0;
 }

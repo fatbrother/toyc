@@ -8,6 +8,11 @@
 
 namespace toyc::utility {
 
+// Helper function for C++17 compatibility (starts_with available in C++20)
+inline bool starts_with(const std::string& str, const std::string& prefix) {
+    return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
+}
+
 Preprocessor::Preprocessor() : currentLine_(0), hasErrors_(false) {
     // 添加一些預定義的宏
     addPredefinedMacro("__LINE__", "");
@@ -84,7 +89,7 @@ std::string Preprocessor::preprocessContent(const std::string& content, const st
     std::string trimmedLine = trim(line);
 
     // 空行或註解行
-    if (trimmedLine.empty() || trimmedLine.find("//") == 0) {
+    if (trimmedLine.empty() || starts_with(trimmedLine, "//")) {
         return shouldIncludeCode() ? line : "";
     }
 
@@ -97,37 +102,38 @@ std::string Preprocessor::preprocessContent(const std::string& content, const st
         std::string directive = trimmedLine.substr(1);
         directive = trim(directive);
 
-        if (directive.find("define") == 0) {
+        if (starts_with(directive, "define")) {
             if (shouldIncludeCode()) {
                 handleDefine(directive, lineNumber);
             }
             return "";
-        } else if (directive.find("include") == 0) {
+        } else if (starts_with(directive, "include")) {
             if (shouldIncludeCode()) {
                 return handleInclude(directive, currentFile, lineNumber);
             }
             return "";
-        } else if (directive.find("undef") == 0) {
+        } else if (starts_with(directive, "undef")) {
             if (shouldIncludeCode()) {
                 handleUndef(directive, lineNumber);
             }
             return "";
-        } else if (directive.find("ifdef") == 0) {
+        } else if (starts_with(directive, "ifdef")) {
             handleIfdef(directive, lineNumber);
             return "";
-        } else if (directive.find("ifndef") == 0) {
+        } else if (starts_with(directive, "ifndef")) {
             handleIfndef(directive, lineNumber);
             return "";
-        } else if (directive.find("if") == 0 && directive.find("ifdef") != 0 && directive.find("ifndef") != 0) {
+        } else if (starts_with(directive, "if")) {
+            // 純 #if 指令 (已經排除 ifdef 和 ifndef)
             handleIf(directive, lineNumber);
             return "";
-        } else if (directive.find("else") == 0) {
+        } else if (starts_with(directive, "else")) {
             handleElse(lineNumber);
             return "";
-        } else if (directive.find("elif") == 0) {
+        } else if (starts_with(directive, "elif")) {
             handleElif(directive, lineNumber);
             return "";
-        } else if (directive.find("endif") == 0) {
+        } else if (starts_with(directive, "endif")) {
             handleEndif(lineNumber);
             return "";
         }
@@ -445,10 +451,9 @@ bool Preprocessor::shouldIncludeCode() {
     }
 
     // 檢查是否所有條件都為真
-    for (const auto& state : conditionalStack_) {
-        if (!state.isActive) {
-            return false;
-        }
+    if (std::any_of(conditionalStack_.begin(), conditionalStack_.end(),
+                    [](const ConditionalState& state) { return !state.isActive; })) {
+        return false;
     }
 
     return true;
