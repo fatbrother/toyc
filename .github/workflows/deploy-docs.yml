@@ -17,17 +17,16 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
+        sudo apt-get install -y 
           build-essential \
+          g++ \
+          gcc \
           flex \
           bison \
-          llvm-dev \
-          libllvm-ocaml-dev \
-          llvm \
-          clang \
+          llvm-14 \
+          llvm-14-dev \
           libgtest-dev \
           libgmock-dev \
-          cmake \
           googletest
         
     - name: Build release version
