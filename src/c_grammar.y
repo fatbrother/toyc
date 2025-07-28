@@ -9,8 +9,6 @@
 
 // #include <unordered_map>
 
-#define YYERROR_VERBOSE 1
-
 void yyerror(const char *s);
 extern "C" int yylex(void);
 extern int yyparse();
@@ -41,6 +39,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 	int token;
 }
 
+%define parse.error verbose
 
 %token	<string> IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL TYPEDEF_NAME
 %token	INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP PTR_OP AND_OP OR_OP
@@ -548,7 +547,7 @@ void yyerror(const char *str)
 		delete error_handler;
 	}
 
-    error_handler = new toyc::utility::ErrorHandler(std::string(str), yylineno, yycolumn);
+    error_handler = new toyc::utility::ErrorHandler(std::string(str), yylineno, yycolumn - yyleng, yyleng);
 }
 
 /* void insert_symbol(const std::string &s, int type)

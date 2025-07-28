@@ -17,7 +17,7 @@ LIB_OBJS = $(filter-out $(BUILDDIR)/toyc.o, $(SRC_OBJS)) $(GENERATED_OBJS)
 
 CXX = g++
 LEX = lex
-YACC = yacc
+YACC = bison
 LLVM_CXXFLAGS = $(shell llvm-config --includedir)
 LLVM_LDFLAGS = $(shell llvm-config --ldflags)
 LLVM_LIB = $(shell llvm-config --libs)

@@ -9,8 +9,8 @@ namespace toyc::utility {
 
 class ErrorHandler {
 public:
-    ErrorHandler(const std::string &message, int line = 0, int column = 0)
-        : errorMessage(message), lineNumber(line), columnNumber(column) {}
+    ErrorHandler(const std::string &message, int line = 0, int column = 0, int tokenSize = 0)
+        : errorMessage(message), lineNumber(line), columnNumber(column), tokenSize(tokenSize) {}
 
     void setFileName(const std::string &name) {
         fileName = name;
@@ -62,7 +62,11 @@ public:
 
             // 直接使用原始字符構建指示行，讓終端機自然處理 Tab
             std::string indicator = buildIndicatorLine(errorLine, columnNumber);
-            output << indicator << "^" << std::endl;
+            output << indicator << "^";
+            for (int i = 1; i < tokenSize; ++i) {
+                output << "~";  // 使用 ~ 符號表示錯誤範圍
+            }
+            output << std::endl;
         }
     }
 
@@ -83,7 +87,7 @@ private:
     std::string fileName;
     int lineNumber = 0;
     int columnNumber = 0;
-    int tabCount = 0;
+    int tokenSize = 0;
 
     // 構建錯誤指示行，保持原始的 Tab 字符
     std::string buildIndicatorLine(const std::string& line, int logicalColumn) const {

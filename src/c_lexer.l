@@ -151,7 +151,7 @@ yycolumn += yyleng;
 "?"					    { yycolumn += yyleng; return '?'; }
 
 [ \t\r]+                { yycolumn += yyleng; }
-\n                      { yycolumn = 0; }
+\n                      { yycolumn = 1; }
 
 .					    { yyterminate();}
 
