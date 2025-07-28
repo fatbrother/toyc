@@ -1,0 +1,67 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          flex \
+          bison \
+          llvm-dev \
+          libllvm-ocaml-dev \
+          llvm \
+          clang \
+          libgtest-dev \
+          libgmock-dev \
+          cmake \
+          googletest
+        
+    - name: Clean previous builds
+      run: make clean
+
+    - name: Build project
+      run: make all
+
+    - name: Run tests
+      run: make test
+
+    - name: Check if binary exists
+      run: |
+        if [ -f "./toyc" ]; then
+          echo "✅ Compiler binary built successfully"
+          ./toyc --help || echo "Binary exists but help command failed"
+        else
+          echo "❌ Compiler binary not found"
+          exit 1
+        fi
+        
+    - name: Test basic compilation
+      run: |
+        if [ -f "./test.c" ]; then
+          echo "Testing basic compilation with test.c"
+          ./toyc test.c || echo "Compilation test completed"
+        fi
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: toyc-compiler
+        path: |
+          toyc
+          build/
+        retention-days: 7

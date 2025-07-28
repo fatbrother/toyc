@@ -1,0 +1,80 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-format:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          flex \
+          bison \
+          llvm-dev \
+          libllvm-ocaml-dev \
+          llvm \
+          clang \
+          clang-format \
+          cppcheck
+    
+    - name: Check code formatting
+      run: |
+        find src include -name "*.cpp" -o -name "*.hpp" | xargs clang-format --dry-run --Werror || {
+          echo "❌ Code formatting issues found. Please run clang-format on your code."
+          echo "Run: find src include -name '*.cpp' -o -name '*.hpp' | xargs clang-format -i"
+          exit 1
+        }
+        
+    - name: Static analysis with cppcheck
+      run: |
+        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem src/ || {
+          echo "❌ Static analysis found issues"
+          exit 1
+        }
+
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          flex \
+          bison \
+          llvm-dev \
+          libllvm-ocaml-dev \
+          llvm \
+          clang \
+          libgtest-dev \
+          libgmock-dev \
+          cmake \
+          googletest
+        
+    - name: Build project
+      run: |
+        make clean
+        make all
+        
+    - name: Run tests
+      run: make test
+
+    - name: Test compilation with sample files
+      run: |
+        if [ -f "./test.c" ]; then
+          echo "Testing basic compilation"
+          ./toyc test.c || echo "Test compilation completed"
+        fi

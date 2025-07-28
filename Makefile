@@ -62,12 +62,7 @@ test-build: $(TEST_OBJS) $(LIB_OBJS)
 test: test-build
 	$(BUILDDIR)/tests/all_tests
 
-install-test-deps:
-	sudo apt-get update
-	sudo apt-get install -y libgtest-dev libgmock-dev
-	cd /usr/src/gtest && sudo cmake . && sudo make && sudo cp *.a /usr/lib/
-
 clean:
 	rm -rf $(BUILDDIR) toyc
 
-.PHONY: all test install-test-deps clean
+.PHONY: all test clean
