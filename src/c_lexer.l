@@ -38,7 +38,7 @@ yylval.string[yyleng] = '\0'; \
 yycolumn += yyleng;
 
 #define SAVE_STRING yylval.string = unescape_string(yytext, yyleng); yycolumn += yyleng;
-#define TOKEN(t) (yylval.token = t); return t; yycolumn += yyleng;
+#define TOKEN(t) (yylval.token = t); yycolumn += yyleng; return t;
 
 %}
 
@@ -50,14 +50,14 @@ yycolumn += yyleng;
 
 %%
 
-\/\/            { BEGIN COMMENT; }
-<COMMENT>[^\n]* { ; }
-<COMMENT>\n     { BEGIN 0; yycolumn = 0; }
+\/\/            { BEGIN COMMENT; yycolumn += yyleng; }
+<COMMENT>[^\n]* { yycolumn += yyleng; }
+<COMMENT>\n     { BEGIN 0; yycolumn = 1; }
 
-\/\*            { BEGIN MULTI_COMMENT; }
-<MULTI_COMMENT>[^*]* { ; }
-<MULTI_COMMENT>\*+[^*/]* { ; }
-<MULTI_COMMENT>\*+\/ { BEGIN 0; yycolumn = 0; }
+\/\*            { BEGIN MULTI_COMMENT; yycolumn += yyleng; }
+<MULTI_COMMENT>[^*]* { yycolumn += yyleng; }
+<MULTI_COMMENT>\*+[^*/]* { yycolumn += yyleng; }
+<MULTI_COMMENT>\*+\/ { BEGIN 0; yycolumn += yyleng; }
 
 "break"					{ TOKEN(BREAK); }
 "bool"                  { TOKEN(BOOL); }
@@ -150,7 +150,7 @@ yycolumn += yyleng;
 "~"					    { yycolumn += yyleng; return '~'; }
 "?"					    { yycolumn += yyleng; return '?'; }
 
-[ \t\r]+                { yycolumn++; }
+[ \t\r]+                { yycolumn += yyleng; }
 \n                      { yycolumn = 0; }
 
 .					    { yyterminate();}
