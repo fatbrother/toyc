@@ -11,8 +11,9 @@ NStatement::~NStatement() {
 
 llvm::Value *NExpressionStatement::codegen(ASTContext &context) {
     if (nullptr != expression) {
-        return expression->codegen(context);
+        expression->codegen(context);
     }
+
     return nullptr;
 }
 
@@ -26,9 +27,9 @@ llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
 
     for (auto currentDeclarator = declarator; currentDeclarator != nullptr; currentDeclarator = currentDeclarator->next) {
         llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
-        context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst);
+        context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst, type);
 
-        llvm::Value *value = currentDeclarator->codegen(context);
+        auto [value, valType] = currentDeclarator->codegen(context);
 
         if (nullptr == allocaInst) {
             std::cerr << "Error: AllocaInst is null" << std::endl;
@@ -36,6 +37,7 @@ llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
         }
 
         if (nullptr != value) {
+            value = typeCast(value, valType, type, context.llvmContext, context.builder);
             context.builder.CreateStore(value, allocaInst);
         }
 
@@ -52,10 +54,12 @@ llvm::Value *NBlock::codegen(ASTContext &context) {
     context.pushVariableTable();
 
     if (true == context.isInitializingFunction) {
+        auto *param = context.currentFunction->getParams();
         for (auto &arg : context.currentFunction->getFunction()->args()) {
             llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(arg.getType(), nullptr, arg.getName());
             context.builder.CreateStore(&arg, allocaInst);
-            context.variableTable->insertVariable(arg.getName().str(), allocaInst);
+            context.variableTable->insertVariable(arg.getName().str(), allocaInst, param->getVarType());
+            param = param->next;
         }
     }
     context.isInitializingFunction = false;
@@ -79,9 +83,11 @@ llvm::Value *NBlock::codegen(ASTContext &context) {
 
 llvm::Value *NReturnStatement::codegen(ASTContext &context) {
     if (nullptr != expression) {
-        llvm::Value *value = typeCast(
-            expression->codegen(context),
-            context.currentFunction->getReturnType()->getVarType(),
+        auto [value, type] = expression->codegen(context);
+        value = typeCast(
+            value,
+            type,
+            context.currentFunction->getReturnType(),
             context.llvmContext,
             context.builder);
         if (nullptr == value) {
@@ -106,7 +112,7 @@ llvm::Value *NIfStatement::codegen(ASTContext &context) {
 
     context.builder.CreateBr(conditionBlock);
     context.builder.SetInsertPoint(conditionBlock);
-    conditionValue = conditionNode->codegen(context);
+    conditionValue = conditionNode->codegen(context).first;
     if (nullptr == conditionValue) {
         std::cerr << "Error: Condition value is null" << std::endl;
         return nullptr;
@@ -161,7 +167,8 @@ llvm::Value *NForStatement::codegen(ASTContext &context) {
     incrementNode->codegen(context);
     context.builder.CreateBr(loopCondition);
     context.builder.SetInsertPoint(loopCondition);
-    llvm::Value *conditionValue = typeCast(conditionNode->codegen(context), VAR_TYPE_BOOL, context.llvmContext, context.builder);
+    auto [conditionValue, conditionType] = conditionNode->codegen(context);
+    conditionValue = typeCast(conditionValue, conditionType, VAR_TYPE_BOOL, context.llvmContext, context.builder);
     if (nullptr == conditionValue) {
         context.builder.CreateBr(loopBody);
     } else {
@@ -181,7 +188,12 @@ llvm::Value *NWhileStatement::codegen(ASTContext &context) {
     llvm::BasicBlock *previousBlock = context.builder.GetInsertBlock();
 
     context.builder.SetInsertPoint(loopCondition);
-    llvm::Value *conditionValue = typeCast(conditionNode->codegen(context), VAR_TYPE_BOOL, context.llvmContext, context.builder);
+    auto [conditionValue, conditionType] = conditionNode->codegen(context);
+    conditionValue = typeCast(conditionValue,
+                              conditionType,
+                              VAR_TYPE_BOOL,
+                              context.llvmContext,
+                              context.builder);
     if (nullptr == conditionValue) {
         std::cerr << "Error: Condition value is null" << std::endl;
         return nullptr;

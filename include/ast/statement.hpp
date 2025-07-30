@@ -23,16 +23,14 @@ class NDeclarationStatement : public NStatement {
 public:
     NDeclarationStatement(NType *type, NDeclarator *declarator)
         : type(type), declarator(declarator) {}
-    ~NDeclarationStatement()
-    {
-        SAFE_DELETE(type);
+    ~NDeclarationStatement() {
         SAFE_DELETE(declarator);
     }
     virtual llvm::Value *codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "DeclarationStatement"; }
 
 private:
-    NType *type;
+    NTypePtr type;
     NDeclarator *declarator;
 };
 

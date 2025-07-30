@@ -6,21 +6,21 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/Host.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
 namespace toyc::obj {
 
 bool ObjectGenner::generate(llvm::Module& module, const std::string& outputFileName) {
-    auto triple = llvm::sys::getDefaultTargetTriple();
-    module.setTargetTriple(triple);
-
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
     llvm::InitializeAllTargetMCs();
     llvm::InitializeAllAsmParsers();
     llvm::InitializeAllAsmPrinters();
+
+    auto triple = llvm::sys::getDefaultTargetTriple();
+    module.setTargetTriple(triple);
 
     std::string error;
     auto target = llvm::TargetRegistry::lookupTarget(triple, error);
@@ -47,7 +47,7 @@ bool ObjectGenner::generate(llvm::Module& module, const std::string& outputFileN
     }
 
     llvm::legacy::PassManager pass;
-    if (targetMachine->addPassesToEmitFile(pass, dest, nullptr, llvm::CGFT_ObjectFile)) {
+    if (targetMachine->addPassesToEmitFile(pass, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
         llvm::errs() << "TargetMachine can't emit a file of this type\n";
         return false;
     }

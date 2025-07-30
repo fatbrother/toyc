@@ -14,7 +14,7 @@ public:
         SAFE_DELETE(lhs);
         SAFE_DELETE(rhs);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "BinaryOperator"; }
 
 private:
@@ -30,9 +30,9 @@ public:
     ~NUnaryExpression() {
         SAFE_DELETE(expr);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "UnaryOperator"; }
-    virtual llvm::AllocaInst *allocgen(ASTContext &context) override {
+    virtual std::pair<llvm::AllocaInst *, NTypePtr> allocgen(ASTContext &context) override {
         return expr->allocgen(context);
     };
 
@@ -50,7 +50,7 @@ public:
         SAFE_DELETE(trueExpr);
         SAFE_DELETE(falseExpr);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ConditionalExpression"; }
 
 private:
@@ -62,8 +62,8 @@ private:
 class NIdentifier : public NExpression {
 public:
     NIdentifier(const std::string &name) : name(name) {}
-    virtual llvm::Value *codegen(ASTContext &context) override;
-    virtual llvm::AllocaInst *allocgen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
+    virtual std::pair<llvm::AllocaInst *, NTypePtr> allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "Identifier"; }
 
 private:
@@ -73,7 +73,7 @@ private:
 class NInteger : public NExpression {
 public:
     NInteger(int value) : value(value) {}
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Integer"; }
 
 private:
@@ -83,7 +83,7 @@ private:
 class NFloat : public NExpression {
 public:
     NFloat(double value) : value(value) {}
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Float"; }
 
 private:
@@ -93,7 +93,7 @@ private:
 class NString : public NExpression {
 public:
     NString(const std::string &value) : value(value) {}
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "String"; }
 
 private:
@@ -108,9 +108,9 @@ public:
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override {
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override {
         if (nullptr == expr) {
-            return nullptr;
+            return std::make_pair(nullptr, nullptr);
         }
         return expr->codegen(context);
     }
@@ -133,7 +133,7 @@ public:
         SAFE_DELETE(lhs);
         SAFE_DELETE(rhs);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Assignment"; }
 
 private:
@@ -148,7 +148,7 @@ public:
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Arguments"; }
 
 public:
@@ -163,7 +163,7 @@ public:
     ~NFunctionCall() {
         SAFE_DELETE(argNodes);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionCall"; }
 
 private:

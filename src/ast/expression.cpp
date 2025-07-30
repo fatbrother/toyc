@@ -6,134 +6,184 @@
 
 using namespace toyc::ast;
 
-llvm::Value *NBinaryOperator::codegen(ASTContext &context) {
-    llvm::Value *lhsValue = lhs->codegen(context);
-    llvm::Value *rhsValue = rhs->codegen(context);
+std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context) {
+    auto [lhsValue, lhsType] = lhs->codegen(context);
+    auto [rhsValue, rhsType] = rhs->codegen(context);
     llvm::Value *result = nullptr;
+    NTypePtr resultType = nullptr;
+    VarType targetType = VAR_TYPE_INT;
 
     if (nullptr == lhsValue || nullptr == rhsValue) {
-        return nullptr;
+        return std::make_pair(nullptr, nullptr);
     }
 
-    std::map<BineryOperator, std::function<llvm::Value *(llvm::IRBuilder<> &, llvm::Value *, llvm::Value *)>> binaryOps = {
-        {AND, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
-            return typeCast(
-                builder.CreateLogicalAnd(lhs, typeCast(rhs, VarType::VAR_TYPE_BOOL, builder.getContext(), builder), "and"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
-        }},
-        {OR, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
-            return typeCast(
-                builder.CreateLogicalOr(lhs, typeCast(rhs, VarType::VAR_TYPE_BOOL, builder.getContext(), builder), "or"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
-        }},
-        {EQ, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
-            return typeCast(builder.CreateICmpEQ(lhs, rhs, "eq"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
-        }},
-        {NE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
-            return typeCast(builder.CreateICmpNE(lhs, rhs, "ne"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
-        }},
-        {LE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
-            return typeCast(builder.CreateICmpSLE(lhs, rhs, "le"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
-        }},
-        {GE, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
-            return typeCast(builder.CreateICmpSGE(lhs, rhs, "ge"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
-        }},
-        {L, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
-            return typeCast(builder.CreateICmpSLT(lhs, rhs, "lt"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
-        }},
-        {G, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) {
-            return typeCast(builder.CreateICmpSGT(lhs, rhs, "gt"), VarType::VAR_TYPE_INT, builder.getContext(), builder);
-        }},
-        {ADD, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateAdd(lhs, rhs, "add"); }},
-        {SUB, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateSub(lhs, rhs, "sub"); }},
-        {MUL, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateMul(lhs, rhs, "mul"); }},
-        {DIV, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateSDiv(lhs, rhs, "div"); }},
-        {MOD, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateSRem(lhs, rhs, "mod"); }},
-        {LEFT, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateShl(lhs, rhs, "left"); }},
-        {RIGHT, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateLShr(lhs, rhs, "right"); }},
-        {BIT_AND, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateAnd(lhs, rhs, "bit_and"); }},
-        {BIT_OR, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateOr(lhs, rhs, "bit_or"); }},
-        {XOR, [](llvm::IRBuilder<> &builder, llvm::Value *lhs, llvm::Value *rhs) { return builder.CreateXor(lhs, rhs, "xor"); }}
-    };
+    if (op == EQ || op == NE || op == LE || op == GE || op == L || op == G) {
+        resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
+        targetType = (lhsType->getVarType() > rhsType->getVarType()) ?
+                     lhsType->getVarType() : rhsType->getVarType();
 
-    if (0 != binaryOps.count(op)) {
-        result = binaryOps[op](context.builder, lhsValue, rhsValue);
+        if (lhsType->getVarType() != targetType) {
+            lhsValue = typeCast(lhsValue, lhsType, targetType, context.llvmContext, context.builder);
+        }
+        if (rhsType->getVarType() != targetType) {
+            rhsValue = typeCast(rhsValue, rhsType, targetType, context.llvmContext, context.builder);
+        }
+    } else if (op == AND || op == OR) {
+        resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
+        lhsValue = typeCast(lhsValue, lhsType, resultType, context.llvmContext, context.builder);
+        rhsValue = typeCast(rhsValue, rhsType, resultType, context.llvmContext, context.builder);
     } else {
-        std::cerr << "Unknown binary operator: " << op << std::endl;
-        return nullptr;
+        if (true == isFloatingPointType(lhsType->getVarType())) {
+            resultType = std::make_shared<NType>(VarType::VAR_TYPE_DOUBLE);
+            targetType = VAR_TYPE_DOUBLE;
+        } else {
+            resultType = std::make_shared<NType>(VarType::VAR_TYPE_INT);
+            targetType = VAR_TYPE_INT;
+        }
+
+        lhsValue = typeCast(lhsValue, lhsType, resultType, context.llvmContext, context.builder);
+        rhsValue = typeCast(rhsValue, rhsType, resultType, context.llvmContext, context.builder);
     }
-    return result;
+
+    switch (op) {
+        case AND:
+            result = context.builder.CreateLogicalAnd(lhsValue, rhsValue, "and");
+            break;
+        case OR:
+            result = context.builder.CreateLogicalOr(lhsValue, rhsValue, "or");
+            break;
+        case ADD:
+            result = context.builder.CreateAdd(lhsValue, rhsValue, "add");
+            break;
+        case SUB:
+            result = context.builder.CreateSub(lhsValue, rhsValue, "sub");
+            break;
+        case MUL:
+            result = context.builder.CreateMul(lhsValue, rhsValue, "mul");
+            break;
+        case DIV:
+            result = context.builder.CreateSDiv(lhsValue, rhsValue, "div");
+            break;
+        case MOD:
+            result = context.builder.CreateSRem(lhsValue, rhsValue, "mod");
+            break;
+        case LEFT:
+            result = context.builder.CreateShl(lhsValue, rhsValue, "left");
+            break;
+        case RIGHT:
+            result = context.builder.CreateLShr(lhsValue, rhsValue, "right");
+            break;
+        case EQ:
+            result = (true == isFloatingPointType(targetType)) ?
+                     context.builder.CreateFCmpOEQ(lhsValue, rhsValue, "eq") :
+                     context.builder.CreateICmpEQ(lhsValue, rhsValue, "eq");
+            break;
+        case NE:
+            result = (true == isFloatingPointType(targetType)) ?
+                     context.builder.CreateFCmpONE(lhsValue, rhsValue, "ne") :
+                     context.builder.CreateICmpNE(lhsValue, rhsValue, "ne");
+            break;
+        case LE:
+            result = (true == isFloatingPointType(targetType)) ?
+                     context.builder.CreateFCmpOLE(lhsValue, rhsValue, "le") :
+                     context.builder.CreateICmpSLE(lhsValue, rhsValue, "le");
+            break;
+        case GE:
+            result = (true == isFloatingPointType(targetType)) ?
+                     context.builder.CreateFCmpOGE(lhsValue, rhsValue, "ge") :
+                     context.builder.CreateICmpSGE(lhsValue, rhsValue, "ge");
+            break;
+        case L:
+            result = (true == isFloatingPointType(targetType)) ?
+                     context.builder.CreateFCmpOLT(lhsValue, rhsValue, "lt") :
+                     context.builder.CreateICmpSLT(lhsValue, rhsValue, "lt");
+            break;
+        case G:
+            result = (true == isFloatingPointType(targetType)) ?
+                     context.builder.CreateFCmpOGT(lhsValue, rhsValue, "gt") :
+                     context.builder.CreateICmpSGT(lhsValue, rhsValue, "gt");
+            break;
+        case BIT_AND:
+            result = context.builder.CreateAnd(lhsValue, rhsValue, "bit_and");
+            break;
+        case BIT_OR:
+            result = context.builder.CreateOr(lhsValue, rhsValue, "bit_or");
+            break;
+        case XOR:
+            result = context.builder.CreateXor(lhsValue, rhsValue, "xor");
+            break;
+        default:
+            std::cerr << "Unknown binary operator: " << op << std::endl;
+            return std::make_pair(nullptr, nullptr);
+    }
+
+    return std::make_pair(result, resultType);
 }
 
-llvm::Value *NUnaryExpression::codegen(ASTContext &context) {
-    llvm::Value *value = nullptr;
+std::pair<llvm::Value *, NTypePtr> NUnaryExpression::codegen(ASTContext &context) {
+    auto [value, type] = expr->codegen(context);
+    llvm::AllocaInst *allocaInst = nullptr;
     llvm::Value *one = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), 1);
+    NTypePtr resultType = nullptr;
 
     if (nullptr == expr) {
         std::cerr << "Error: Expression is null" << std::endl;
-        return nullptr;
+        return std::make_pair(nullptr, nullptr);
+    }
+
+    if (op == L_INC || op == R_INC || op == L_DEC || op == R_DEC) {
+        allocaInst = expr->allocgen(context).first;
     }
 
     llvm::Value *tmp = nullptr;
     switch (op) {
         case L_INC:
-            value = expr->codegen(context);
             value = context.builder.CreateAdd(value, one, "inc");
-            context.builder.CreateStore(value, expr->allocgen(context));
+            context.builder.CreateStore(value, allocaInst);
             break;
         case R_INC:
-            value = expr->codegen(context);
             tmp = context.builder.CreateAdd(value, one, "inc");
-            context.builder.CreateStore(tmp, expr->allocgen(context));
+            context.builder.CreateStore(tmp, allocaInst);
             break;
         case L_DEC:
-            value = expr->codegen(context);
             value = context.builder.CreateSub(value, one, "dec");
-            context.builder.CreateStore(value, expr->allocgen(context));
+            context.builder.CreateStore(value, allocaInst);
             break;
         case R_DEC:
-            value = expr->codegen(context);
             tmp = context.builder.CreateSub(value, one, "dec");
-            context.builder.CreateStore(tmp, expr->allocgen(context));
+            context.builder.CreateStore(tmp, allocaInst);
             break;
         case ADDR:
-            value = expr->allocgen(context);
+            value = allocaInst;
             break;
         case DEREF:
-            value = expr->codegen(context);
             if (nullptr == value) {
-                std::cerr << "Error: Dereference failed" << std::endl;
-                return nullptr;
+                return std::make_pair(nullptr, nullptr);
             }
-            value = context.builder.CreateLoad(value->getType()->getPointerElementType(), value, "deref");
+            value = context.builder.CreateLoad(type->getLLVMType(context.llvmContext), value, "deref");
             break;
         case PLUS:
-            value = expr->codegen(context);
             if (nullptr == value) {
                 std::cerr << "Error: Unary plus failed" << std::endl;
-                return nullptr;
+                return std::make_pair(nullptr, nullptr);
             }
             break;
         case MINUS:
-            value = expr->codegen(context);
             if (nullptr == value) {
                 std::cerr << "Error: Unary minus failed" << std::endl;
-                return nullptr;
+                return std::make_pair(nullptr, nullptr);
             }
             value = context.builder.CreateNeg(value, "neg");
             break;
         case BIT_NOT:
-            value = expr->codegen(context);
             if (nullptr == value) {
                 std::cerr << "Error: Bitwise NOT failed" << std::endl;
-                return nullptr;
+                return std::make_pair(nullptr, nullptr);
             }
             value = context.builder.CreateXor(value, llvm::ConstantInt::get(value->getType(), -1), "bit_not");
             break;
         case LOG_NOT:
-            value = typeCast(expr->codegen(context), VarType::VAR_TYPE_INT, context.llvmContext, context.builder);
-            if (nullptr == value) {
-                std::cerr << "Error: Logical NOT failed" << std::endl;
-                return nullptr;
-            }
+            value = typeCast(value, type, VarType::VAR_TYPE_BOOL, context.llvmContext, context.builder);
             value = context.builder.CreateICmpEQ(value, llvm::ConstantInt::get(value->getType(), 0), "log_not");
             break;
         default:
@@ -141,19 +191,29 @@ llvm::Value *NUnaryExpression::codegen(ASTContext &context) {
             break;
     }
 
-    return value;
-}
-
-llvm::Value *NConditionalExpression::codegen(ASTContext &context) {
-    if (nullptr == condition || nullptr == trueExpr || nullptr == falseExpr) {
-        std::cerr << "Error: One of the expressions is null" << std::endl;
-        return nullptr;
+    if (op == ADDR) {
+        resultType = std::make_shared<NType>(VarType::VAR_TYPE_PTR, type);
+    } else if (op == DEREF) {
+        resultType = type->getPointTo();
+    } else if (op == LOG_NOT) {
+        resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
+    } else {
+        resultType = type;
     }
 
-    llvm::Value *condValue = condition->codegen(context);
+    return std::make_pair(value, resultType);
+}
+
+std::pair<llvm::Value *, NTypePtr> NConditionalExpression::codegen(ASTContext &context) {
+    if (nullptr == condition || nullptr == trueExpr || nullptr == falseExpr) {
+        std::cerr << "Error: One of the expressions is null" << std::endl;
+        return std::make_pair(nullptr, nullptr);
+    }
+
+    auto [condValue, condType] = condition->codegen(context);
     if (nullptr == condValue) {
         std::cerr << "Error: Condition code generation failed" << std::endl;
-        return nullptr;
+        return std::make_pair(nullptr, nullptr);
     }
 
     condValue = context.builder.CreateICmpNE(condValue, llvm::ConstantInt::get(condValue->getType(), 0), "cond");
@@ -166,18 +226,18 @@ llvm::Value *NConditionalExpression::codegen(ASTContext &context) {
     context.builder.CreateCondBr(condValue, trueBlock, falseBlock);
 
     context.builder.SetInsertPoint(trueBlock);
-    llvm::Value *trueValue = trueExpr->codegen(context);
+    auto [trueValue, trueType] = trueExpr->codegen(context);
     if (nullptr == trueValue) {
         std::cerr << "Error: True expression code generation failed" << std::endl;
-        return nullptr;
+        return std::make_pair(nullptr, nullptr);
     }
     context.builder.CreateBr(mergeBlock);
 
     context.builder.SetInsertPoint(falseBlock);
-    llvm::Value *falseValue = falseExpr->codegen(context);
+    auto [falseValue, falseType] = falseExpr->codegen(context);
     if (nullptr == falseValue) {
         std::cerr << "Error: False expression code generation failed" << std::endl;
-        return nullptr;
+        return std::make_pair(nullptr, nullptr);
     }
     context.builder.CreateBr(mergeBlock);
 
@@ -189,15 +249,15 @@ llvm::Value *NConditionalExpression::codegen(ASTContext &context) {
     phiNode->addIncoming(trueValue, trueBlock);
     phiNode->addIncoming(falseValue, falseBlock);
 
-    return phiNode;
+    return std::make_pair(phiNode, trueType);
 }
 
-llvm::Value *NIdentifier::codegen(ASTContext &context) {
-    llvm::AllocaInst *allocaInst = context.variableTable->lookupVariable(name);
+std::pair<llvm::Value *, NTypePtr> NIdentifier::codegen(ASTContext &context) {
+    auto [allocaInst, type] = context.variableTable->lookupVariable(name);
     llvm::Value *value = nullptr;
     if (nullptr == allocaInst) {
         std::cerr << "Error: Variable not found: " << name << std::endl;
-        return nullptr;
+        return std::make_pair(nullptr, nullptr);
     }
 
     value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
@@ -205,78 +265,70 @@ llvm::Value *NIdentifier::codegen(ASTContext &context) {
         std::cerr << "Error: Load failed for variable: " << name << std::endl;
     }
 
-    return value;
+    return std::make_pair(value, type);
 }
 
-llvm::AllocaInst *NIdentifier::allocgen(ASTContext &context) {
-    llvm::AllocaInst *allocaInst = context.variableTable->lookupVariable(name);
-    if (nullptr == allocaInst) {
-        std::cerr << "Error: Variable not found: " << name << std::endl;
-        return nullptr;
-    }
-
-    return allocaInst;
+std::pair<llvm::AllocaInst *, NTypePtr> NIdentifier::allocgen(ASTContext &context) {
+    return context.variableTable->lookupVariable(name);
 }
 
-llvm::Value *NAssignment::codegen(ASTContext &context) {
-    llvm::AllocaInst *lhsAlloca = lhs->allocgen(context);
-    llvm::Value *rhsValue = rhs->codegen(context);
+std::pair<llvm::Value *, NTypePtr> NAssignment::codegen(ASTContext &context) {
+    auto [lhsAlloca, lhsType] = lhs->allocgen(context);
+    auto [rhsValue, rhsType] = rhs->codegen(context);
     if (nullptr == rhsValue || nullptr == lhsAlloca) {
         std::cerr << "Error: Assignment failed due to null values" << std::endl;
-        return nullptr;
+        return std::make_pair(nullptr, nullptr);
     }
 
-    if (lhsAlloca->getAllocatedType() != rhsValue->getType()) {
-        std::cerr << "Error: Type mismatch in assignment" << std::endl;
-        return nullptr;
-    }
+    rhsValue = typeCast(rhsValue, rhsType, lhsType, context.llvmContext, context.builder);
     context.builder.CreateStore(rhsValue, lhsAlloca);
-    return rhsValue;
+    return std::make_pair(rhsValue, lhsType);
 }
 
-llvm::Value *NArguments::codegen(ASTContext &context) {
-    if (nullptr == expr) {
-        std::cerr << "Error: Expression is null" << std::endl;
-        return nullptr;
-    }
+std::pair<llvm::Value *, NTypePtr> NArguments::codegen(ASTContext &context) {
     return expr->codegen(context);
 }
 
-llvm::Value *NFunctionCall::codegen(ASTContext &context) {
+std::pair<llvm::Value *, NTypePtr> NFunctionCall::codegen(ASTContext &context) {
     std::vector<llvm::Value *> args;
-    llvm::Function *function = context.module.getFunction(name);
+    NFunctionDefinition *function = context.functionDefinitions[name];
     llvm::Value *res = nullptr;
     if (nullptr == function) {
         std::cerr << "Error: Function not found: " << name << std::endl;
-        return nullptr;
+        return std::make_pair(nullptr, nullptr);
     }
 
     for (NArguments *argNode = argNodes; argNode != nullptr; argNode = argNode->next) {
-        llvm::Value *argValue = argNode->codegen(context);
+        auto [argValue, argType] = argNode->codegen(context);
         if (nullptr == argValue) {
             std::cerr << "Error: Argument value is null" << std::endl;
-            return nullptr;
+            return std::make_pair(nullptr, nullptr);
         }
         args.push_back(argValue);
     }
 
-    if (function->getReturnType()->isVoidTy()) {
-        res = context.builder.CreateCall(function, args);
-    } else {
-        res = context.builder.CreateCall(function, args, "calltmp");
-    }
+    res = context.builder.CreateCall(function->getFunction(), args, "call_" + name);
 
-    return res;
+    return std::make_pair(res, function->getReturnType());
 }
 
-llvm::Value *NInteger::codegen(ASTContext &context) {
-    return llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), value);
+std::pair<llvm::Value *, NTypePtr> NInteger::codegen(ASTContext &context) {
+    return std::make_pair(
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), value),
+        std::make_shared<NType>(VarType::VAR_TYPE_INT)
+    );
 }
 
-llvm::Value *NFloat::codegen(ASTContext &context) {
-    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.llvmContext), value);
+std::pair<llvm::Value *, NTypePtr> NFloat::codegen(ASTContext &context) {
+    return std::make_pair(
+        llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.llvmContext), value),
+        std::make_shared<NType>(VarType::VAR_TYPE_DOUBLE)
+    );
 }
 
-llvm::Value *NString::codegen(ASTContext &context) {
-    return context.builder.CreateGlobalStringPtr(value, "str");
+std::pair<llvm::Value *, NTypePtr> NString::codegen(ASTContext &context) {
+    return std::make_pair(
+        context.builder.CreateGlobalStringPtr(value, "string_literal"),
+        std::make_shared<NType>(VarType::VAR_TYPE_PTR, std::make_shared<NType>(VarType::VAR_TYPE_CHAR))
+    );
 }

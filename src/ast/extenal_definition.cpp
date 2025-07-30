@@ -6,7 +6,6 @@
 using namespace toyc::ast;
 
 NFunctionDefinition::~NFunctionDefinition() {
-    SAFE_DELETE(returnType);
     SAFE_DELETE(params);
     SAFE_DELETE(body);
 }
@@ -47,6 +46,8 @@ void NFunctionDefinition::codegen(ASTContext &context) {
         paramIt = paramIt->next;
     }
 
+    context.functionDefinitions[name] = this;
+
     if (nullptr == body) {
         return;
     }
@@ -55,6 +56,8 @@ void NFunctionDefinition::codegen(ASTContext &context) {
     context.isInitializingFunction = true;
     body->setName("entry");
     body->codegen(context);
+    context.currentFunction = nullptr;
+    context.isInitializingFunction = false;
 
     if (false != llvm::verifyFunction(*llvmFunction, &llvm::errs())) {
         return;
