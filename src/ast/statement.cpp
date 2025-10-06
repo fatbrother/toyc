@@ -78,7 +78,7 @@ llvm::Value *NBlock::codegen(ASTContext &context) {
 
     context.popScope();
 
-    if (nullptr != nextBlock) {
+    if (nullptr != nextBlock && !block->getTerminator()) {
         context.builder.CreateBr(nextBlock);
         context.builder.SetInsertPoint(nextBlock);
     }
@@ -111,8 +111,8 @@ llvm::Value *NIfStatement::codegen(ASTContext &context) {
     llvm::Function *function = context.currentFunction->getFunction();
     llvm::BasicBlock *thenBlock = nullptr;
     llvm::BasicBlock *elseBlock = nullptr;
-    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(context.llvmContext, "if_merge", function);
     llvm::BasicBlock *conditionBlock = llvm::BasicBlock::Create(context.llvmContext, "if_condition", function);
+    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(context.llvmContext, "if_merge", function);
     llvm::Value *conditionValue = nullptr;
 
     context.builder.CreateBr(conditionBlock);
