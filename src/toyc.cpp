@@ -80,8 +80,8 @@ int main(int argc, char *argv[]) {
     inputFileName = argv[optind];
     outputFileName = outputFileName.empty() ? inputFileName.substr(0, inputFileName.find_last_of('.')) : outputFileName;
 
-    if (inputFileName.empty()) {
-        std::cerr << "Error: No input file specified." << std::endl;
+    if (std::filesystem::exists(inputFileName) == false) {
+        std::cerr << "Input file does not exist: " << inputFileName << std::endl;
         return -1;
     }
 
@@ -126,9 +126,8 @@ int main(int argc, char *argv[]) {
     // passManager.run(astContext.module);
 
     if (emitLLVM) {
-        std::string llvmFileName = outputFileName + ".ll";
         std::error_code EC;
-        llvm::raw_fd_ostream llvmFile(llvmFileName, EC);
+        llvm::raw_fd_ostream llvmFile(outputFileName, EC);
         if (EC) {
             std::cerr << "Error opening file for writing: " << EC.message() << std::endl;
             return -1;
