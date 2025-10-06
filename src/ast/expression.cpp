@@ -25,7 +25,7 @@ std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context)
     } else {
         targetType = (true == isFloatingPointType(lhsType->getVarType())) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;
         resultType = std::make_shared<NType>(targetType);
-        }
+    }
 
     lhsValue = typeCast(lhsValue, lhsType, targetType, context.llvmContext, context.builder);
     rhsValue = typeCast(rhsValue, rhsType, targetType, context.llvmContext, context.builder);
@@ -248,13 +248,21 @@ std::pair<llvm::Value *, NTypePtr> NIdentifier::codegen(ASTContext &context) {
     value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
     if (nullptr == value) {
         std::cerr << "Error: Load failed for variable: " << name << std::endl;
+        return std::make_pair(nullptr, nullptr);
     }
 
     return std::make_pair(value, type);
 }
 
 std::pair<llvm::AllocaInst *, NTypePtr> NIdentifier::allocgen(ASTContext &context) {
-    return context.variableTable->lookupVariable(name);
+    auto [allocaInst, type] = context.variableTable->lookupVariable(name);
+
+    if (nullptr == allocaInst) {
+        std::cerr << "Error: Variable not found: " << name << std::endl;
+        return std::make_pair(nullptr, nullptr);
+    }
+
+    return std::make_pair(allocaInst, type);
 }
 
 std::pair<llvm::Value *, NTypePtr> NAssignment::codegen(ASTContext &context) {

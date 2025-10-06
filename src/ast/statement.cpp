@@ -26,6 +26,11 @@ llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
     }
 
     for (auto currentDeclarator = declarator; currentDeclarator != nullptr; currentDeclarator = currentDeclarator->next) {
+        if (context.variableTable->lookupVariable(currentDeclarator->getName(), false).first != nullptr) {
+            std::cerr << "Error: Variable already declared in this scope: " << currentDeclarator->getName() << std::endl;
+            return nullptr;
+        }
+
         llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
         context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst, type);
 
@@ -51,7 +56,7 @@ llvm::Value *NBlock::codegen(ASTContext &context) {
     llvm::BasicBlock *block = llvm::BasicBlock::Create(context.llvmContext, name, parentFunction);
 
     context.builder.SetInsertPoint(block);
-    context.pushVariableTable();
+    context.pushScope();
 
     if (true == context.isInitializingFunction) {
         auto *param = context.currentFunction->getParams();
@@ -71,7 +76,7 @@ llvm::Value *NBlock::codegen(ASTContext &context) {
         stmt->codegen(context);
     }
 
-    context.popVariableTable();
+    context.popScope();
 
     if (nullptr != nextBlock) {
         context.builder.CreateBr(nextBlock);
