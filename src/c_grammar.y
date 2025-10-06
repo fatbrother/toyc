@@ -294,6 +294,15 @@ assignment_expression
 	| unary_expression MOD_ASSIGN assignment_expression {
 		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MOD, $3));
 	  }
+	| unary_expression AND_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::BIT_AND, $3));
+	  }
+	| unary_expression OR_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::BIT_OR, $3));
+	  }
+	| unary_expression XOR_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::XOR, $3));
+	  }
 	;
 
 conditional_expression
