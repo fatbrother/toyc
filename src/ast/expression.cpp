@@ -17,33 +17,18 @@ std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context)
         return std::make_pair(nullptr, nullptr);
     }
 
-    if (op == EQ || op == NE || op == LE || op == GE || op == L || op == G) {
+    if (op == EQ || op == NE || op == LE || op == GE || op == LT || op == GT) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
-        targetType = (lhsType->getVarType() > rhsType->getVarType()) ?
-                     lhsType->getVarType() : rhsType->getVarType();
-
-        if (lhsType->getVarType() != targetType) {
-            lhsValue = typeCast(lhsValue, lhsType, targetType, context.llvmContext, context.builder);
-        }
-        if (rhsType->getVarType() != targetType) {
-            rhsValue = typeCast(rhsValue, rhsType, targetType, context.llvmContext, context.builder);
-        }
+        targetType = (lhsType->getVarType() > rhsType->getVarType()) ? lhsType->getVarType() : rhsType->getVarType();
     } else if (op == AND || op == OR) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
-        lhsValue = typeCast(lhsValue, lhsType, resultType, context.llvmContext, context.builder);
-        rhsValue = typeCast(rhsValue, rhsType, resultType, context.llvmContext, context.builder);
     } else {
-        if (true == isFloatingPointType(lhsType->getVarType())) {
-            resultType = std::make_shared<NType>(VarType::VAR_TYPE_DOUBLE);
-            targetType = VAR_TYPE_DOUBLE;
-        } else {
-            resultType = std::make_shared<NType>(VarType::VAR_TYPE_INT);
-            targetType = VAR_TYPE_INT;
+        targetType = (true == isFloatingPointType(lhsType->getVarType())) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;
+        resultType = std::make_shared<NType>(targetType);
         }
 
-        lhsValue = typeCast(lhsValue, lhsType, resultType, context.llvmContext, context.builder);
-        rhsValue = typeCast(rhsValue, rhsType, resultType, context.llvmContext, context.builder);
-    }
+    lhsValue = typeCast(lhsValue, lhsType, targetType, context.llvmContext, context.builder);
+    rhsValue = typeCast(rhsValue, rhsType, targetType, context.llvmContext, context.builder);
 
     switch (op) {
         case AND:
@@ -93,12 +78,12 @@ std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context)
                      context.builder.CreateFCmpOGE(lhsValue, rhsValue, "ge") :
                      context.builder.CreateICmpSGE(lhsValue, rhsValue, "ge");
             break;
-        case L:
+        case LT:
             result = (true == isFloatingPointType(targetType)) ?
                      context.builder.CreateFCmpOLT(lhsValue, rhsValue, "lt") :
                      context.builder.CreateICmpSLT(lhsValue, rhsValue, "lt");
             break;
-        case G:
+        case GT:
             result = (true == isFloatingPointType(targetType)) ?
                      context.builder.CreateFCmpOGT(lhsValue, rhsValue, "gt") :
                      context.builder.CreateICmpSGT(lhsValue, rhsValue, "gt");

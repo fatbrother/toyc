@@ -497,10 +497,10 @@ relational_expression_op
 		$$ = toyc::ast::BineryOperator::GE;
 	}
 	| '<' {
-		$$ = toyc::ast::BineryOperator::L;
+		$$ = toyc::ast::BineryOperator::LT;
 	}
 	| '>' {
-		$$ = toyc::ast::BineryOperator::G;
+		$$ = toyc::ast::BineryOperator::GT;
 	}
 	;
 

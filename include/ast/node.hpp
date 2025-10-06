@@ -36,8 +36,8 @@ enum BineryOperator {
     NE,
     LE,
     GE,
-    L,
-    G,
+    LT,
+    GT,
     BIT_AND,
     BIT_OR,
     XOR
@@ -73,18 +73,26 @@ struct VariableTable {
     std::map<std::string, std::pair<llvm::AllocaInst *, NTypePtr>> variables;
     VariableTable *parent = nullptr;
 
-    std::pair<llvm::AllocaInst *, NTypePtr> lookupVariable(const std::string &name) {
+    /**
+     * Looks up a variable in the current scope and parent scopes.
+     * @return A pair containing the AllocaInst and NTypePtr if found, otherwise {nullptr, nullptr}.
+     */
+    std::pair<llvm::AllocaInst *, NTypePtr> lookupVariable(const std::string &name, bool searchParent = true) {
         auto it = variables.find(name);
         if (it != variables.end()) {
             return it->second;
         }
 
-        if (nullptr == parent) {
-            std::cerr << "Error: Variable not found: " << name << std::endl;
+        if (false == searchParent || nullptr == parent) {
             return std::make_pair(nullptr, nullptr);
         }
+
         return parent->lookupVariable(name);
     }
+
+    /**
+     * Inserts a new variable into the current scope.
+     */
     void insertVariable(const std::string &name, llvm::AllocaInst *allocaInst, NTypePtr type) {
         variables[name] = std::make_pair(allocaInst, type);
     }
@@ -101,13 +109,13 @@ struct ASTContext {
 
     ASTContext() : module("toyc", llvmContext), builder(llvmContext) {}
 
-    void pushVariableTable() {
+    void pushScope() {
         VariableTable *newTable = new VariableTable();
         newTable->parent = variableTable;
         variableTable = newTable;
     }
 
-    void popVariableTable() {
+    void popScope() {
         if (variableTable) {
             VariableTable *oldTable = variableTable;
             variableTable = variableTable->parent;
