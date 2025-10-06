@@ -59,7 +59,7 @@ toyc: $(OBJS)
 # Test targets
 test-build: $(TEST_OBJS) $(LIB_OBJS)
 	@mkdir -p $(BUILDDIR)/tests
-	$(CXX) $(TEST_FLAGS) $(BUILDDIR)/tests/main_test.o $(BUILDDIR)/tests/test_preprocessor.o $(BUILDDIR)/tests/test_error_handler.o $(LIB_OBJS) -o $(BUILDDIR)/tests/all_tests $(TEST_LDFLAGS)
+	$(CXX) $(TEST_FLAGS) $(BUILDDIR)/tests/main_test.o $(BUILDDIR)/tests/test_preprocessor.o $(BUILDDIR)/tests/test_error_handler.o $(BUILDDIR)/tests/test_syntax.o $(LIB_OBJS) -o $(BUILDDIR)/tests/all_tests $(TEST_LDFLAGS)
 
 test: test-build
 	$(BUILDDIR)/tests/all_tests
