@@ -20,6 +20,8 @@ make build_test
 - `test_preprocessor.cpp` - 預處理器測試
 - `test_error_handler.cpp` - 錯誤處理器測試
 - `test_syntax.cpp` - C 語法解析測試
+- `test_output.cpp` - 編譯器輸出測試
+- `test_compiler_errors.cpp` - 編譯錯誤處理測試
 
 ### Fixtures 資料夾結構
 測試使用 fixtures 資料夾來存放測試檔案，提供更好的可讀性和維護性：
@@ -44,6 +46,12 @@ tests/fixtures/
     ├── variables/         # 變數測試
     ├── literals/          # 字面值測試
     └── *.c               # 複合測試檔案
+└── output/                # 編譯器輸出測試檔案
+    ├── simple_programs/   # 簡單程式測試
+    ├── calculations/      # 計算結果測試
+    ├── functions/         # 函數功能測試
+    ├── control_flow/      # 控制流功能測試
+    └── error_cases/       # 錯誤情況測試
 ```
 
 ## 預處理器測試
@@ -266,4 +274,202 @@ make toyc
 ./toyc tests/fixtures/syntax/operators/arithmetic.c
 ./toyc tests/fixtures/syntax/control_flow/for_loop.c
 ./toyc tests/fixtures/syntax/functions/function_calls.c
+```
+
+## 編譯器輸出測試
+
+編譯器輸出測試驗證 ToyC 編譯器的完整編譯流程，包括 LLVM IR 生成、可執行檔案生成和程式執行結果的正確性。
+
+### 測試層級
+
+#### 1. LLVM IR 生成測試
+驗證編譯器能夠正確生成 LLVM IR 中間表示：
+- **IR 檔案生成**: 使用 `-l` 參數生成 `.ll` 檔案
+- **IR 內容檢查**: 驗證生成的 IR 包含正確的函數定義、指令和結構
+- **語法正確性**: 確保生成的 IR 符合 LLVM IR 語法規範
+
+```bash
+# 生成 LLVM IR
+./toyc -l -o output.ll input.c
+
+# 檢查 IR 內容
+cat output.ll
+```
+
+#### 2. 可執行檔案生成測試
+驗證編譯器能夠成功生成可執行的二進制檔案：
+- **目標檔案生成**: 通過 LLVM 後端生成目標碼
+- **連結過程**: 與系統函式庫正確連結
+- **可執行檔案**: 生成可執行的二進制檔案
+
+```bash
+# 生成可執行檔案
+./toyc -o output input.c
+
+# 檢查檔案是否可執行
+ls -l output
+file output
+```
+
+#### 3. 程式執行結果測試
+驗證生成的程式執行結果符合預期：
+- **返回值檢查**: 驗證程式的退出碼 (exit code)
+- **計算正確性**: 確保算術運算、函數調用等產生正確結果
+- **控制流正確性**: 驗證條件判斷、迴圈等控制結構正確執行
+
+```bash
+# 執行程式並檢查退出碼
+./output
+echo $?  # 顯示程式退出碼
+```
+
+#### 4. 錯誤處理測試
+驗證編譯器對錯誤程式碼的處理：
+- **語法錯誤檢測**: 正確識別並報告語法錯誤
+- **錯誤訊息**: 提供有意義的錯誤訊息
+- **編譯失敗**: 在遇到錯誤時正確終止編譯過程
+
+### 測試檔案結構
+
+```
+tests/fixtures/output/
+├── simple_programs/      # 基本程式測試
+│   ├── return_constant.c     # 返回常數
+│   ├── return_zero.c         # 返回 0
+│   └── simple_variable.c     # 簡單變數操作
+├── calculations/         # 計算測試
+│   ├── addition.c            # 加法運算
+│   ├── multiplication.c      # 乘法運算
+│   └── complex_arithmetic.c  # 複雜算術
+├── functions/            # 函數測試
+│   ├── simple_function.c     # 簡單函數調用
+│   └── recursive_function.c  # 遞歸函數
+├── control_flow/         # 控制流測試
+│   ├── if_else_test.c        # if-else 測試
+│   ├── for_loop_test.c       # for 迴圈測試
+│   └── while_loop_test.c     # while 迴圈測試
+└── error_cases/          # 錯誤情況測試
+    ├── missing_semicolon.c   # 缺少分號
+    ├── undefined_function.c  # 未定義函數
+    └── unmatched_braces.c    # 大括號不匹配
+```
+
+### 測試範例
+
+#### 基本計算測試
+```c
+// tests/fixtures/output/calculations/addition.c
+int main() {
+    int a = 10;
+    int b = 5;
+    int result = a + b;
+    return result;  // 應該返回 15
+}
+```
+
+#### 函數調用測試
+```c
+// tests/fixtures/output/functions/simple_function.c
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    int result = add(10, 5);
+    return result;  // 應該返回 15
+}
+```
+
+#### 遞歸函數測試
+```c
+// tests/fixtures/output/functions/recursive_function.c
+int factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+int main() {
+    return factorial(5);  // 應該返回 120
+}
+```
+
+### 測試執行流程
+
+1. **編譯階段測試**
+   ```bash
+   # 測試 LLVM IR 生成
+   ./toyc -l -o test.ll test.c
+
+   # 測試可執行檔案生成
+   ./toyc -o test_exec test.c
+   ```
+
+2. **執行階段測試**
+   ```bash
+   # 執行程式並檢查結果
+   ./test_exec
+   echo "Exit code: $?"
+   ```
+
+3. **錯誤處理測試**
+   ```bash
+   # 測試語法錯誤檢測
+   ./toyc error_test.c  # 應該返回非零退出碼
+   ```
+
+### 自動化測試
+
+Google Test 框架提供完整的自動化測試：
+
+```cpp
+// 測試程式執行結果
+TEST_F(OutputTest, ExecutionResult_Addition) {
+    std::string inputFile = "tests/fixtures/output/calculations/addition.c";
+    std::string execFile = test_output_dir + "/addition";
+
+    ASSERT_TRUE(compileFile(inputFile, execFile));
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 15);  // 期望返回 15
+}
+
+// 測試 LLVM IR 生成
+TEST_F(OutputTest, GenerateLLVMIR_ReturnConstant) {
+    std::string inputFile = "tests/fixtures/output/simple_programs/return_constant.c";
+    std::string llvmFile = test_output_dir + "/return_constant.ll";
+
+    EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile));
+    EXPECT_TRUE(llvmIRContains(llvmFile, "define"));
+    EXPECT_TRUE(llvmIRContains(llvmFile, "main"));
+}
+```
+
+### 手動測試輸出
+
+```bash
+# 編譯編譯器
+make toyc
+
+# 測試基本功能
+./toyc tests/fixtures/output/simple_programs/return_constant.c
+./return_constant
+echo $?  # 應該顯示 42
+
+# 測試計算功能
+./toyc tests/fixtures/output/calculations/addition.c
+./addition
+echo $?  # 應該顯示 15
+
+# 測試函數功能
+./toyc tests/fixtures/output/functions/recursive_function.c
+./recursive_function
+echo $?  # 應該顯示 120
+
+# 測試 LLVM IR 生成
+./toyc -l -o test.ll tests/fixtures/output/simple_programs/return_constant.c
+cat test.ll  # 檢查生成的 IR
+
+# 測試錯誤處理
+./toyc tests/fixtures/output/error_cases/missing_semicolon.c  # 應該報錯
 ```
