@@ -20,12 +20,12 @@ extern toyc::utility::ErrorHandler *error_handler;
 void help() {
     std::cout << "Usage: toyc <filename>" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  -h, --help     Show this help message" << std::endl;
-    std::cout << "  -o, --output   Specify output file" << std::endl;
-    std::cout << "  -l, --emit-llvm  Emit LLVM IR to the specified file" << std::endl;
-    std::cout << "  -E             Run only the preprocessor" << std::endl;
-    std::cout << "  -D <macro>     Define a macro" << std::endl;
-    std::cout << "  -I <path>      Add include path" << std::endl;
+    std::cout << "  -h              Show this help message" << std::endl;
+    std::cout << "  -o <filename>   Specify output file" << std::endl;
+    std::cout << "  -l              Emit LLVM IR to the specified file" << std::endl;
+    std::cout << "  -E              Run only the preprocessor" << std::endl;
+    std::cout << "  -D <macro>      Define a macro" << std::endl;
+    std::cout << "  -I <path>       Add include path" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
