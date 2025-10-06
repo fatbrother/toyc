@@ -5,6 +5,7 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <unistd.h>
 #include <vector>
+#include <filesystem>
 
 #include "ast/node.hpp"
 #include "obj/object_genner.hpp"
@@ -114,7 +115,10 @@ int main(int argc, char *argv[]) {
 
     toyc::ast::ASTContext astContext;
     for (auto &decl = program; decl != nullptr; decl = decl->next) {
-        decl->codegen(astContext);
+        if (0 != decl->codegen(astContext)) {
+            std::cerr << "Code generation failed." << std::endl;
+            return -1;
+        }
     }
 
     // llvm::legacy::PassManager passManager;
@@ -158,13 +162,7 @@ int main(int argc, char *argv[]) {
     system(command.c_str());
 
     // Clean up AST memory
-    toyc::ast::NExternalDeclaration *current = program;
-    while (current != nullptr) {
-        toyc::ast::NExternalDeclaration *next = current->next;
-        delete current;
-        current = next;
-    }
-    program = nullptr;
+    delete program;
 
     return 0;
 }

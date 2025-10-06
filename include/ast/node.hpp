@@ -281,7 +281,7 @@ public:
     virtual ~NExternalDeclaration() {
         SAFE_DELETE(next);
     }
-    virtual void codegen(ASTContext &context) = 0;
+    virtual int codegen(ASTContext &context) = 0;
 
 public:
     NExternalDeclaration *next = nullptr;
@@ -318,7 +318,7 @@ public:
     NFunctionDefinition(NType *returnType, const std::string &name, NParameter *params, NBlock *body)
         : returnType(returnType), name(name), params(params), body(body) {}
     ~NFunctionDefinition();
-    virtual void codegen(ASTContext &context) override;
+    virtual int codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionDefinition"; }
     llvm::Function *getFunction() const { return llvmFunction; }
     NTypePtr getReturnType() const { return returnType; }

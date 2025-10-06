@@ -11,7 +11,7 @@ NStatement::~NStatement() {
 
 llvm::Value *NExpressionStatement::codegen(ASTContext &context) {
     if (nullptr != expression) {
-        expression->codegen(context);
+        return expression->codegen(context).first;
     }
 
     return nullptr;
@@ -19,6 +19,7 @@ llvm::Value *NExpressionStatement::codegen(ASTContext &context) {
 
 llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
     llvm::Type *llvmType = type->getLLVMType(context.llvmContext);
+    llvm::AllocaInst *allocaInst = nullptr;
 
     if (nullptr == llvmType) {
         std::cerr << "Error: Type is null" << std::endl;
@@ -31,7 +32,7 @@ llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
             return nullptr;
         }
 
-        llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
+        allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
         context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst, type);
 
         auto [value, valType] = currentDeclarator->codegen(context);
@@ -41,14 +42,16 @@ llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
             return nullptr;
         }
 
-        if (nullptr != value) {
+        if ((nullptr == value) && (false == currentDeclarator->isNonInitialized())) {
+            std::cerr << "Error: Initializer generation failed for variable: " << currentDeclarator->getName() << std::endl;
+            return nullptr;
+        } else {
             value = typeCast(value, valType, type, context.llvmContext, context.builder);
             context.builder.CreateStore(value, allocaInst);
         }
-
     }
 
-    return nullptr;
+    return allocaInst;
 }
 
 llvm::Value *NBlock::codegen(ASTContext &context) {
@@ -73,7 +76,12 @@ llvm::Value *NBlock::codegen(ASTContext &context) {
         if (nullptr != parent) {
             stmt->setParent(parent);
         }
-        stmt->codegen(context);
+
+        if (nullptr == stmt->codegen(context)) {
+            std::cerr << "Error: Statement codegen fail" << std::endl;
+            context.popScope();
+            return nullptr;
+        }
     }
 
     context.popScope();
@@ -99,9 +107,9 @@ llvm::Value *NReturnStatement::codegen(ASTContext &context) {
             std::cerr << "Error: Return value is null" << std::endl;
             return nullptr;
         }
-        context.builder.CreateRet(value);
+        return context.builder.CreateRet(value);
     } else {
-        context.builder.CreateRetVoid();
+        return context.builder.CreateRetVoid();
     }
 
     return nullptr;

@@ -116,6 +116,7 @@ public:
     }
     virtual std::string getType() const override { return "Declaration"; }
     std::string getName() const { return name; }
+    bool isNonInitialized() const { return expr == nullptr; }
 
 public:
     NDeclarator *next = nullptr;

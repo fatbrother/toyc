@@ -10,7 +10,7 @@ NFunctionDefinition::~NFunctionDefinition() {
     SAFE_DELETE(body);
 }
 
-void NFunctionDefinition::codegen(ASTContext &context) {
+int NFunctionDefinition::codegen(ASTContext &context) {
     llvm::Type *llvmReturnType = returnType->getLLVMType(context.llvmContext);
     std::vector<llvm::Type *> paramTypes;
     std::vector<std::string> paramNames;
@@ -26,7 +26,7 @@ void NFunctionDefinition::codegen(ASTContext &context) {
         llvm::Type *paramType = paramIt->getLLVMType(context.llvmContext);
         if (nullptr == paramType) {
             std::cerr << "Error: Parameter type is null" << std::endl;
-            return;
+            return -1;
         }
 
         paramTypes.push_back(paramType);
@@ -37,7 +37,7 @@ void NFunctionDefinition::codegen(ASTContext &context) {
     llvmFunction = static_cast<llvm::Function *>(context.module.getOrInsertFunction(name, functionType).getCallee());
     if (nullptr == llvmFunction) {
         std::cerr << "Error: Function is null" << std::endl;
-        return;
+        return -1;
     }
 
     NParameter* paramIt = params;
@@ -49,17 +49,21 @@ void NFunctionDefinition::codegen(ASTContext &context) {
     context.functionDefinitions[name] = this;
 
     if (nullptr == body) {
-        return;
+        return 0;
     }
 
     context.currentFunction = this;
     context.isInitializingFunction = true;
     body->setName("entry");
-    body->codegen(context);
+    if (nullptr == body->codegen(context)) {
+        return -1;
+    }
     context.currentFunction = nullptr;
     context.isInitializingFunction = false;
 
     if (false != llvm::verifyFunction(*llvmFunction, &llvm::errs())) {
-        return;
+        return -1;
     }
+
+    return 0;
 }
