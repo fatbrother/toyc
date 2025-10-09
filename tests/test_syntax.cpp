@@ -207,3 +207,70 @@ TEST_F(SyntaxTest, CompleteProgram) {
     ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
     EXPECT_TRUE(testFileParsing(filepath)) << "完整程式解析失敗";
 }
+
+// Struct 語法測試
+TEST_F(SyntaxTest, BasicStruct) {
+    std::string filepath = "tests/fixtures/syntax/structures/basic_struct.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "基本 struct 定義解析失敗";
+}
+
+TEST_F(SyntaxTest, SimpleStructDefinition) {
+    std::string filepath = "tests/fixtures/syntax/structures/simple_struct_definition.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "簡單 struct 定義解析失敗";
+}
+
+TEST_F(SyntaxTest, StructInitialization) {
+    std::string filepath = "tests/fixtures/syntax/structures/struct_initialization.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "struct 初始化解析失敗";
+}
+
+TEST_F(SyntaxTest, AnonymousStruct) {
+    std::string filepath = "tests/fixtures/syntax/structures/anonymous_struct.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "匿名 struct 解析失敗";
+}
+
+TEST_F(SyntaxTest, ForwardDeclaration) {
+    std::string filepath = "tests/fixtures/syntax/structures/forward_declaration.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "struct 前向聲明解析失敗";
+}
+
+TEST_F(SyntaxTest, StructForwardOnly) {
+    std::string filepath = "tests/fixtures/syntax/structures/struct_forward_only.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "僅前向聲明的 struct 解析失敗";
+}
+
+TEST_F(SyntaxTest, NestedStruct) {
+    std::string filepath = "tests/fixtures/syntax/structures/nested_struct.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "嵌套 struct 解析失敗";
+}
+
+TEST_F(SyntaxTest, StructPointer) {
+    std::string filepath = "tests/fixtures/syntax/structures/struct_pointer.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "struct 指標解析失敗";
+}
+
+TEST_F(SyntaxTest, StructAsParameter) {
+    std::string filepath = "tests/fixtures/syntax/structures/struct_as_parameter.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "struct 作為參數解析失敗";
+}
+
+TEST_F(SyntaxTest, ComplexStruct) {
+    std::string filepath = "tests/fixtures/syntax/structures/complex_struct.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "複雜 struct 解析失敗";
+}
+
+TEST_F(SyntaxTest, StructVariableDeclaration) {
+    std::string filepath = "tests/fixtures/syntax/structures/struct_variable_declaration.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "struct 變數聲明解析失敗";
+}

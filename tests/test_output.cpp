@@ -271,3 +271,71 @@ TEST_F(OutputTest, CompleteCompilationPipeline) {
     int exitCode = executeProgram(execFile);
     EXPECT_EQ(exitCode, 10) << "程式執行結果不正確，期望 10，實際 " << exitCode;
 }
+
+// Struct 輸出測試
+TEST_F(OutputTest, BasicStructCompile) {
+    std::string inputFile = "tests/fixtures/output/structures/basic_struct_compile.c";
+    std::string execFile = test_output_dir + "/basic_struct_compile";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    EXPECT_TRUE(compileFile(inputFile, execFile)) << "基本 struct 編譯失敗";
+    
+    if (fileExists(execFile)) {
+        int exitCode = executeProgram(execFile);
+        EXPECT_EQ(exitCode, 30) << "基本 struct 執行結果不正確，期望 30 (10+20)，實際 " << exitCode;
+    }
+}
+
+TEST_F(OutputTest, StructSizeTest) {
+    std::string inputFile = "tests/fixtures/output/structures/struct_size_test.c";
+    std::string execFile = test_output_dir + "/struct_size_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    EXPECT_TRUE(compileFile(inputFile, execFile)) << "struct 大小測試編譯失敗";
+    
+    if (fileExists(execFile)) {
+        int exitCode = executeProgram(execFile);
+        EXPECT_EQ(exitCode, 42) << "struct 大小測試執行結果不正確，期望 42，實際 " << exitCode;
+    }
+}
+
+TEST_F(OutputTest, StructReturnValue) {
+    std::string inputFile = "tests/fixtures/output/structures/struct_return_value.c";
+    std::string execFile = test_output_dir + "/struct_return_value";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    EXPECT_TRUE(compileFile(inputFile, execFile)) << "struct 返回值測試編譯失敗";
+    
+    if (fileExists(execFile)) {
+        int exitCode = executeProgram(execFile);
+        EXPECT_EQ(exitCode, 40) << "struct 返回值測試執行結果不正確，期望 40 (15+25)，實際 " << exitCode;
+    }
+}
+
+TEST_F(OutputTest, ComplexStructCompile) {
+    std::string inputFile = "tests/fixtures/output/structures/complex_struct_compile.c";
+    std::string execFile = test_output_dir + "/complex_struct_compile";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    EXPECT_TRUE(compileFile(inputFile, execFile)) << "複雜 struct 編譯失敗";
+    
+    if (fileExists(execFile)) {
+        int exitCode = executeProgram(execFile);
+        EXPECT_EQ(exitCode, 50) << "複雜 struct 執行結果不正確，期望 50 (10*5)，實際 " << exitCode;
+    }
+}
+
+// Struct LLVM IR 生成測試
+TEST_F(OutputTest, BasicStructLLVMIR) {
+    std::string inputFile = "tests/fixtures/output/structures/basic_struct_compile.c";
+    std::string llvmFile = test_output_dir + "/basic_struct.ll";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "基本 struct LLVM IR 生成失敗";
+    EXPECT_TRUE(fileExists(llvmFile)) << "LLVM IR 檔案未生成";
+    
+    if (fileExists(llvmFile)) {
+        EXPECT_TRUE(llvmIRContains(llvmFile, "define")) << "LLVM IR 缺少函數定義";
+        EXPECT_TRUE(llvmIRContains(llvmFile, "main")) << "LLVM IR 缺少 main 函數";
+    }
+}
