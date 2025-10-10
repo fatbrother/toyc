@@ -22,6 +22,7 @@ WS  [ \t\v\n\f]
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
 #include "ast/structure.hpp"
+#include "ast/external_definition.hpp"
 #include "y.tab.hpp"
 
 // extern std::unordered_map<std::string, std::string> symbol_table;

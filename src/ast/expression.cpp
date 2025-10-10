@@ -1,5 +1,5 @@
 #include "ast/expression.hpp"
-#include "ast/statement.hpp"
+#include "ast/external_definition.hpp"
 
 #include <iostream>
 #include <map>

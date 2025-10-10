@@ -6,6 +6,17 @@
 
 namespace toyc::ast {
 
+class NExpression : public BasicNode {
+public:
+    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) {
+        throw std::runtime_error("Code generation not implemented for this expression type");
+    }
+    virtual std::pair<llvm::AllocaInst *, NTypePtr> allocgen(ASTContext &context) {
+        throw std::runtime_error("Expression is not a valid left value");
+    };
+    virtual std::string getType() const override { return "Expression"; }
+};
+
 class NBinaryOperator : public NExpression {
 public:
     NBinaryOperator(NExpression *lhs, BineryOperator op, NExpression *rhs)
@@ -102,8 +113,8 @@ private:
 
 class NDeclarator : public NExpression {
 public:
-    NDeclarator(const std::string &name, NExpression *expr)
-        : name(name), expr(expr) {}
+    NDeclarator(const std::string &name, int pointerLevel = 0)
+        : name(name), pointerLevel(pointerLevel) {}
     ~NDeclarator() {
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
@@ -119,11 +130,12 @@ public:
     bool isNonInitialized() const { return expr == nullptr; }
 
 public:
+    int pointerLevel = 0;
     NDeclarator *next = nullptr;
+    NExpression *expr = nullptr;
 
 private:
     std::string name;
-    NExpression *expr;
 };
 
 class NAssignment : public NExpression {

@@ -6,6 +6,7 @@
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
 #include "ast/structure.hpp"
+#include "ast/external_definition.hpp"
 #include "utility/error_handler.hpp"
 
 // #include <unordered_map>
@@ -103,27 +104,27 @@ external_declaration
 	;
 
 function_definition
-	: type IDENTIFIER '(' parameter_list ')' compound_statement {
+	:  type_specifier IDENTIFIER '(' parameter_list ')' compound_statement {
 		$$ = new toyc::ast::NFunctionDefinition($1, *$2, $4, $6);
 		delete $2;
 	}
-	| type IDENTIFIER '(' ')' compound_statement {
+	|  type_specifier IDENTIFIER '(' ')' compound_statement {
 		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, $5);
 		delete $2;
 	}
-	| type IDENTIFIER '(' parameter_list ')' ';' {
+	|  type_specifier IDENTIFIER '(' parameter_list ')' ';' {
 		$$ = new toyc::ast::NFunctionDefinition($1, *$2, $4, nullptr);
 		delete $2;
 	}
-	| type IDENTIFIER '(' VOID ')' compound_statement {
+	|  type_specifier IDENTIFIER '(' VOID ')' compound_statement {
 		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, $6);
 		delete $2;
 	}
-	| type IDENTIFIER '(' VOID ')' ';' {
+	|  type_specifier IDENTIFIER '(' VOID ')' ';' {
 		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, nullptr);
 		delete $2;
 	}
-	| type IDENTIFIER '(' ')' ';' {
+	|  type_specifier IDENTIFIER '(' ')' ';' {
 		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, nullptr);
 		delete $2;
 	}
@@ -131,6 +132,9 @@ function_definition
 
 parameter_list
 	: parameter_declaration ',' parameter_list {
+		if ($1->isVariadic) {
+			yyerror("syntax error: variadic parameter must be the last parameter");
+		}
 		$$ = $1;
 		$$->next = $3;
 	}
@@ -140,12 +144,11 @@ parameter_list
 	;
 
 parameter_declaration
-	: type IDENTIFIER {
-		$$ = new toyc::ast::NParameter($1, *$2);
-		delete $2;
+	:  type_specifier declarator {
+		$$ = new toyc::ast::NParameter($1, $2);
 	}
 	| ELLIPSIS {
-		$$ = new toyc::ast::NParameter(nullptr, "", true);
+		$$ = new toyc::ast::NParameter();
 	}
 	;
 

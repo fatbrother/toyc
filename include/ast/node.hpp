@@ -20,6 +20,7 @@ enum VarType {
     VAR_TYPE_FLOAT = 7,
     VAR_TYPE_DOUBLE = 8,
     VAR_TYPE_PTR = 9,
+    VAR_TYPE_STRUCT = 10,
 };
 
 enum BineryOperator {
@@ -62,11 +63,8 @@ enum UnaryOperator {
         ptr = nullptr;   \
     }
 
-class NType;
-class NBlock;
-class NParentStatement;
 class NFunctionDefinition;
-
+class NType;
 typedef std::shared_ptr<NType> NTypePtr;
 
 struct VariableTable {
@@ -150,6 +148,17 @@ public:
     NTypePtr pointTo = nullptr;
     int pointerLevel = 0;
     VarType type;
+};
+
+class NExternalDeclaration : public BasicNode {
+public:
+    virtual ~NExternalDeclaration() {
+        SAFE_DELETE(next);
+    }
+    virtual llvm::Value *codegen(ASTContext &context) = 0;
+
+public:
+    NExternalDeclaration *next = nullptr;
 };
 
 static bool isFloatingPointType(VarType type) {
@@ -262,72 +271,5 @@ static llvm::Value *typeCast(llvm::Value *value, const NTypePtr fromType, VarTyp
     NTypePtr toNType = std::make_shared<NType>(toType);
     return typeCast(value, fromType, toNType, context, builder);
 }
-
-class NExpression : public BasicNode {
-public:
-    virtual std::pair<llvm::Value *, NTypePtr> codegen(ASTContext &context) {
-        throw std::runtime_error("Code generation not implemented for this expression type");
-    }
-    virtual std::pair<llvm::AllocaInst *, NTypePtr> allocgen(ASTContext &context) {
-        throw std::runtime_error("Expression is not a valid left value");
-    };
-    virtual std::string getType() const override { return "Expression"; }
-};
-
-class NExternalDeclaration : public BasicNode {
-public:
-    virtual ~NExternalDeclaration() {
-        SAFE_DELETE(next);
-    }
-    virtual int codegen(ASTContext &context) = 0;
-
-public:
-    NExternalDeclaration *next = nullptr;
-};
-
-class NParameter : public BasicNode {
-public:
-    NParameter(NType *type, const std::string &name, bool isVarArg = false)
-        : type(type), name(name), isVarArg(isVarArg) {}
-    ~NParameter() {
-        SAFE_DELETE(next);
-    }
-    virtual std::string getType() const override { return "Parameter"; }
-    llvm::Type *getLLVMType(llvm::LLVMContext &context) const {
-        return type->getLLVMType(context);
-    }
-    NTypePtr getVarType() const {
-        return type;
-    }
-    std::string getName() const { return name; }
-
-public:
-    NParameter *next = nullptr;
-    bool isVarArg = false;
-
-private:
-    NTypePtr type;
-    std::string name;
-};
-
-
-class NFunctionDefinition : public NExternalDeclaration {
-public:
-    NFunctionDefinition(NType *returnType, const std::string &name, NParameter *params, NBlock *body)
-        : returnType(returnType), name(name), params(params), body(body) {}
-    ~NFunctionDefinition();
-    virtual int codegen(ASTContext &context) override;
-    virtual std::string getType() const override { return "FunctionDefinition"; }
-    llvm::Function *getFunction() const { return llvmFunction; }
-    NTypePtr getReturnType() const { return returnType; }
-    NParameter *getParams() const { return params; }
-
-private:
-    llvm::Function *llvmFunction = nullptr;
-    std::string name;
-    NTypePtr returnType;
-    NParameter *params;
-    NBlock *body;
-};
 
 } // namespace toyc::ast

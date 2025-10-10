@@ -19,7 +19,7 @@ public:
     NStatement *next = nullptr;
 };
 
-class NDeclarationStatement : public NStatement {
+class NDeclarationStatement : public NStatement, public NExternalDeclaration {
 public:
     NDeclarationStatement(NType *type, NDeclarator *declarator)
         : type(type), declarator(declarator) {}

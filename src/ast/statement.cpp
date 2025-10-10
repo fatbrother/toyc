@@ -1,5 +1,7 @@
 #include "ast/statement.hpp"
 
+#include "ast/external_definition.hpp"
+
 #include <iostream>
 
 using namespace toyc::ast;
