@@ -19,11 +19,11 @@ std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context)
 
     if (op == EQ || op == NE || op == LE || op == GE || op == LT || op == GT) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
-        targetType = (lhsType->getVarType() > rhsType->getVarType()) ? lhsType->getVarType() : rhsType->getVarType();
+        targetType = (lhsType->type > rhsType->type) ? lhsType->type : rhsType->type;
     } else if (op == AND || op == OR) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
     } else {
-        targetType = (true == isFloatingPointType(lhsType->getVarType())) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;
+        targetType = (true == isFloatingPointType(lhsType->type)) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;
         resultType = std::make_shared<NType>(targetType);
     }
 
@@ -38,13 +38,22 @@ std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context)
             result = context.builder.CreateLogicalOr(lhsValue, rhsValue, "or");
             break;
         case ADD:
-            result = context.builder.CreateAdd(lhsValue, rhsValue, "add");
+            if (true == isFloatingPointType(targetType))
+                result = context.builder.CreateFAdd(lhsValue, rhsValue, "add");
+            else
+                result = context.builder.CreateAdd(lhsValue, rhsValue, "add");
             break;
         case SUB:
-            result = context.builder.CreateSub(lhsValue, rhsValue, "sub");
+            if (true == isFloatingPointType(targetType))
+                result = context.builder.CreateFSub(lhsValue, rhsValue, "sub");
+            else
+                result = context.builder.CreateSub(lhsValue, rhsValue, "sub");
             break;
         case MUL:
-            result = context.builder.CreateMul(lhsValue, rhsValue, "mul");
+            if (true == isFloatingPointType(targetType))
+                result = context.builder.CreateFMul(lhsValue, rhsValue, "mul");
+            else
+                result = context.builder.CreateMul(lhsValue, rhsValue, "mul");
             break;
         case DIV:
             result = context.builder.CreateSDiv(lhsValue, rhsValue, "div");
@@ -177,9 +186,11 @@ std::pair<llvm::Value *, NTypePtr> NUnaryExpression::codegen(ASTContext &context
     }
 
     if (op == ADDR) {
-        resultType = std::make_shared<NType>(VarType::VAR_TYPE_PTR, type);
+        resultType = type;
+        resultType->pointerLevel++;
     } else if (op == DEREF) {
-        resultType = type->getPointTo();
+        resultType = type;
+        resultType->pointerLevel--;
     } else if (op == LOG_NOT) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
     } else {
@@ -291,8 +302,11 @@ std::pair<llvm::Value *, NTypePtr> NFunctionCall::codegen(ASTContext &context) {
         return std::make_pair(nullptr, nullptr);
     }
 
-    for (NArguments *argNode = argNodes; argNode != nullptr; argNode = argNode->next) {
+    NParameter *paramIt = nullptr;
+    NArguments* argNode = nullptr;
+    for (paramIt = function->getParams(), argNode = argNodes; paramIt != nullptr && argNode != nullptr; paramIt = paramIt->next, argNode = argNodes->next) {
         auto [argValue, argType] = argNode->codegen(context);
+        argValue = typeCast(argValue, argType, paramIt->getVarType(), context.llvmContext, context.builder);
         if (nullptr == argValue) {
             std::cerr << "Error: Argument value is null" << std::endl;
             return std::make_pair(nullptr, nullptr);
@@ -300,7 +314,7 @@ std::pair<llvm::Value *, NTypePtr> NFunctionCall::codegen(ASTContext &context) {
         args.push_back(argValue);
     }
 
-    res = context.builder.CreateCall(function->getFunction(), args, "call_" + name);
+    res = context.builder.CreateCall(function->getFunction(), args);
 
     return std::make_pair(res, function->getReturnType());
 }

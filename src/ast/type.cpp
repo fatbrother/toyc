@@ -37,7 +37,10 @@ llvm::Type *NType::getLLVMType(llvm::LLVMContext &context) const {
                 std::cerr << "Pointer type is null" << std::endl;
                 return nullptr;
             }
-            llvmType = llvm::PointerType::get(pointTo->getLLVMType(context), 0);
+            llvmType = pointTo->getLLVMType(context);
+            for (int i = 0; i < pointerLevel; ++i) {
+                llvmType = llvm::PointerType::get(pointTo->getLLVMType(context), 0);
+            }
             break;
         case VAR_TYPE_DEFINED:
             // TODO: Handle typedef names

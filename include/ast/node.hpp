@@ -138,20 +138,18 @@ class NType : public BasicNode {
 public:
     NType(VarType type, const std::string &name = "")
         : type(type), name(name) {}
-    NType(VarType type, NTypePtr pointTo)
-        : type(type), pointTo(pointTo) {}
-    NType(VarType type, NType *pointTo)
-        : type(type), pointTo(pointTo) {}
+    NType(VarType type, NTypePtr pointTo, int pointerLevel = 0)
+        : type(type), pointTo(pointTo), pointerLevel(pointerLevel) {}
+    NType(VarType type, NType *pointTo, int pointerLevel = 0)
+        : type(type), pointTo(pointTo), pointerLevel(pointerLevel) {}
 
     virtual std::string getType() const override { return "Type"; }
-    virtual VarType getVarType() const { return type; }
     virtual llvm::Type *getLLVMType(llvm::LLVMContext &context) const;
-    virtual NTypePtr getPointTo() const { return pointTo; }
 
-private:
-    VarType type;
     std::string name;
     NTypePtr pointTo = nullptr;
+    int pointerLevel = 0;
+    VarType type;
 };
 
 static bool isFloatingPointType(VarType type) {
@@ -197,8 +195,8 @@ static llvm::Value *typeCast(llvm::Value *value, const NTypePtr fromType, const 
         throw std::runtime_error("Invalid type cast: value or type is null");
     }
 
-    VarType from = fromType->getVarType();
-    VarType to = toType->getVarType();
+    VarType from = fromType->type;
+    VarType to = toType->type;
 
     if (from == to) {
         return value;
@@ -251,9 +249,9 @@ static llvm::Value *typeCast(llvm::Value *value, const NTypePtr fromType, const 
 
         case VAR_TYPE_PTR:
             if (isIntegerType(from)) {
-                return builder.CreateIntToPtr(value, toType->getPointTo()->getLLVMType(context), "to_ptr");
+                return builder.CreateIntToPtr(value, toType->pointTo->getLLVMType(context), "to_ptr");
             }
-            return builder.CreateBitCast(value, toType->getPointTo()->getLLVMType(context), "to_ptr");
+            return builder.CreateBitCast(value, toType->pointTo->getLLVMType(context), "to_ptr");
 
         default:
             throw std::runtime_error("Unsupported type cast to type: " + std::to_string(to));

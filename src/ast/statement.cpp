@@ -33,7 +33,15 @@ llvm::Value *NDeclarationStatement::codegen(ASTContext &context) {
         }
 
         allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
-        context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst, type);
+
+        // copy type and pointer level from declaration
+        NTypePtr newType = nullptr;
+        if (declarator->pointerLevel > 0) {
+            newType = std::make_shared<NType>(VarType::VAR_TYPE_PTR, type, currentDeclarator->pointerLevel);
+        } else {
+            newType = type;
+        }
+        context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst, newType);
 
         auto [value, valType] = currentDeclarator->codegen(context);
 
