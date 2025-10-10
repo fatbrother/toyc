@@ -21,6 +21,7 @@ WS  [ \t\v\n\f]
 #include "ast/node.hpp"
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
+#include "ast/structure.hpp"
 #include "y.tab.hpp"
 
 // extern std::unordered_map<std::string, std::string> symbol_table;
@@ -82,6 +83,7 @@ yycolumn += yyleng;
 "struct"				{ TOKEN(STRUCT); }
 "switch"				{ TOKEN(SWITCH); }
 "typedef"				{ TOKEN(TYPEDEF); }
+"union"					{ TOKEN(UNION); }
 "unsigned"				{ TOKEN(UNSIGNED); }
 "void"					{ TOKEN(VOID); }
 "while"					{ TOKEN(WHILE); }

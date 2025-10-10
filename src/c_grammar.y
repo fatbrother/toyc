@@ -5,6 +5,7 @@
 #include "ast/node.hpp"
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
+#include "ast/structure.hpp"
 #include "utility/error_handler.hpp"
 
 // #include <unordered_map>
@@ -27,16 +28,19 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 %union
 {
 	toyc::ast::NExpression *expression;
-	toyc::ast::NType *type;
+	toyc::ast::NType *type_specifier;
 	toyc::ast::NDeclarator *declarator;
 	toyc::ast::NStatement *statement;
+	toyc::ast::NDeclarationStatement *declaration_specifiers;
 	toyc::ast::NBlock *block;
 	toyc::ast::NExternalDeclaration *external_declaration;
 	toyc::ast::NParameter *parameter;
 	toyc::ast::NArguments *arguments;
+	toyc::ast::NStructDeclaration *struct_declaration;
 	toyc::ast::BineryOperator bop;
 	std::string *string;
 	int token;
+	int integer;
 }
 
 %define parse.error verbose
@@ -50,20 +54,25 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 %token	TYPEDEF SIZEOF
 %token	BOOL CHAR SHORT INT LONG FLOAT DOUBLE VOID
 %token	SIGNED UNSIGNED CONST STATIC
-%token	STRUCT ELLIPSIS
+%token	STRUCT UNION ENUM ELLIPSIS
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
-%type	<expression> expression unary_expression assignment_expression relational_expression equality_expression additive_expression multiplicative_expression primary_expression numeric postfix_expression conditional_expression logical_or_expression logical_and_expression inclusive_or_expression exclusive_or_expression and_expression
-%type   <type> type
+%type	<expression> expression unary_expression assignment_expression relational_expression equality_expression additive_expression
+%type	<expression> multiplicative_expression primary_expression numeric postfix_expression conditional_expression logical_or_expression
+%type	<expression> logical_and_expression inclusive_or_expression exclusive_or_expression and_expression initializer
+%type   <type_specifier> type_specifier struct_specifier
+%type   <struct_declaration> struct_declaration struct_declaration_list
 %type	<bop> relational_expression_op
-%type   <declarator> declarator declarator_list
+%type   <declarator> init_declarator init_declarator_list struct_declarator_list declarator
 %type   <parameter> parameter_list parameter_declaration
-%type   <statement> statement statement_list declaration_statement expression_statement jump_statement for_statement_init_declaration
+%type   <declaration_specifiers> declaration_specifiers
+%type   <statement> statement statement_list expression_statement jump_statement for_statement_init_declaration
 %type   <statement>  if_statement for_statement while_statement do_while_statement
 %type   <block> compound_statement
 %type   <external_declaration> program external_declaration external_declaration_list function_definition
 %type   <arguments> argument_expression_list
+%type   <integer> pointer
 
 %start program
 %%
@@ -86,6 +95,9 @@ external_declaration_list
 
 external_declaration
 	: function_definition {
+		$$ = $1;
+	}
+	| declaration_specifiers {
 		$$ = $1;
 	}
 	;
@@ -160,7 +172,7 @@ statement
 	: expression_statement {
 		$$ = $1;
 	}
-	| declaration_statement {
+	| declaration_specifiers {
 		$$ = $1;
 	}
 	| compound_statement {
@@ -187,7 +199,7 @@ for_statement_init_declaration
 	: expression_statement {
 		$$ = $1;
 	}
-	| declaration_statement {
+	| declaration_specifiers {
 		$$ = $1;
 	}
 	;
@@ -221,29 +233,55 @@ jump_statement
 	| CONTINUE ';' */
 	;
 
-declaration_statement
-	: type declarator_list ';' {
+declaration_specifiers
+	:  type_specifier init_declarator_list ';' {
 		$$ = new toyc::ast::NDeclarationStatement($1, $2);
+	}
+	| type_specifier ';' {
+		$$ = new toyc::ast::NDeclarationStatement($1, nullptr);
+	}
+	;
+
+init_declarator_list
+	: init_declarator {
+		$$ = $1;
+	}
+	| init_declarator ',' init_declarator_list {
+		$$ = $1;
+		$$->next = $3;
+	}
+	;
+
+init_declarator
+	: declarator {
+		$$ = $1;
+	}
+	| declarator '=' initializer {
+		$$ = $1;
+		$$->expr = $3;
 	}
 	;
 
 declarator
-	: IDENTIFIER {
-		$$ = new toyc::ast::NDeclarator(*$1, nullptr);
-		delete $1;
+	: pointer IDENTIFIER {
+		$$ = new toyc::ast::NDeclarator(*$2, $1);
 	}
-	| IDENTIFIER '=' expression {
-		$$ = new toyc::ast::NDeclarator(*$1, $3);
-		delete $1;
+	| IDENTIFIER {
+		$$ = new toyc::ast::NDeclarator(*$1);
 	}
 	;
 
-declarator_list
-	: declarator ',' declarator_list {
-		$$ = $1;
-		$$->next = $3;
+pointer
+	: '*' {
+		$$ = 1;
 	}
-	| declarator {
+	| '*' pointer {
+		$$ = $2 + 1;
+	}
+	;
+
+initializer
+	: assignment_expression {
 		$$ = $1;
 	}
 	;
@@ -455,6 +493,12 @@ postfix_expression
 		$$ = new toyc::ast::NFunctionCall(*$1, nullptr);
 		delete $1;
 	  }
+	| postfix_expression '.' IDENTIFIER {
+
+	  }
+	| postfix_expression PTR_OP IDENTIFIER {
+
+	  }
 	;
 
 /* constant_expression
@@ -513,11 +557,8 @@ relational_expression_op
 	}
 	;
 
-type
-	: type '*' {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_PTR, $1);
-	}
-	| TYPEDEF_NAME {
+type_specifier
+	: TYPEDEF_NAME {
 		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_DEFINED, *$1);
 		delete $1;
 	}
@@ -544,6 +585,52 @@ type
 	}
 	| VOID {
 		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_VOID);
+	}
+	| struct_specifier {
+		$$ = $1;
+	}
+	;
+
+struct_specifier
+	: STRUCT IDENTIFIER '{' struct_declaration_list '}' {
+		$$ = new toyc::ast::NStructType(*$2, $4);
+		delete $2;
+	}
+	| STRUCT '{' struct_declaration_list '}' {
+		$$ = new toyc::ast::NStructType("", $3);
+	}
+	| STRUCT IDENTIFIER {
+		$$ = new toyc::ast::NStructType(*$2, nullptr);
+		delete $2;
+	}
+	;
+
+struct_declaration_list
+	: struct_declaration {
+		$$ = $1;
+	}
+	| struct_declaration struct_declaration_list {
+		$$ = $1;
+		$$->next = $2;
+	}
+	| /* empty */ {
+		$$ = nullptr;
+	}
+	;
+
+struct_declaration
+	:  type_specifier struct_declarator_list ';' {
+		$$ = new toyc::ast::NStructDeclaration($1, $2);
+	}
+	;
+
+struct_declarator_list
+	: declarator {
+		$$ = $1;
+	}
+	| struct_declarator_list ',' declarator {
+		$$ = $1;
+		$$->next = $3;
 	}
 	;
 
