@@ -59,7 +59,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
-%type	<expression> expression unary_expression assignment_expression relational_expression equality_expression additive_expression
+%type	<expression> expression unary_expression assignment_expression relational_expression equality_expression shift_expression additive_expression
 %type	<expression> multiplicative_expression primary_expression numeric postfix_expression conditional_expression logical_or_expression
 %type	<expression> logical_and_expression inclusive_or_expression exclusive_or_expression and_expression initializer
 %type   <type_specifier> type_specifier struct_specifier
@@ -344,6 +344,12 @@ assignment_expression
 	| unary_expression XOR_ASSIGN assignment_expression {
 		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::XOR, $3));
 	  }
+	| unary_expression LEFT_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::LEFT, $3));
+	  }
+	| unary_expression RIGHT_ASSIGN assignment_expression {
+		$$ = new toyc::ast::NAssignment($1, new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::RIGHT, $3));
+	  }
 	;
 
 conditional_expression
@@ -413,11 +419,23 @@ equality_expression
 	;
 
 relational_expression
-	: relational_expression relational_expression_op additive_expression {
+	: relational_expression relational_expression_op shift_expression {
 		$$ = new toyc::ast::NBinaryOperator($1, $2, $3);
 	  }
-	| additive_expression {
+	| shift_expression {
 		$$ = $1;
+	  }
+	;
+
+shift_expression
+	: additive_expression {
+		$$ = $1;
+	  }
+	| shift_expression LEFT_OP additive_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::LEFT, $3);
+	  }
+	| shift_expression RIGHT_OP additive_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::RIGHT, $3);
 	  }
 	;
 

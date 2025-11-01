@@ -111,6 +111,18 @@ TEST_F(OutputTest, GenerateLLVMIR_FunctionCall) {
     EXPECT_TRUE(llvmIRContains(llvmFile, "call")) << "LLVM IR 缺少函數調用指令";
 }
 
+TEST_F(OutputTest, GenerateLLVMIR_ShiftOperations) {
+    std::string inputFile = "tests/fixtures/output/operators/shift_operations.c";
+    std::string llvmFile = test_output_dir + "/shift_operations.ll";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "LLVM IR 生成失敗";
+    EXPECT_TRUE(fileExists(llvmFile)) << "LLVM IR 檔案未生成";
+
+    EXPECT_TRUE(llvmIRContains(llvmFile, "shl")) << "LLVM IR 缺少左移指令";
+    EXPECT_TRUE(llvmIRContains(llvmFile, "lshr")) << "LLVM IR 缺少右移指令";
+}
+
 // 可執行檔案生成測試
 TEST_F(OutputTest, GenerateExecutable_ReturnConstant) {
     std::string inputFile = "tests/fixtures/output/simple_programs/return_constant.c";
@@ -126,7 +138,8 @@ TEST_F(OutputTest, GenerateExecutable_AllTestFiles) {
         {"tests/fixtures/output/simple_programs/return_zero.c", "return_zero"},
         {"tests/fixtures/output/simple_programs/simple_variable.c", "simple_variable"},
         {"tests/fixtures/output/calculations/multiplication.c", "multiplication"},
-        {"tests/fixtures/output/functions/simple_function.c", "simple_function"}
+        {"tests/fixtures/output/functions/simple_function.c", "simple_function"},
+        {"tests/fixtures/output/operators/shift_operations.c", "shift_operations"}
     };
 
     for (const auto& testFile : testFiles) {
@@ -193,6 +206,17 @@ TEST_F(OutputTest, ExecutionResult_ComplexArithmetic) {
 
     int exitCode = executeProgram(execFile);
     EXPECT_EQ(exitCode, 15) << "複雜算術計算結果不正確，期望 15，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_ShiftOperations) {
+    std::string inputFile = "tests/fixtures/output/operators/shift_operations.c";
+    std::string execFile = test_output_dir + "/shift_operations";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 20) << "移位運算結果不正確，期望 20，實際 " << exitCode;
 }
 
 TEST_F(OutputTest, ExecutionResult_SimpleFunction) {
