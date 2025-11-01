@@ -497,10 +497,10 @@ postfix_expression
 		delete $1;
 	  }
 	| postfix_expression '.' IDENTIFIER {
-
+		$$ = new toyc::ast::NMemberAccess($1, *$3, false);
 	  }
 	| postfix_expression PTR_OP IDENTIFIER {
-
+		$$ = new toyc::ast::NMemberAccess($1, *$3, true);
 	  }
 	;
 

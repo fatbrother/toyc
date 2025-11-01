@@ -14,33 +14,33 @@ NStatement::~NStatement() {
 
 CodegenResult NExpressionStatement::codegen(ASTContext &context) {
     if (nullptr == expression) {
-        return CodegenResult(nullptr);
+        return CodegenResult();
     }
 
     return expression->codegen(context);
 }
 
 CodegenResult NDeclarationStatement::codegen(ASTContext &context) {
-    llvm::Type *llvmType = type->getLLVMType(context.llvmContext);
+    llvm::Type *llvmType = nullptr;
     llvm::AllocaInst *allocaInst = nullptr;
 
     if ("StructType" == type->getType()) {
         auto structType = static_cast<NStructType *>(type.get());
         if (nullptr != structType->members) {
             structType->codegen(context);
+            context.typeTable->insert(structType->name, type);
         }
-        llvmType = structType->getLLVMType(context.llvmContext);
     }
 
-    if (nullptr == llvmType) {
-        std::cerr << "Error: Type is null" << std::endl;
-        return nullptr;
+    CodegenResult typeResult = type->getLLVMType(context);
+    if (false == typeResult.isSuccess() || nullptr == typeResult.getLLVMType()) {
+        return typeResult << CodegenResult("Failed to get LLVM type for declaration");
     }
+    llvmType = typeResult.getLLVMType();
 
     for (auto currentDeclarator = declarator; currentDeclarator != nullptr; currentDeclarator = currentDeclarator->next) {
-        if (context.variableTable->lookupVariable(currentDeclarator->getName(), false).first != nullptr) {
-            std::cerr << "Error: Variable already declared in this scope: " << currentDeclarator->getName() << std::endl;
-            return nullptr;
+        if (true == context.variableTable->lookup(currentDeclarator->getName(), false).first) {
+            return CodegenResult("Variable already declared in this scope: " + currentDeclarator->getName());
         }
 
         allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
@@ -52,15 +52,19 @@ CodegenResult NDeclarationStatement::codegen(ASTContext &context) {
         } else {
             newType = type;
         }
-        context.variableTable->insertVariable(currentDeclarator->getName(), allocaInst, newType);
+        context.variableTable->insert(currentDeclarator->getName(), std::make_pair(allocaInst, newType));
+
+        if (true == currentDeclarator->isNonInitialized()) {
+            continue;
+        }
 
         CodegenResult codegenResult = currentDeclarator->codegen(context);
         llvm::Value *value = codegenResult.getValue();
         NTypePtr valType = codegenResult.getType();
-        if ((false == codegenResult.isSuccess()) || ((nullptr == value) && (false == currentDeclarator->isNonInitialized()))) {
+        if ((false == codegenResult.isSuccess()) || (nullptr == value)) {
             return codegenResult << CodegenResult("Initializer codegen failed for variable: " + currentDeclarator->getName());
         } else {
-            CodegenResult castResult = typeCast(value, valType, type, context.llvmContext, context.builder);
+            CodegenResult castResult = typeCast(value, valType, type, context);
             if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
                 return castResult << CodegenResult("Type cast failed for initializer of variable: " + currentDeclarator->getName());
             }
@@ -83,7 +87,7 @@ CodegenResult NBlock::codegen(ASTContext &context) {
         for (auto &arg : context.currentFunction->getFunction()->args()) {
             llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(arg.getType(), nullptr, arg.getName());
             context.builder.CreateStore(&arg, allocaInst);
-            context.variableTable->insertVariable(arg.getName().str(), allocaInst, param->getVarType());
+            context.variableTable->insert(arg.getName().str(), std::make_pair(allocaInst, param->getVarType()));
             param = param->next;
         }
     }
@@ -123,8 +127,7 @@ CodegenResult NReturnStatement::codegen(ASTContext &context) {
             value,
             type,
             context.currentFunction->getReturnType(),
-            context.llvmContext,
-            context.builder);
+            context);
         if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
             return castResult << CodegenResult("Type cast failed for return statement");
         }
@@ -133,7 +136,7 @@ CodegenResult NReturnStatement::codegen(ASTContext &context) {
         return CodegenResult(context.builder.CreateRetVoid());
     }
 
-    return nullptr;
+    return CodegenResult();
 }
 
 CodegenResult NIfStatement::codegen(ASTContext &context) {
@@ -211,8 +214,7 @@ CodegenResult NForStatement::codegen(ASTContext &context) {
         conditionValue,
         conditionType,
         VAR_TYPE_BOOL,
-        context.llvmContext,
-        context.builder);
+        context);
     if (false == conditionCastResult.isSuccess()) {
         return conditionCastResult << CodegenResult("Type cast failed for for loop condition");
     }
@@ -245,8 +247,7 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
         conditionValue,
         conditionType,
         VAR_TYPE_BOOL,
-        context.llvmContext,
-        context.builder);
+        context);
     if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
         return castResult << CodegenResult("Type cast failed for while loop condition");
     }

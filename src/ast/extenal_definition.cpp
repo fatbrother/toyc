@@ -25,11 +25,17 @@ NFunctionDefinition::~NFunctionDefinition() {
 }
 
 CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
-    llvm::Type *llvmReturnType = returnType->getLLVMType(context.llvmContext);
+    llvm::Type *llvmReturnType = nullptr;
     std::vector<llvm::Type *> paramTypes;
     std::vector<std::string> paramNames;
     llvm::FunctionType *functionType = nullptr;
     bool isVariadic = false;
+
+    CodegenResult returnTypeResult = returnType->getLLVMType(context);
+    if (false == returnTypeResult.isSuccess() || nullptr == returnTypeResult.getLLVMType()) {
+        return returnTypeResult << CodegenResult("Failed to get LLVM type for function return type");
+    }
+    llvmReturnType = returnTypeResult.getLLVMType();
 
     for (NParameter *paramIt = params; paramIt != nullptr; paramIt = paramIt->next) {
         if (true == paramIt->isVariadic) {
@@ -37,7 +43,11 @@ CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
             break;
         }
 
-        llvm::Type *paramType = paramIt->getLLVMType(context.llvmContext);
+        CodegenResult paramTypeResult = paramIt->getVarType()->getLLVMType(context);
+        if (false == paramTypeResult.isSuccess() || nullptr == paramTypeResult.getLLVMType()) {
+            return paramTypeResult << CodegenResult("Failed to get LLVM type for parameter");
+        }
+        llvm::Type *paramType = paramTypeResult.getLLVMType();
         if (nullptr == paramType) {
             return CodegenResult("Parameter type is null");
         }

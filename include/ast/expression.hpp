@@ -8,8 +8,9 @@ namespace toyc::ast {
 
 class NExpression : public BasicNode {
 public:
-    virtual CodegenResult codegen(ASTContext &context) = 0;
-    virtual CodegenResult allocgen(ASTContext &context) = 0;
+    virtual CodegenResult allocgen(ASTContext &context) {
+        return CodegenResult("Allocation not supported for " + getType());
+    };
     virtual std::string getType() const override { return "Expression"; }
 };
 
@@ -178,6 +179,23 @@ public:
 private:
     std::string name;
     NArguments *argNodes;
+};
+
+class NMemberAccess : public NExpression {
+public:
+    NMemberAccess(NExpression *base, const std::string &memberName, bool isPointerAccess)
+        : base(base), memberName(memberName), isPointerAccess(isPointerAccess) {}
+    ~NMemberAccess() {
+        SAFE_DELETE(base);
+    }
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual CodegenResult allocgen(ASTContext &context) override;
+    virtual std::string getType() const override { return "MemberAccess"; }
+
+private:
+    NExpression *base;
+    std::string memberName;
+    bool isPointerAccess;
 };
 
 } // namespace toyc::ast

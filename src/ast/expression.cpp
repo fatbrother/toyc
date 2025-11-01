@@ -1,5 +1,6 @@
 #include "ast/expression.hpp"
 #include "ast/external_definition.hpp"
+#include "ast/structure.hpp"
 
 #include <iostream>
 #include <map>
@@ -35,8 +36,7 @@ CodegenResult NBinaryOperator::codegen(ASTContext &context) {
         lhsValue,
         lhsType,
         targetType,
-        context.llvmContext,
-        context.builder);
+        context);
     if (false == castLhsResult.isSuccess() || nullptr == castLhsResult.getValue()) {
         return castLhsResult << CodegenResult("Type cast failed for left-hand side in binary operation");
     }
@@ -46,8 +46,7 @@ CodegenResult NBinaryOperator::codegen(ASTContext &context) {
         rhsValue,
         rhsType,
         targetType,
-        context.llvmContext,
-        context.builder);
+        context);
     if (false == castRhsResult.isSuccess() || nullptr == castRhsResult.getValue()) {
         return castRhsResult << CodegenResult("Type cast failed for right-hand side in binary operation");
     }
@@ -177,8 +176,13 @@ CodegenResult NUnaryExpression::codegen(ASTContext &context) {
         case ADDR:
             value = allocaInst;
             break;
-        case DEREF:
-            value = context.builder.CreateLoad(type->getLLVMType(context.llvmContext), value, "deref");
+        case DEREF: {
+                CodegenResult derefTypeResult = type->getLLVMType(context);
+                if (false == derefTypeResult.isSuccess() || nullptr == derefTypeResult.getLLVMType()) {
+                    return derefTypeResult << CodegenResult("Failed to get LLVM type for dereference");
+                }
+                value = context.builder.CreateLoad(derefTypeResult.getLLVMType(), value, "deref");
+            }
             break;
         case PLUS:
             break;
@@ -189,7 +193,7 @@ CodegenResult NUnaryExpression::codegen(ASTContext &context) {
             value = context.builder.CreateXor(value, llvm::ConstantInt::get(value->getType(), -1), "bit_not");
             break;
         case LOG_NOT: {
-                CodegenResult castResult = typeCast(value, type, VAR_TYPE_BOOL, context.llvmContext, context.builder);
+                CodegenResult castResult = typeCast(value, type, VAR_TYPE_BOOL, context);
                 if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
                     return castResult << CodegenResult("Failed to cast value to bool for logical not");
                 }
@@ -265,9 +269,10 @@ CodegenResult NConditionalExpression::codegen(ASTContext &context) {
 }
 
 CodegenResult NIdentifier::codegen(ASTContext &context) {
-    auto [allocaInst, type] = context.variableTable->lookupVariable(name);
+    auto [isFound, variablePair] = context.variableTable->lookup(name);
+    auto [allocaInst, type] = variablePair;
     llvm::Value *value = nullptr;
-    if (nullptr == allocaInst) {
+    if (false == isFound || nullptr == allocaInst) {
         return CodegenResult("Variable not found: " + name);
     }
 
@@ -280,9 +285,10 @@ CodegenResult NIdentifier::codegen(ASTContext &context) {
 }
 
 CodegenResult NIdentifier::allocgen(ASTContext &context) {
-    auto [allocaInst, type] = context.variableTable->lookupVariable(name);
+    auto [isFound, variablePair] = context.variableTable->lookup(name);
+    auto [allocaInst, type] = variablePair;
 
-    if (nullptr == allocaInst) {
+    if (false == isFound || nullptr == allocaInst) {
         return CodegenResult("Variable not found: " + name);
     }
 
@@ -304,8 +310,7 @@ CodegenResult NAssignment::codegen(ASTContext &context) {
         rhsValue,
         rhsType,
         lhsType,
-        context.llvmContext,
-        context.builder);
+        context);
     if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
         return castResult << CodegenResult("Type cast failed during assignment");
     }
@@ -339,8 +344,7 @@ CodegenResult NFunctionCall::codegen(ASTContext &context) {
             argValue,
             argType,
             paramIt->getVarType()->type,
-            context.llvmContext,
-            context.builder);
+            context);
         if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
             return castResult << CodegenResult("Type cast failed for argument in function call: " + name);
         }
@@ -350,6 +354,78 @@ CodegenResult NFunctionCall::codegen(ASTContext &context) {
     res = context.builder.CreateCall(function->getFunction(), args);
 
     return CodegenResult(res, function->getReturnType());
+}
+
+CodegenResult NMemberAccess::codegen(ASTContext &context) {
+    CodegenResult allocResult = allocgen(context);
+    if (false == allocResult.isSuccess()) {
+        return allocResult << CodegenResult("Member access allocation failed for member: " + memberName);
+    }
+
+    llvm::Value *memberPtr = allocResult.getValue();
+    NTypePtr memberType = allocResult.getType();
+    CodegenResult memberTypeResult = memberType->getLLVMType(context);
+    if (false == memberTypeResult.isSuccess() || nullptr == memberTypeResult.getLLVMType()) {
+        return memberTypeResult << CodegenResult("Failed to get LLVM type for member: " + memberName);
+    }
+    llvm::Value *memberValue = context.builder.CreateLoad(
+        memberTypeResult.getLLVMType(),
+        memberPtr,
+        "member_value");
+
+    return CodegenResult(memberValue, memberType);
+}
+
+CodegenResult NMemberAccess::allocgen(ASTContext &context) {
+    CodegenResult baseResult = base->allocgen(context);
+    llvm::Value *baseValue = baseResult.getValue();
+    NTypePtr baseType = baseResult.getType();
+    llvm::Type *childLLVMType = nullptr;
+
+    if (false == baseResult.isSuccess() || nullptr == baseValue) {
+        return baseResult << CodegenResult("Base expression code generation failed for member access: " + memberName);
+    }
+
+    if (baseType->pointerLevel > 0) {
+        CodegenResult derefTypeResult = baseType->getLLVMType(context);
+        if (false == derefTypeResult.isSuccess() || nullptr == derefTypeResult.getLLVMType()) {
+            return derefTypeResult << CodegenResult("Failed to get LLVM type for dereferencing in member access");
+        }
+        baseValue = context.builder.CreateLoad(
+            derefTypeResult.getLLVMType(),
+            baseValue,
+            "deref_member_access");
+        baseType->pointerLevel--;
+    }
+
+    if (baseType->type != VarType::VAR_TYPE_STRUCT) {
+        return CodegenResult("Base type is not a struct for member access: " + memberName);
+    }
+
+    auto [isFound, typePtr] = context.typeTable->lookup(baseType->name);
+    if (false == isFound) {
+        return CodegenResult("Struct type not found in type table: " + baseType->name);
+    }
+    NStructType *structType = static_cast<NStructType *>(typePtr.get());
+
+    int memberIndex = structType->getMemberIndex(memberName);
+    if (memberIndex < 0) {
+        return CodegenResult("Member not found in struct: " + memberName);
+    }
+
+    std::vector<llvm::Value *> indices;
+    indices.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), 0));
+    indices.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), memberIndex));
+
+    llvm::Value *memberPtr = context.builder.CreateGEP(
+        structType->llvmStructType,
+        baseValue,
+        indices,
+        "member_ptr");
+
+    NTypePtr memberType = structType->getMemberType(memberName);
+
+    return CodegenResult(memberPtr, memberType);
 }
 
 CodegenResult NInteger::codegen(ASTContext &context) {

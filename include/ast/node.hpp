@@ -70,6 +70,7 @@ typedef std::shared_ptr<NType> NTypePtr;
 class CodegenResult {
 public:
     CodegenResult() : errorMessage(""), value(nullptr) {}
+    CodegenResult(llvm::Type *type) : errorMessage(""), llvmType(type), value(nullptr) {}
     CodegenResult(llvm::Value *val) : errorMessage(""), value(val), type(nullptr) {}
     CodegenResult(llvm::Value *val, NTypePtr type) : errorMessage(""), value(val), type(type) {}
     CodegenResult(const std::string &errMsg) : errorMessage(errMsg), value(nullptr) {}
@@ -90,41 +91,50 @@ public:
     bool isSuccess() const { return "" == errorMessage; }
     std::string getErrorMessage() const { return errorMessage; }
     llvm::Value *getValue() const { return value; }
+    llvm::Type *getLLVMType() const { return llvmType; }
     NTypePtr getType() const { return type; }
 
 private:
     std::string errorMessage;
     llvm::Value *value = nullptr;
+    llvm::Type *llvmType = nullptr;
     NTypePtr type = nullptr;
 };
 
-struct VariableTable {
-    std::map<std::string, std::pair<llvm::AllocaInst *, NTypePtr>> variables;
-    VariableTable *parent = nullptr;
+template<typename T> class ScopeTable {
+public:
+    ScopeTable() = default;
+    ScopeTable(ScopeTable<T> *parent) : parent(parent) {}
 
     /**
-     * Looks up a variable in the current scope and parent scopes.
-     * @return A pair containing the AllocaInst and NTypePtr if found, otherwise {nullptr, nullptr}.
+     * Looks up a object in the current scope and parent scopes.
+     * @return A pair of (isFound, object).
      */
-    std::pair<llvm::AllocaInst *, NTypePtr> lookupVariable(const std::string &name, bool searchParent = true) {
+    std::pair<bool, T> lookup(const std::string &name, bool deepSearch = true) {
         auto it = variables.find(name);
         if (it != variables.end()) {
-            return it->second;
+            return std::make_pair(true, it->second);
         }
 
-        if (false == searchParent || nullptr == parent) {
-            return std::make_pair(nullptr, nullptr);
+        if (false == deepSearch || nullptr == parent) {
+            return std::make_pair(false, T());
         }
 
-        return parent->lookupVariable(name);
+        return parent->lookup(name);
     }
 
     /**
-     * Inserts a new variable into the current scope.
+     * Inserts a new object into the current scope.
      */
-    void insertVariable(const std::string &name, llvm::AllocaInst *allocaInst, NTypePtr type) {
-        variables[name] = std::make_pair(allocaInst, type);
+    void insert(const std::string &name, T obj) {
+        variables[name] = obj;
     }
+
+private:
+    std::map<std::string, T> variables;
+    ScopeTable<T> *parent = nullptr;
+
+friend class ASTContext;
 };
 
 struct ASTContext {
@@ -132,23 +142,31 @@ struct ASTContext {
     llvm::Module module;
     llvm::IRBuilder<> builder;
     NFunctionDefinition *currentFunction = nullptr;
-    VariableTable *variableTable = nullptr;
+    ScopeTable<std::pair<llvm::AllocaInst *, NTypePtr>> *variableTable = nullptr;
+    ScopeTable<NTypePtr> *typeTable = nullptr;
+
     std::map<std::string, NFunctionDefinition *> functionDefinitions;
     bool isInitializingFunction = false;
 
-    ASTContext() : module("toyc", llvmContext), builder(llvmContext) {}
+    ASTContext() : module("toyc", llvmContext), builder(llvmContext) {
+        pushScope();
+    }
 
     void pushScope() {
-        VariableTable *newTable = new VariableTable();
-        newTable->parent = variableTable;
-        variableTable = newTable;
+        variableTable = new ScopeTable<std::pair<llvm::AllocaInst *, NTypePtr>>(variableTable);
+        typeTable = new ScopeTable<NTypePtr>(typeTable);
     }
 
     void popScope() {
         if (variableTable) {
-            VariableTable *oldTable = variableTable;
-            variableTable = variableTable->parent;
-            delete oldTable;
+            ScopeTable<std::pair<llvm::AllocaInst *, NTypePtr>> *parent = variableTable->parent;
+            delete variableTable;
+            variableTable = parent;
+        }
+        if (typeTable) {
+            ScopeTable<NTypePtr> *parent = typeTable->parent;
+            delete typeTable;
+            typeTable = parent;
         }
     }
 };
@@ -161,7 +179,9 @@ public:
     BasicNode(BasicNode &&) = default;
     BasicNode &operator=(const BasicNode &) = default;
     virtual std::string getType() const = 0;
-    virtual CodegenResult codegen(ASTContext &context) = 0;
+    virtual CodegenResult codegen(ASTContext &context) {
+        return CodegenResult("Codegen not implemented for this node type: " + getType());
+    }
 };
 
 class NType {
@@ -174,7 +194,7 @@ public:
         : type(type), pointTo(pointTo), pointerLevel(pointerLevel) {}
 
     virtual std::string getType() const { return "Type"; }
-    virtual llvm::Type *getLLVMType(llvm::LLVMContext &context) const;
+    virtual CodegenResult getLLVMType(ASTContext &context) const;
 
     std::string name;
     NTypePtr pointTo = nullptr;
@@ -191,6 +211,23 @@ public:
 public:
     NExternalDeclaration *next = nullptr;
 };
+
+static std::string varTypeToString(VarType type) {
+    switch (type) {
+        case VAR_TYPE_VOID: return "void";
+        case VAR_TYPE_CHAR: return "char";
+        case VAR_TYPE_BOOL: return "bool";
+        case VAR_TYPE_SHORT: return "short";
+        case VAR_TYPE_INT: return "int";
+        case VAR_TYPE_LONG: return "long";
+        case VAR_TYPE_FLOAT: return "float";
+        case VAR_TYPE_DOUBLE: return "double";
+        case VAR_TYPE_PTR: return "pointer";
+        case VAR_TYPE_STRUCT: return "struct";
+        case VAR_TYPE_DEFINED: return "defined";
+        default: return "unknown";
+    }
+}
 
 static bool isFloatingPointType(VarType type) {
     return type == VAR_TYPE_FLOAT || type == VAR_TYPE_DOUBLE;
@@ -240,7 +277,7 @@ static llvm::Value *castToBool(llvm::Value *value, VarType fromType,
     }
 }
 
-static CodegenResult typeCast(llvm::Value *value, const NTypePtr fromType, const NTypePtr toType, llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
+static CodegenResult typeCast(llvm::Value *value, const NTypePtr fromType, const NTypePtr toType, ASTContext &context) {
     if (nullptr == value || nullptr == fromType || nullptr == toType) {
         return CodegenResult("Type cast failed due to null value or type");
     }
@@ -253,64 +290,68 @@ static CodegenResult typeCast(llvm::Value *value, const NTypePtr fromType, const
     }
 
     if (from == VAR_TYPE_BOOL) {
-        return castFromBool(value, to, context, builder);
+        return castFromBool(value, to, context.llvmContext, context.builder);
     }
 
     if (to == VAR_TYPE_BOOL) {
-        return castToBool(value, from, context, builder);
+        return castToBool(value, from, context.llvmContext, context.builder);
     }
 
     switch (to) {
         case VAR_TYPE_CHAR:
             if (isFloatingPointType(from)) {
-                return builder.CreateFPToSI(value, llvm::Type::getInt8Ty(context), "to_char");
+                return context.builder.CreateFPToSI(value, llvm::Type::getInt8Ty(context.llvmContext), "to_char");
             }
-            return builder.CreateIntCast(value, llvm::Type::getInt8Ty(context), true, "to_char");
+            return context.builder.CreateIntCast(value, llvm::Type::getInt8Ty(context.llvmContext), true, "to_char");
 
         case VAR_TYPE_SHORT:
             if (isFloatingPointType(from)) {
-                return builder.CreateFPToSI(value, llvm::Type::getInt16Ty(context), "to_short");
+                return context.builder.CreateFPToSI(value, llvm::Type::getInt16Ty(context.llvmContext), "to_short");
             }
-            return builder.CreateIntCast(value, llvm::Type::getInt16Ty(context), true, "to_short");
+            return context.builder.CreateIntCast(value, llvm::Type::getInt16Ty(context.llvmContext), true, "to_short");
 
         case VAR_TYPE_INT:
             if (isFloatingPointType(from)) {
-                return builder.CreateFPToSI(value, llvm::Type::getInt32Ty(context), "to_int");
+                return context.builder.CreateFPToSI(value, llvm::Type::getInt32Ty(context.llvmContext), "to_int");
             }
-            return builder.CreateIntCast(value, llvm::Type::getInt32Ty(context), true, "to_int");
+            return context.builder.CreateIntCast(value, llvm::Type::getInt32Ty(context.llvmContext), true, "to_int");
 
         case VAR_TYPE_LONG:
             if (isFloatingPointType(from)) {
-                return builder.CreateFPToSI(value, llvm::Type::getInt64Ty(context), "to_long");
+                return context.builder.CreateFPToSI(value, llvm::Type::getInt64Ty(context.llvmContext), "to_long");
             }
-            return builder.CreateIntCast(value, llvm::Type::getInt64Ty(context), true, "to_long");
+            return context.builder.CreateIntCast(value, llvm::Type::getInt64Ty(context.llvmContext), true, "to_long");
 
         case VAR_TYPE_FLOAT:
             if (isIntegerType(from)) {
-                return builder.CreateSIToFP(value, llvm::Type::getFloatTy(context), "to_float");
+                return context.builder.CreateSIToFP(value, llvm::Type::getFloatTy(context.llvmContext), "to_float");
             }
-            return builder.CreateFPCast(value, llvm::Type::getFloatTy(context), "to_float");
+            return context.builder.CreateFPCast(value, llvm::Type::getFloatTy(context.llvmContext), "to_float");
 
         case VAR_TYPE_DOUBLE:
             if (isIntegerType(from)) {
-                return builder.CreateSIToFP(value, llvm::Type::getDoubleTy(context), "to_double");
+                return context.builder.CreateSIToFP(value, llvm::Type::getDoubleTy(context.llvmContext), "to_double");
             }
-            return builder.CreateFPCast(value, llvm::Type::getDoubleTy(context), "to_double");
+            return context.builder.CreateFPCast(value, llvm::Type::getDoubleTy(context.llvmContext), "to_double");
 
         case VAR_TYPE_PTR:
             if (isIntegerType(from)) {
-                return builder.CreateIntToPtr(value, toType->pointTo->getLLVMType(context), "to_ptr");
+                CodegenResult ptrTypeResult = toType->pointTo->getLLVMType(context);
+                if (false == ptrTypeResult.isSuccess() || nullptr == ptrTypeResult.getLLVMType()) {
+                    return ptrTypeResult << CodegenResult("Failed to get LLVM type for pointer type cast");
+                }
+                return context.builder.CreateIntToPtr(value, ptrTypeResult.getLLVMType(), "to_ptr");
             }
-            return builder.CreateBitCast(value, toType->pointTo->getLLVMType(context), "to_ptr");
+            return context.builder.CreateBitCast(value, toType->getLLVMType(context).getLLVMType(), "to_ptr");
 
         default:
-            return CodegenResult("Unsupported type cast from " + std::to_string(from) + " to " + std::to_string(to));
+            return CodegenResult("Unsupported type cast from " + varTypeToString(from) + " to " + varTypeToString(to));
     }
 }
 
-static CodegenResult typeCast(llvm::Value *value, const NTypePtr fromType, VarType toType, llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
+static CodegenResult typeCast(llvm::Value *value, const NTypePtr fromType, VarType toType, ASTContext &context) {
     NTypePtr toNType = std::make_shared<NType>(toType);
-    return typeCast(value, fromType, toNType, context, builder);
+    return typeCast(value, fromType, toNType, context);
 }
 
 } // namespace toyc::ast

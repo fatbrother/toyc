@@ -11,17 +11,21 @@ CodegenResult NStructType::codegen(ASTContext &context) {
 
     std::vector<llvm::Type *> memberTypes;
     for (auto currentMember = members; currentMember != nullptr; currentMember = currentMember->next) {
-        llvm::Type *memberType = currentMember->type->getLLVMType(context.llvmContext);
+        CodegenResult typeResult = currentMember->type->getLLVMType(context);
+        if (false == typeResult.isSuccess() || nullptr == typeResult.getLLVMType()) {
+            return typeResult << CodegenResult("Failed to get LLVM type for member in struct: " + name);
+        }
+        llvm::Type *memberType = typeResult.getLLVMType();
         if (memberType == nullptr) {
             return CodegenResult("Member type is null in struct: " + name);
         }
         memberTypes.push_back(memberType);
     }
 
-    llvm::StructType *structType = llvm::StructType::create(context.llvmContext, memberTypes, name);
-    if (structType == nullptr) {
+    llvmStructType = llvm::StructType::create(context.llvmContext, memberTypes, name);
+    if (llvmStructType == nullptr) {
         return CodegenResult("Failed to create struct type: " + name);
     }
 
-    return CodegenResult(nullptr);
+    return CodegenResult();
 }

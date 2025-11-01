@@ -17,9 +17,6 @@ public:
         SAFE_DELETE(next);
     }
     virtual std::string getType() const override { return "Parameter"; }
-    llvm::Type *getLLVMType(llvm::LLVMContext &context) const {
-        return type->getLLVMType(context);
-    }
     NTypePtr getVarType() const {
         return type;
     }
