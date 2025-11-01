@@ -95,10 +95,12 @@ The compiler supports variable declarations with optional initialization
 ### Function Calls
 Function calls with argument lists are supported
 
+### Structures
+The compiler supports structure definitions and member access using the dot (`.`) and arrow (`->`) operators.
+
 ## Future Work
 This is a educational/toy C compiler that implements a significant subset of C functionality, but it's not a complete C implementation. Notable limitations include the absence of:
 - Arrays and array indexing
-- Struct/union definitions
 - Switch statements
 - Break/continue statements (tokens defined but not implemented in grammar)
 - Preprocessing directives
