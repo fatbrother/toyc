@@ -42,6 +42,17 @@ llvm::Type *NType::getLLVMType(llvm::LLVMContext &context) const {
                 llvmType = llvm::PointerType::get(pointTo->getLLVMType(context), 0);
             }
             break;
+        case VAR_TYPE_STRUCT:
+            if (name.empty()) {
+                std::cerr << "Struct name is empty" << std::endl;
+                return nullptr;
+            }
+            llvmType = llvm::StructType::getTypeByName(context, name);
+            if (llvmType == nullptr) {
+                std::cerr << "Struct type not found: " << name << std::endl;
+                return nullptr;
+            }
+            break;
         case VAR_TYPE_DEFINED:
             // TODO: Handle typedef names
             break;

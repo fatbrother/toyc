@@ -67,6 +67,37 @@ class NFunctionDefinition;
 class NType;
 typedef std::shared_ptr<NType> NTypePtr;
 
+class CodegenResult {
+public:
+    CodegenResult() : errorMessage(""), value(nullptr) {}
+    CodegenResult(llvm::Value *val) : errorMessage(""), value(val), type(nullptr) {}
+    CodegenResult(llvm::Value *val, NTypePtr type) : errorMessage(""), value(val), type(type) {}
+    CodegenResult(const std::string &errMsg) : errorMessage(errMsg), value(nullptr) {}
+
+    CodegenResult& operator<<(const CodegenResult &other) {
+        if (!other.isSuccess()) {
+            if (false == this->isSuccess()) {
+                if (!this->errorMessage.empty()) {
+                    this->errorMessage += "\n";
+                }
+
+                this->errorMessage += other.errorMessage;
+            }
+        }
+        return *this;
+    }
+
+    bool isSuccess() const { return "" == errorMessage; }
+    std::string getErrorMessage() const { return errorMessage; }
+    llvm::Value *getValue() const { return value; }
+    NTypePtr getType() const { return type; }
+
+private:
+    std::string errorMessage;
+    llvm::Value *value = nullptr;
+    NTypePtr type = nullptr;
+};
+
 struct VariableTable {
     std::map<std::string, std::pair<llvm::AllocaInst *, NTypePtr>> variables;
     VariableTable *parent = nullptr;
@@ -130,9 +161,10 @@ public:
     BasicNode(BasicNode &&) = default;
     BasicNode &operator=(const BasicNode &) = default;
     virtual std::string getType() const = 0;
+    virtual CodegenResult codegen(ASTContext &context) = 0;
 };
 
-class NType : public BasicNode {
+class NType {
 public:
     NType(VarType type, const std::string &name = "")
         : type(type), name(name) {}
@@ -141,7 +173,7 @@ public:
     NType(VarType type, NType *pointTo, int pointerLevel = 0)
         : type(type), pointTo(pointTo), pointerLevel(pointerLevel) {}
 
-    virtual std::string getType() const override { return "Type"; }
+    virtual std::string getType() const { return "Type"; }
     virtual llvm::Type *getLLVMType(llvm::LLVMContext &context) const;
 
     std::string name;
@@ -155,7 +187,6 @@ public:
     virtual ~NExternalDeclaration() {
         SAFE_DELETE(next);
     }
-    virtual llvm::Value *codegen(ASTContext &context) = 0;
 
 public:
     NExternalDeclaration *next = nullptr;
@@ -170,24 +201,34 @@ static bool isIntegerType(VarType type) {
            type == VAR_TYPE_SHORT || type == VAR_TYPE_INT || type == VAR_TYPE_LONG;
 }
 
-static llvm::Value *castFromBool(llvm::Value *value, VarType toType,
+static CodegenResult castFromBool(llvm::Value *value, VarType toType,
                                  llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
+    llvm::Value *result = nullptr;
+
     switch (toType) {
         case VAR_TYPE_CHAR:
-            return builder.CreateZExt(value, llvm::Type::getInt8Ty(context), "bool_to_char");
+            result = builder.CreateZExt(value, llvm::Type::getInt8Ty(context), "bool_to_char");
+            break;
         case VAR_TYPE_SHORT:
-            return builder.CreateZExt(value, llvm::Type::getInt16Ty(context), "bool_to_short");
+            result = builder.CreateZExt(value, llvm::Type::getInt16Ty(context), "bool_to_short");
+            break;
         case VAR_TYPE_INT:
-            return builder.CreateZExt(value, llvm::Type::getInt32Ty(context), "bool_to_int");
+            result = builder.CreateZExt(value, llvm::Type::getInt32Ty(context), "bool_to_int");
+            break;
         case VAR_TYPE_LONG:
-            return builder.CreateZExt(value, llvm::Type::getInt64Ty(context), "bool_to_long");
+            result = builder.CreateZExt(value, llvm::Type::getInt64Ty(context), "bool_to_long");
+            break;
         case VAR_TYPE_FLOAT:
-            return builder.CreateUIToFP(value, llvm::Type::getFloatTy(context), "bool_to_float");
+            result = builder.CreateUIToFP(value, llvm::Type::getFloatTy(context), "bool_to_float");
+            break;
         case VAR_TYPE_DOUBLE:
-            return builder.CreateUIToFP(value, llvm::Type::getDoubleTy(context), "bool_to_double");
+            result = builder.CreateUIToFP(value, llvm::Type::getDoubleTy(context), "bool_to_double");
+            break;
         default:
-            throw std::runtime_error("Unsupported cast from bool to type: " + std::to_string(toType));
+            return CodegenResult("Unsupported cast from bool to " + std::to_string(toType));
     }
+
+    return CodegenResult(result);
 }
 
 static llvm::Value *castToBool(llvm::Value *value, VarType fromType,
@@ -199,9 +240,9 @@ static llvm::Value *castToBool(llvm::Value *value, VarType fromType,
     }
 }
 
-static llvm::Value *typeCast(llvm::Value *value, const NTypePtr fromType, const NTypePtr toType, llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
+static CodegenResult typeCast(llvm::Value *value, const NTypePtr fromType, const NTypePtr toType, llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
     if (nullptr == value || nullptr == fromType || nullptr == toType) {
-        throw std::runtime_error("Invalid type cast: value or type is null");
+        return CodegenResult("Type cast failed due to null value or type");
     }
 
     VarType from = fromType->type;
@@ -263,11 +304,11 @@ static llvm::Value *typeCast(llvm::Value *value, const NTypePtr fromType, const 
             return builder.CreateBitCast(value, toType->pointTo->getLLVMType(context), "to_ptr");
 
         default:
-            throw std::runtime_error("Unsupported type cast to type: " + std::to_string(to));
+            return CodegenResult("Unsupported type cast from " + std::to_string(from) + " to " + std::to_string(to));
     }
 }
 
-static llvm::Value *typeCast(llvm::Value *value, const NTypePtr fromType, VarType toType, llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
+static CodegenResult typeCast(llvm::Value *value, const NTypePtr fromType, VarType toType, llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
     NTypePtr toNType = std::make_shared<NType>(toType);
     return typeCast(value, fromType, toNType, context, builder);
 }

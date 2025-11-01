@@ -10,7 +10,7 @@ namespace toyc::ast {
 class NStatement : public BasicNode {
 public:
     virtual ~NStatement() override;
-    virtual llvm::Value *codegen(ASTContext &context) = 0;
+    virtual CodegenResult codegen(ASTContext &context) = 0;
     virtual std::string getType() const override { return "Statement"; }
     void setParent(NStatement *parent) { this->parent = parent; }
 
@@ -26,7 +26,7 @@ public:
     ~NDeclarationStatement() {
         SAFE_DELETE(declarator);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "DeclarationStatement"; }
 
 private:
@@ -40,7 +40,7 @@ public:
     ~NExpressionStatement() {
         SAFE_DELETE(expression);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ExpressionStatement"; }
 
 private:
@@ -54,7 +54,7 @@ public:
     ~NBlock() {
         SAFE_DELETE(statements);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Block"; }
     void setName(const std::string &name) { this->name = name; }
     void setNextBlock(llvm::BasicBlock *nextBlock) { this->nextBlock = nextBlock; }
@@ -71,7 +71,7 @@ public:
     ~NReturnStatement() {
         SAFE_DELETE(expression);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ReturnStatement"; }
 
 private:
@@ -102,7 +102,7 @@ public:
         SAFE_DELETE(thenBlockNode);
         SAFE_DELETE(elseBlockNode);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "IfStatement"; }
 
 private:
@@ -127,7 +127,7 @@ public:
         SAFE_DELETE(incrementNode);
         SAFE_DELETE(bodyNode);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ForStatement"; }
 
 private:
@@ -151,7 +151,7 @@ public:
         SAFE_DELETE(conditionNode);
         SAFE_DELETE(bodyNode);
     }
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "WhileStatement"; }
 
 private:

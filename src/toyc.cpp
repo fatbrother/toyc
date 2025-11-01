@@ -115,8 +115,9 @@ int main(int argc, char *argv[]) {
 
     toyc::ast::ASTContext astContext;
     for (auto &decl = program; decl != nullptr; decl = decl->next) {
-        if (nullptr == decl->codegen(astContext)) {
-            std::cerr << "Code generation failed." << std::endl;
+        toyc::ast::CodegenResult result = decl->codegen(astContext);
+        if (false == result.isSuccess()) {
+            std::cerr << "Error: \n" << result.getErrorMessage() << std::endl;
             return -1;
         }
     }

@@ -6,15 +6,19 @@
 
 using namespace toyc::ast;
 
-std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context) {
-    auto [lhsValue, lhsType] = lhs->codegen(context);
-    auto [rhsValue, rhsType] = rhs->codegen(context);
+CodegenResult NBinaryOperator::codegen(ASTContext &context) {
+    CodegenResult lhsResult = lhs->codegen(context);
+    CodegenResult rhsResult = rhs->codegen(context);
     llvm::Value *result = nullptr;
     NTypePtr resultType = nullptr;
     VarType targetType = VAR_TYPE_INT;
+    llvm::Value *lhsValue = lhsResult.getValue();
+    NTypePtr lhsType = lhsResult.getType();
+    llvm::Value *rhsValue = rhsResult.getValue();
+    NTypePtr rhsType = rhsResult.getType();
 
-    if (nullptr == lhsValue || nullptr == rhsValue) {
-        return std::make_pair(nullptr, nullptr);
+    if (false == lhsResult.isSuccess() || false == rhsResult.isSuccess()) {
+        return lhsResult << rhsResult << CodegenResult("Failed to generate code for binary operator operands");
     }
 
     if (op == EQ || op == NE || op == LE || op == GE || op == LT || op == GT) {
@@ -27,8 +31,27 @@ std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context)
         resultType = std::make_shared<NType>(targetType);
     }
 
-    lhsValue = typeCast(lhsValue, lhsType, targetType, context.llvmContext, context.builder);
-    rhsValue = typeCast(rhsValue, rhsType, targetType, context.llvmContext, context.builder);
+    CodegenResult castLhsResult = typeCast(
+        lhsValue,
+        lhsType,
+        targetType,
+        context.llvmContext,
+        context.builder);
+    if (false == castLhsResult.isSuccess() || nullptr == castLhsResult.getValue()) {
+        return castLhsResult << CodegenResult("Type cast failed for left-hand side in binary operation");
+    }
+    lhsValue = castLhsResult.getValue();
+
+    CodegenResult castRhsResult = typeCast(
+        rhsValue,
+        rhsType,
+        targetType,
+        context.llvmContext,
+        context.builder);
+    if (false == castRhsResult.isSuccess() || nullptr == castRhsResult.getValue()) {
+        return castRhsResult << CodegenResult("Type cast failed for right-hand side in binary operation");
+    }
+    rhsValue = castRhsResult.getValue();
 
     switch (op) {
         case AND:
@@ -107,26 +130,30 @@ std::pair<llvm::Value *, NTypePtr> NBinaryOperator::codegen(ASTContext &context)
             result = context.builder.CreateXor(lhsValue, rhsValue, "xor");
             break;
         default:
-            std::cerr << "Unknown binary operator: " << op << std::endl;
-            return std::make_pair(nullptr, nullptr);
+            return CodegenResult("Unknown binary operator");
     }
 
-    return std::make_pair(result, resultType);
+    return CodegenResult(result, resultType);
 }
 
-std::pair<llvm::Value *, NTypePtr> NUnaryExpression::codegen(ASTContext &context) {
-    auto [value, type] = expr->codegen(context);
+CodegenResult NUnaryExpression::codegen(ASTContext &context) {
+    CodegenResult exprResult = expr->codegen(context);
     llvm::AllocaInst *allocaInst = nullptr;
     llvm::Value *one = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), 1);
+    llvm::Value *value = exprResult.getValue();
+    NTypePtr type = exprResult.getType();
     NTypePtr resultType = nullptr;
 
-    if (nullptr == expr) {
-        std::cerr << "Error: Expression is null" << std::endl;
-        return std::make_pair(nullptr, nullptr);
+    if (false == exprResult.isSuccess() || nullptr == value) {
+        return exprResult << CodegenResult("Failed to generate code for unary expression operand");
     }
 
     if (op == L_INC || op == R_INC || op == L_DEC || op == R_DEC) {
-        allocaInst = expr->allocgen(context).first;
+        CodegenResult allocResult = expr->allocgen(context);
+        allocaInst = static_cast<llvm::AllocaInst *>(allocResult.getValue());
+        if (false == allocResult.isSuccess() || nullptr == allocaInst) {
+            return allocResult << CodegenResult("Failed to get lvalue for unary increment/decrement");
+        }
     }
 
     llvm::Value *tmp = nullptr;
@@ -151,38 +178,26 @@ std::pair<llvm::Value *, NTypePtr> NUnaryExpression::codegen(ASTContext &context
             value = allocaInst;
             break;
         case DEREF:
-            if (nullptr == value) {
-                return std::make_pair(nullptr, nullptr);
-            }
             value = context.builder.CreateLoad(type->getLLVMType(context.llvmContext), value, "deref");
             break;
         case PLUS:
-            if (nullptr == value) {
-                std::cerr << "Error: Unary plus failed" << std::endl;
-                return std::make_pair(nullptr, nullptr);
-            }
             break;
         case MINUS:
-            if (nullptr == value) {
-                std::cerr << "Error: Unary minus failed" << std::endl;
-                return std::make_pair(nullptr, nullptr);
-            }
             value = context.builder.CreateNeg(value, "neg");
             break;
         case BIT_NOT:
-            if (nullptr == value) {
-                std::cerr << "Error: Bitwise NOT failed" << std::endl;
-                return std::make_pair(nullptr, nullptr);
-            }
             value = context.builder.CreateXor(value, llvm::ConstantInt::get(value->getType(), -1), "bit_not");
             break;
-        case LOG_NOT:
-            value = typeCast(value, type, VarType::VAR_TYPE_BOOL, context.llvmContext, context.builder);
-            value = context.builder.CreateICmpEQ(value, llvm::ConstantInt::get(value->getType(), 0), "log_not");
+        case LOG_NOT: {
+                CodegenResult castResult = typeCast(value, type, VAR_TYPE_BOOL, context.llvmContext, context.builder);
+                if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
+                    return castResult << CodegenResult("Failed to cast value to bool for logical not");
+                }
+                value = context.builder.CreateICmpEQ(value, llvm::ConstantInt::get(value->getType(), 0), "log_not");
+            }
             break;
         default:
-            std::cerr << "Unknown unary operator: " << op << std::endl;
-            break;
+            return CodegenResult("Unknown unary operator");
     }
 
     if (op == ADDR) {
@@ -197,19 +212,18 @@ std::pair<llvm::Value *, NTypePtr> NUnaryExpression::codegen(ASTContext &context
         resultType = type;
     }
 
-    return std::make_pair(value, resultType);
+    return CodegenResult(value, resultType);
 }
 
-std::pair<llvm::Value *, NTypePtr> NConditionalExpression::codegen(ASTContext &context) {
+CodegenResult NConditionalExpression::codegen(ASTContext &context) {
     if (nullptr == condition || nullptr == trueExpr || nullptr == falseExpr) {
-        std::cerr << "Error: One of the expressions is null" << std::endl;
-        return std::make_pair(nullptr, nullptr);
+        return CodegenResult("One of the expressions is null");
     }
 
-    auto [condValue, condType] = condition->codegen(context);
-    if (nullptr == condValue) {
-        std::cerr << "Error: Condition code generation failed" << std::endl;
-        return std::make_pair(nullptr, nullptr);
+    CodegenResult condResult = condition->codegen(context);
+    llvm::Value *condValue = condResult.getValue();
+    if (false == condResult.isSuccess() || nullptr == condValue) {
+        return condResult << CodegenResult("Condition expression code generation failed");
     }
 
     condValue = context.builder.CreateICmpNE(condValue, llvm::ConstantInt::get(condValue->getType(), 0), "cond");
@@ -222,18 +236,20 @@ std::pair<llvm::Value *, NTypePtr> NConditionalExpression::codegen(ASTContext &c
     context.builder.CreateCondBr(condValue, trueBlock, falseBlock);
 
     context.builder.SetInsertPoint(trueBlock);
-    auto [trueValue, trueType] = trueExpr->codegen(context);
-    if (nullptr == trueValue) {
-        std::cerr << "Error: True expression code generation failed" << std::endl;
-        return std::make_pair(nullptr, nullptr);
+    CodegenResult trueResult = trueExpr->codegen(context);
+    llvm::Value *trueValue = trueResult.getValue();
+    NTypePtr trueType = trueResult.getType();
+    if (false == trueResult.isSuccess() || nullptr == trueValue) {
+        return trueResult << CodegenResult("True expression code generation failed");
     }
     context.builder.CreateBr(mergeBlock);
 
     context.builder.SetInsertPoint(falseBlock);
-    auto [falseValue, falseType] = falseExpr->codegen(context);
-    if (nullptr == falseValue) {
-        std::cerr << "Error: False expression code generation failed" << std::endl;
-        return std::make_pair(nullptr, nullptr);
+    CodegenResult falseResult = falseExpr->codegen(context);
+    llvm::Value *falseValue = falseResult.getValue();
+    NTypePtr falseType = falseResult.getType();
+    if (false == falseResult.isSuccess() || nullptr == falseValue) {
+        return falseResult << CodegenResult("False expression code generation failed");
     }
     context.builder.CreateBr(mergeBlock);
 
@@ -245,96 +261,113 @@ std::pair<llvm::Value *, NTypePtr> NConditionalExpression::codegen(ASTContext &c
     phiNode->addIncoming(trueValue, trueBlock);
     phiNode->addIncoming(falseValue, falseBlock);
 
-    return std::make_pair(phiNode, trueType);
+    return CodegenResult(phiNode, trueType);
 }
 
-std::pair<llvm::Value *, NTypePtr> NIdentifier::codegen(ASTContext &context) {
+CodegenResult NIdentifier::codegen(ASTContext &context) {
     auto [allocaInst, type] = context.variableTable->lookupVariable(name);
     llvm::Value *value = nullptr;
     if (nullptr == allocaInst) {
-        std::cerr << "Error: Variable not found: " << name << std::endl;
-        return std::make_pair(nullptr, nullptr);
+        return CodegenResult("Variable not found: " + name);
     }
 
     value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
     if (nullptr == value) {
-        std::cerr << "Error: Load failed for variable: " << name << std::endl;
-        return std::make_pair(nullptr, nullptr);
+        return CodegenResult("Load failed for variable: " + name);
     }
 
-    return std::make_pair(value, type);
+    return CodegenResult(value, type);
 }
 
-std::pair<llvm::AllocaInst *, NTypePtr> NIdentifier::allocgen(ASTContext &context) {
+CodegenResult NIdentifier::allocgen(ASTContext &context) {
     auto [allocaInst, type] = context.variableTable->lookupVariable(name);
 
     if (nullptr == allocaInst) {
-        std::cerr << "Error: Variable not found: " << name << std::endl;
-        return std::make_pair(nullptr, nullptr);
+        return CodegenResult("Variable not found: " + name);
     }
 
-    return std::make_pair(allocaInst, type);
+    return CodegenResult(allocaInst, type);
 }
 
-std::pair<llvm::Value *, NTypePtr> NAssignment::codegen(ASTContext &context) {
-    auto [lhsAlloca, lhsType] = lhs->allocgen(context);
-    auto [rhsValue, rhsType] = rhs->codegen(context);
-    if (nullptr == rhsValue || nullptr == lhsAlloca) {
-        std::cerr << "Error: Assignment failed due to null values" << std::endl;
-        return std::make_pair(nullptr, nullptr);
+CodegenResult NAssignment::codegen(ASTContext &context) {
+    CodegenResult lhsResult = lhs->allocgen(context);
+    llvm::AllocaInst *lhsAlloca = static_cast<llvm::AllocaInst *>(lhsResult.getValue());
+    NTypePtr lhsType = lhsResult.getType();
+    CodegenResult rhsResult = rhs->codegen(context);
+    llvm::Value *rhsValue = rhsResult.getValue();
+    NTypePtr rhsType = rhsResult.getType();
+    if (false == rhsResult.isSuccess() || false == lhsResult.isSuccess() || nullptr == lhsAlloca || nullptr == rhsValue) {
+        return lhsResult << rhsResult << CodegenResult("Assignment failed due to null values");
     }
 
-    rhsValue = typeCast(rhsValue, rhsType, lhsType, context.llvmContext, context.builder);
+    CodegenResult castResult = typeCast(
+        rhsValue,
+        rhsType,
+        lhsType,
+        context.llvmContext,
+        context.builder);
+    if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
+        return castResult << CodegenResult("Type cast failed during assignment");
+    }
+    rhsValue = castResult.getValue();
     context.builder.CreateStore(rhsValue, lhsAlloca);
-    return std::make_pair(rhsValue, lhsType);
+    return CodegenResult(rhsValue, lhsType);
 }
 
-std::pair<llvm::Value *, NTypePtr> NArguments::codegen(ASTContext &context) {
+CodegenResult NArguments::codegen(ASTContext &context) {
     return expr->codegen(context);
 }
 
-std::pair<llvm::Value *, NTypePtr> NFunctionCall::codegen(ASTContext &context) {
+CodegenResult NFunctionCall::codegen(ASTContext &context) {
     std::vector<llvm::Value *> args;
     NFunctionDefinition *function = context.functionDefinitions[name];
     llvm::Value *res = nullptr;
     if (nullptr == function) {
-        std::cerr << "Error: Function not found: " << name << std::endl;
-        return std::make_pair(nullptr, nullptr);
+        return CodegenResult("Function not found: " + name);
     }
 
     NParameter *paramIt = nullptr;
     NArguments* argNode = nullptr;
     for (paramIt = function->getParams(), argNode = argNodes; paramIt != nullptr && argNode != nullptr; paramIt = paramIt->next, argNode = argNodes->next) {
-        auto [argValue, argType] = argNode->codegen(context);
-        argValue = typeCast(argValue, argType, paramIt->getVarType(), context.llvmContext, context.builder);
-        if (nullptr == argValue) {
-            std::cerr << "Error: Argument value is null" << std::endl;
-            return std::make_pair(nullptr, nullptr);
+        CodegenResult argResult = argNode->codegen(context);
+        llvm::Value *argValue = argResult.getValue();
+        NTypePtr argType = argResult.getType();
+        if (false == argResult.isSuccess() || nullptr == argValue) {
+            return argResult << CodegenResult("Argument code generation failed for function call: " + name);
         }
-        args.push_back(argValue);
+        CodegenResult castResult = typeCast(
+            argValue,
+            argType,
+            paramIt->getVarType()->type,
+            context.llvmContext,
+            context.builder);
+        if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
+            return castResult << CodegenResult("Type cast failed for argument in function call: " + name);
+        }
+        args.push_back(castResult.getValue());
     }
 
     res = context.builder.CreateCall(function->getFunction(), args);
 
-    return std::make_pair(res, function->getReturnType());
+    return CodegenResult(res, function->getReturnType());
 }
 
-std::pair<llvm::Value *, NTypePtr> NInteger::codegen(ASTContext &context) {
-    return std::make_pair(
+CodegenResult NInteger::codegen(ASTContext &context) {
+    return CodegenResult(
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), value),
         std::make_shared<NType>(VarType::VAR_TYPE_INT)
     );
 }
 
-std::pair<llvm::Value *, NTypePtr> NFloat::codegen(ASTContext &context) {
-    return std::make_pair(
+CodegenResult NFloat::codegen(ASTContext &context) {
+    return CodegenResult(
         llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.llvmContext), value),
         std::make_shared<NType>(VarType::VAR_TYPE_DOUBLE)
     );
 }
 
-std::pair<llvm::Value *, NTypePtr> NString::codegen(ASTContext &context) {
-    return std::make_pair(
+CodegenResult NString::codegen(ASTContext &context) {
+    return CodegenResult(
         context.builder.CreateGlobalStringPtr(value, "string_literal"),
         std::make_shared<NType>(VarType::VAR_TYPE_PTR, std::make_shared<NType>(VarType::VAR_TYPE_CHAR))
     );

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ast/node.hpp"
 #include "ast/expression.hpp"
 
 namespace toyc::ast {
@@ -21,15 +22,13 @@ public:
 class NStructType : public NType {
 public:
     NStructType(const std::string &name, NStructDeclaration *members)
-        : NType(VarType::VAR_TYPE_STRUCT), name(name), members(members) {}
+        : NType(VarType::VAR_TYPE_STRUCT, name), members(members) {}
     ~NStructType() {
         SAFE_DELETE(members);
     }
     virtual std::string getType() const override { return "StructType"; }
-    const std::string &getName() const { return name; }
+    virtual CodegenResult codegen(ASTContext &context);
 
-private:
-    std::string name;
     NStructDeclaration *members = nullptr;
 };
 

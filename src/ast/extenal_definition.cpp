@@ -24,7 +24,7 @@ NFunctionDefinition::~NFunctionDefinition() {
     SAFE_DELETE(body);
 }
 
-llvm::Value *NFunctionDefinition::codegen(ASTContext &context) {
+CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     llvm::Type *llvmReturnType = returnType->getLLVMType(context.llvmContext);
     std::vector<llvm::Type *> paramTypes;
     std::vector<std::string> paramNames;
@@ -39,8 +39,7 @@ llvm::Value *NFunctionDefinition::codegen(ASTContext &context) {
 
         llvm::Type *paramType = paramIt->getLLVMType(context.llvmContext);
         if (nullptr == paramType) {
-            std::cerr << "Error: Parameter type is null" << std::endl;
-            return nullptr;
+            return CodegenResult("Parameter type is null");
         }
 
         paramTypes.push_back(paramType);
@@ -50,8 +49,7 @@ llvm::Value *NFunctionDefinition::codegen(ASTContext &context) {
     functionType = llvm::FunctionType::get(llvmReturnType, paramTypes, isVariadic);
     llvmFunction = static_cast<llvm::Function *>(context.module.getOrInsertFunction(name, functionType).getCallee());
     if (nullptr == llvmFunction) {
-        std::cerr << "Error: Function is null" << std::endl;
-        return nullptr;
+        return CodegenResult("Function creation failed for " + name);
     }
 
     NParameter* paramIt = params;
@@ -63,21 +61,24 @@ llvm::Value *NFunctionDefinition::codegen(ASTContext &context) {
     context.functionDefinitions[name] = this;
 
     if (nullptr == body) {
-        return llvmFunction;
+        return CodegenResult(llvmFunction);
     }
 
     context.currentFunction = this;
     context.isInitializingFunction = true;
     body->setName("entry");
-    if (nullptr == body->codegen(context)) {
-        return nullptr;
+    CodegenResult bodyResult = body->codegen(context);
+    if (false == bodyResult.isSuccess()) {
+        return bodyResult << CodegenResult("Function body code generation failed for " + name);
     }
     context.currentFunction = nullptr;
     context.isInitializingFunction = false;
 
-    if (false != llvm::verifyFunction(*llvmFunction, &llvm::errs())) {
-        return nullptr;
+    std::string Error;
+    llvm::raw_string_ostream ErrorOS(Error);
+    if (false != llvm::verifyFunction(*llvmFunction, &ErrorOS)) {
+        return CodegenResult(ErrorOS.str());
     }
 
-    return llvmFunction;
+    return CodegenResult(llvmFunction);
 }

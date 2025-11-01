@@ -40,7 +40,7 @@ public:
     NFunctionDefinition(NType *returnType, const std::string &name, NParameter *params, NBlock *body)
         : returnType(returnType), name(name), params(params), body(body) {}
     ~NFunctionDefinition();
-    virtual llvm::Value *codegen(ASTContext &context) override;
+    virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionDefinition"; }
     llvm::Function *getFunction() const { return llvmFunction; }
     NTypePtr getReturnType() const { return returnType; }
