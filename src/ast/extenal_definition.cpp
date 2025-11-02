@@ -1,4 +1,5 @@
 #include "ast/external_definition.hpp"
+#include "utility/raii_guard.hpp"
 
 #include <iostream>
 #include <llvm/IR/Verifier.h>
@@ -77,12 +78,20 @@ CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     context.currentFunction = this;
     context.isInitializingFunction = true;
     body->setName("entry");
+    auto labelGuard = toyc::utility::makeScopeGuard([&context]() {
+        context.clearLabels();
+    });
     CodegenResult bodyResult = body->codegen(context);
     if (false == bodyResult.isSuccess()) {
         return bodyResult << CodegenResult("Function body code generation failed for " + name);
     }
     context.currentFunction = nullptr;
     context.isInitializingFunction = false;
+
+    // Resolve pending goto statements
+    if (!context.pendingGotos.empty()) {
+        return CodegenResult("Undefined label in goto statement in function " + name);
+    }
 
     std::string Error;
     llvm::raw_string_ostream ErrorOS(Error);

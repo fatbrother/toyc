@@ -69,7 +69,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 %type   <parameter> parameter_list parameter_declaration
 %type   <declaration_specifiers> declaration_specifiers
 %type   <statement> statement statement_list expression_statement jump_statement for_statement_init_declaration
-%type   <statement>  if_statement for_statement while_statement do_while_statement
+%type   <statement>  if_statement for_statement while_statement do_while_statement labeled_statement
 %type   <block> compound_statement
 %type   <external_declaration> program external_declaration external_declaration_list function_definition
 %type   <arguments> argument_expression_list
@@ -184,6 +184,9 @@ statement
 	| jump_statement {
 		$$ = $1;
 	}
+	| labeled_statement {
+		$$ = $1;
+	}
 	| if_statement {
 		$$ = $1;
 	}
@@ -225,8 +228,19 @@ do_while_statement
 	}
 	;
 
+labeled_statement
+	: IDENTIFIER ':' statement {
+		$$ = new toyc::ast::NLabelStatement(*$1, $3);
+		delete $1;
+	}
+	;
+
 jump_statement
-	: RETURN expression ';' {
+	: GOTO IDENTIFIER ';' {
+		$$ = new toyc::ast::NGotoStatement(*$2);
+		delete $2;
+	}
+	| RETURN expression ';' {
 		$$ = new toyc::ast::NReturnStatement($2);
 	}
 	| RETURN ';' {

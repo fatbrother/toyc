@@ -336,3 +336,62 @@ CodegenResult NContinueStatement::codegen(ASTContext &context) {
 
     return CodegenResult();
 }
+
+CodegenResult NLabelStatement::codegen(ASTContext &context) {
+    llvm::Function *function = context.builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *labelBlock = context.getLabel(label);
+
+    if (labelBlock) {
+        if (!labelBlock->empty()) {
+            return CodegenResult("Label '" + label + "' is already defined");
+        }
+        context.pendingGotos.erase(label);
+    } else {
+        labelBlock = llvm::BasicBlock::Create(
+            context.llvmContext, "label_" + label, function);
+
+        context.registerLabel(label, labelBlock);
+    }
+
+    // Branch from current block to label block if no terminator
+    if (!context.builder.GetInsertBlock()->getTerminator()) {
+        context.builder.CreateBr(labelBlock);
+    }
+
+    // Set insert point to the label block
+    context.builder.SetInsertPoint(labelBlock);
+
+    // Generate code for the statement after the label
+    if (statement) {
+        CodegenResult result = statement->codegen(context);
+        if (!result.isSuccess()) {
+            return result << CodegenResult("Failed to generate code for statement after label");
+        }
+    }
+
+    return CodegenResult(labelBlock);
+}
+
+CodegenResult NGotoStatement::codegen(ASTContext &context) {
+    llvm::Function *function = context.builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *targetBlock = context.getLabel(label);
+
+    if (!targetBlock) {
+        // Label not yet defined, create a placeholder block
+        targetBlock = llvm::BasicBlock::Create(
+            context.llvmContext, "label_" + label, function);
+
+        llvm::BranchInst *branch = context.builder.CreateBr(targetBlock);
+        context.registerLabel(label, targetBlock);
+        context.pendingGotos.insert(label);
+    } else {
+        context.builder.CreateBr(targetBlock);
+    }
+
+    // Create an unreachable block after the goto
+    llvm::BasicBlock *afterGoto = llvm::BasicBlock::Create(
+        context.llvmContext, "after_goto", function);
+    context.builder.SetInsertPoint(afterGoto);
+
+    return CodegenResult();
+}

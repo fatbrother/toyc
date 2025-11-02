@@ -176,4 +176,30 @@ public:
     virtual std::string getType() const override { return "ContinueStatement"; }
 };
 
+class NLabelStatement : public NStatement {
+public:
+    NLabelStatement(const std::string& label, NStatement* statement)
+        : label(label), statement(statement) {}
+    ~NLabelStatement() {
+        SAFE_DELETE(statement);
+    }
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "LabelStatement"; }
+
+private:
+    std::string label;
+    NStatement* statement;
+};
+
+class NGotoStatement : public NStatement {
+public:
+    NGotoStatement(const std::string& label) : label(label) {}
+    ~NGotoStatement() = default;
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "GotoStatement"; }
+
+private:
+    std::string label;
+};
+
 } // namespace toyc::ast

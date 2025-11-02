@@ -26,6 +26,7 @@ CodegenResult NBinaryOperator::codegen(ASTContext &context) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
         targetType = (lhsType->type > rhsType->type) ? lhsType->type : rhsType->type;
     } else if (op == AND || op == OR) {
+        targetType = VAR_TYPE_BOOL;
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
     } else {
         targetType = (true == isFloatingPointType(lhsType->type)) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;

@@ -3,6 +3,8 @@
 #include <string>
 #include <stack>
 #include <map>
+#include <unordered_set>
+#include <algorithm>
 #include <iostream>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
@@ -172,6 +174,10 @@ struct ASTContext {
     // Used by loops (for/while/do-while) and switch statements
     std::stack<std::shared_ptr<NJumpContext>> jumpContextStack;
 
+    // Label management for goto statements
+    std::map<std::string, llvm::BasicBlock*> labels;
+    std::unordered_set<std::string> pendingGotos;
+
     ASTContext() : module("toyc", llvmContext), builder(llvmContext) {
         pushScope();
     }
@@ -189,6 +195,21 @@ struct ASTContext {
 
     std::shared_ptr<NJumpContext> getCurrentJumpContext() const {
         return jumpContextStack.empty() ? nullptr : jumpContextStack.top();
+    }
+
+    // Label management for goto
+    void registerLabel(const std::string& name, llvm::BasicBlock* block) {
+        labels[name] = block;
+    }
+
+    llvm::BasicBlock* getLabel(const std::string& name) {
+        auto it = labels.find(name);
+        return (it != labels.end()) ? it->second : nullptr;
+    }
+
+    void clearLabels() {
+        labels.clear();
+        pendingGotos.clear();
     }
 
     void pushScope() {
