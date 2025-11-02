@@ -138,6 +138,12 @@ TEST_F(SyntaxTest, BreakContinueStatements) {
     EXPECT_TRUE(testFileParsing(filepath)) << "break/continue 語句解析失敗";
 }
 
+TEST_F(SyntaxTest, GotoStatements) {
+    std::string filepath = "tests/fixtures/syntax/control_flow/goto_statement.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "goto 語句解析失敗";
+}
+
 TEST_F(SyntaxTest, SwitchStatements) {
     std::string filepath = "tests/fixtures/syntax/control_flow/switch_statement.c";
     ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;

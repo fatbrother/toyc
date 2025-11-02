@@ -307,6 +307,50 @@ TEST_F(OutputTest, ExecutionResult_NestedBreakContinue) {
     EXPECT_EQ(exitCode, 90) << "巢狀 break/continue 結果不正確，期望 90，實際 " << exitCode;
 }
 
+TEST_F(OutputTest, ExecutionResult_GotoSimple) {
+    std::string inputFile = "tests/fixtures/output/control_flow/goto_simple_test.c";
+    std::string execFile = test_output_dir + "/goto_simple_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 5) << "簡單 goto 結果不正確，期望 5，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_GotoLoop) {
+    std::string inputFile = "tests/fixtures/output/control_flow/goto_loop_test.c";
+    std::string execFile = test_output_dir + "/goto_loop_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 10) << "goto 循環結果不正確，期望 10 (0+1+2+3+4)，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_GotoNested) {
+    std::string inputFile = "tests/fixtures/output/control_flow/goto_nested_test.c";
+    std::string execFile = test_output_dir + "/goto_nested_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 35) << "goto 跳出巢狀循環結果不正確，期望 35，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_GotoMultipleLabels) {
+    std::string inputFile = "tests/fixtures/output/control_flow/goto_multiple_labels_test.c";
+    std::string execFile = test_output_dir + "/goto_multiple_labels_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 111) << "多標籤 goto 結果不正確，期望 111，實際 " << exitCode;
+}
+
 TEST_F(OutputTest, ExecutionResult_SwitchBasic) {
     std::string inputFile = "tests/fixtures/output/control_flow/switch_test.c";
     std::string execFile = test_output_dir + "/switch_test";
