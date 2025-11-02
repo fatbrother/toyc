@@ -240,6 +240,7 @@ CodegenResult NConditionalExpression::codegen(ASTContext &context) {
 
     context.builder.CreateCondBr(condValue, trueBlock, falseBlock);
 
+    // Generate true branch
     context.builder.SetInsertPoint(trueBlock);
     CodegenResult trueResult = trueExpr->codegen(context);
     llvm::Value *trueValue = trueResult.getValue();
@@ -247,8 +248,11 @@ CodegenResult NConditionalExpression::codegen(ASTContext &context) {
     if (false == trueResult.isSuccess() || nullptr == trueValue) {
         return trueResult << CodegenResult("True expression code generation failed");
     }
+    // Get the actual block after codegen (it might have changed due to nested expressions)
+    llvm::BasicBlock *trueEndBlock = context.builder.GetInsertBlock();
     context.builder.CreateBr(mergeBlock);
 
+    // Generate false branch
     context.builder.SetInsertPoint(falseBlock);
     CodegenResult falseResult = falseExpr->codegen(context);
     llvm::Value *falseValue = falseResult.getValue();
@@ -256,15 +260,17 @@ CodegenResult NConditionalExpression::codegen(ASTContext &context) {
     if (false == falseResult.isSuccess() || nullptr == falseValue) {
         return falseResult << CodegenResult("False expression code generation failed");
     }
+    // Get the actual block after codegen (it might have changed due to nested expressions)
+    llvm::BasicBlock *falseEndBlock = context.builder.GetInsertBlock();
     context.builder.CreateBr(mergeBlock);
 
     context.builder.SetInsertPoint(mergeBlock);
 
-    // Merge the two branches
+    // Merge the two branches using the actual ending blocks
     llvm::PHINode * phiNode = context.builder.CreatePHI(trueValue->getType(), 2, "phi");
 
-    phiNode->addIncoming(trueValue, trueBlock);
-    phiNode->addIncoming(falseValue, falseBlock);
+    phiNode->addIncoming(trueValue, trueEndBlock);
+    phiNode->addIncoming(falseValue, falseEndBlock);
 
     return CodegenResult(phiNode, trueType);
 }
