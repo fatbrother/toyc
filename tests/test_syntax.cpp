@@ -132,6 +132,18 @@ TEST_F(SyntaxTest, ReturnStatements) {
     EXPECT_TRUE(testFileParsing(filepath)) << "return 語句解析失敗";
 }
 
+TEST_F(SyntaxTest, BreakContinueStatements) {
+    std::string filepath = "tests/fixtures/syntax/control_flow/break_continue.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "break/continue 語句解析失敗";
+}
+
+TEST_F(SyntaxTest, SwitchStatements) {
+    std::string filepath = "tests/fixtures/syntax/control_flow/switch_statement.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "switch 語句解析失敗";
+}
+
 // 函數測試
 TEST_F(SyntaxTest, FunctionDefinitions) {
     std::string filepath = "tests/fixtures/syntax/functions/function_definition.c";

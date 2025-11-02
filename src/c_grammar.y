@@ -232,8 +232,12 @@ jump_statement
 	| RETURN ';' {
 		$$ = new toyc::ast::NReturnStatement(nullptr);
 	}
-	/* | BREAK ';'
-	| CONTINUE ';' */
+	| BREAK ';' {
+		$$ = new toyc::ast::NBreakStatement();
+	}
+	| CONTINUE ';' {
+		$$ = new toyc::ast::NContinueStatement();
+	}
 	;
 
 declaration_specifiers

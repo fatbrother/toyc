@@ -274,6 +274,72 @@ TEST_F(OutputTest, ExecutionResult_WhileLoop) {
     EXPECT_EQ(exitCode, 10) << "while 迴圈結果不正確，期望 10 (1+2+3+4)，實際 " << exitCode;
 }
 
+TEST_F(OutputTest, ExecutionResult_Break) {
+    std::string inputFile = "tests/fixtures/output/control_flow/break_test.c";
+    std::string execFile = test_output_dir + "/break_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 10) << "break 語句結果不正確，期望 10 (0+1+2+3+4)，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_Continue) {
+    std::string inputFile = "tests/fixtures/output/control_flow/continue_test.c";
+    std::string execFile = test_output_dir + "/continue_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 40) << "continue 語句結果不正確，期望 40 (0+1+2+3+4+6+7+8+9)，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_NestedBreakContinue) {
+    std::string inputFile = "tests/fixtures/output/control_flow/nested_break_continue_test.c";
+    std::string execFile = test_output_dir + "/nested_break_continue_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 90) << "巢狀 break/continue 結果不正確，期望 90，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_SwitchBasic) {
+    std::string inputFile = "tests/fixtures/output/control_flow/switch_test.c";
+    std::string execFile = test_output_dir + "/switch_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 30) << "switch 語句結果不正確，期望 30，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_SwitchDefault) {
+    std::string inputFile = "tests/fixtures/output/control_flow/switch_default_test.c";
+    std::string execFile = test_output_dir + "/switch_default_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 99) << "switch default 結果不正確，期望 99，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_SwitchFallthrough) {
+    std::string inputFile = "tests/fixtures/output/control_flow/switch_fallthrough_test.c";
+    std::string execFile = test_output_dir + "/switch_fallthrough_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 30) << "switch fall-through 結果不正確，期望 30 (10+20)，實際 " << exitCode;
+}
+
 // 整合測試：完整編譯流程
 TEST_F(OutputTest, CompleteCompilationPipeline) {
     std::string inputFile = "tests/fixtures/output/simple_programs/simple_variable.c";
@@ -303,7 +369,7 @@ TEST_F(OutputTest, BasicStructCompile) {
 
     ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
     EXPECT_TRUE(compileFile(inputFile, execFile)) << "基本 struct 編譯失敗";
-    
+
     if (fileExists(execFile)) {
         int exitCode = executeProgram(execFile);
         EXPECT_EQ(exitCode, 30) << "基本 struct 執行結果不正確，期望 30 (10+20)，實際 " << exitCode;
@@ -316,7 +382,7 @@ TEST_F(OutputTest, StructSizeTest) {
 
     ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
     EXPECT_TRUE(compileFile(inputFile, execFile)) << "struct 大小測試編譯失敗";
-    
+
     if (fileExists(execFile)) {
         int exitCode = executeProgram(execFile);
         EXPECT_EQ(exitCode, 42) << "struct 大小測試執行結果不正確，期望 42，實際 " << exitCode;
@@ -329,7 +395,7 @@ TEST_F(OutputTest, StructReturnValue) {
 
     ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
     EXPECT_TRUE(compileFile(inputFile, execFile)) << "struct 返回值測試編譯失敗";
-    
+
     if (fileExists(execFile)) {
         int exitCode = executeProgram(execFile);
         EXPECT_EQ(exitCode, 40) << "struct 返回值測試執行結果不正確，期望 40 (15+25)，實際 " << exitCode;
@@ -342,7 +408,7 @@ TEST_F(OutputTest, ComplexStructCompile) {
 
     ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
     EXPECT_TRUE(compileFile(inputFile, execFile)) << "複雜 struct 編譯失敗";
-    
+
     if (fileExists(execFile)) {
         int exitCode = executeProgram(execFile);
         EXPECT_EQ(exitCode, 50) << "複雜 struct 執行結果不正確，期望 50 (10*5)，實際 " << exitCode;
@@ -357,7 +423,7 @@ TEST_F(OutputTest, BasicStructLLVMIR) {
     ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
     EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "基本 struct LLVM IR 生成失敗";
     EXPECT_TRUE(fileExists(llvmFile)) << "LLVM IR 檔案未生成";
-    
+
     if (fileExists(llvmFile)) {
         EXPECT_TRUE(llvmIRContains(llvmFile, "define")) << "LLVM IR 缺少函數定義";
         EXPECT_TRUE(llvmIRContains(llvmFile, "main")) << "LLVM IR 缺少 main 函數";

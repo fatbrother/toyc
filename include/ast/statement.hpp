@@ -160,4 +160,20 @@ private:
     bool isDoWhile; // true if this is a do-while loop
 };
 
+class NBreakStatement : public NStatement {
+public:
+    NBreakStatement() = default;
+    ~NBreakStatement() = default;
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "BreakStatement"; }
+};
+
+class NContinueStatement : public NStatement {
+public:
+    NContinueStatement() = default;
+    ~NContinueStatement() = default;
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "ContinueStatement"; }
+};
+
 } // namespace toyc::ast

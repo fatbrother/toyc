@@ -6,6 +6,7 @@
 #include <iostream>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LLVMContext.h>
 
 namespace toyc::ast {
 
@@ -137,6 +138,25 @@ private:
 friend class ASTContext;
 };
 
+// Jump context for break/continue statements
+// Used by loops (for/while/do-while) and switch statements
+class NJumpContext {
+public:
+    NJumpContext(llvm::BasicBlock *continueTarget, llvm::BasicBlock *breakTarget)
+        : continueTarget(continueTarget), breakTarget(breakTarget) {}
+
+    llvm::BasicBlock* getContinueTarget() const { return continueTarget; }
+    llvm::BasicBlock* getBreakTarget() const { return breakTarget; }
+
+    virtual bool supportsContinue() const { return true; }
+    virtual bool supportsBreak() const { return true; }
+    virtual std::string getContextName() const { return "loop"; }
+
+protected:
+    llvm::BasicBlock *continueTarget;
+    llvm::BasicBlock *breakTarget;
+};
+
 struct ASTContext {
     llvm::LLVMContext llvmContext;
     llvm::Module module;
@@ -148,8 +168,27 @@ struct ASTContext {
     std::map<std::string, NFunctionDefinition *> functionDefinitions;
     bool isInitializingFunction = false;
 
+    // Jump context stack for break/continue statements
+    // Used by loops (for/while/do-while) and switch statements
+    std::stack<std::shared_ptr<NJumpContext>> jumpContextStack;
+
     ASTContext() : module("toyc", llvmContext), builder(llvmContext) {
         pushScope();
+    }
+
+    // Jump context management helpers
+    void pushJumpContext(std::shared_ptr<NJumpContext> ctx) {
+        jumpContextStack.push(ctx);
+    }
+
+    void popJumpContext() {
+        if (!jumpContextStack.empty()) {
+            jumpContextStack.pop();
+        }
+    }
+
+    std::shared_ptr<NJumpContext> getCurrentJumpContext() const {
+        return jumpContextStack.empty() ? nullptr : jumpContextStack.top();
     }
 
     void pushScope() {

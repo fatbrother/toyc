@@ -2,6 +2,7 @@
 
 #include "ast/external_definition.hpp"
 #include "ast/structure.hpp"
+#include "utility/raii_guard.hpp"
 
 #include <iostream>
 
@@ -80,6 +81,10 @@ CodegenResult NBlock::codegen(ASTContext &context) {
     llvm::BasicBlock *block = llvm::BasicBlock::Create(context.llvmContext, name, parentFunction);
 
     context.builder.SetInsertPoint(block);
+
+    auto scopeGuard = toyc::utility::makeScopeGuard([&context]() {
+        context.popScope();
+    });
     context.pushScope();
 
     if (true == context.isInitializingFunction) {
@@ -100,19 +105,17 @@ CodegenResult NBlock::codegen(ASTContext &context) {
 
         CodegenResult stmtResult = stmt->codegen(context);
         if (false == stmtResult.isSuccess()) {
-            context.popScope();
             return stmtResult << CodegenResult("Failed to generate code for block statement");
         }
     }
 
-    context.popScope();
 
-    if (nullptr != nextBlock && !block->getTerminator()) {
+    if (nullptr != nextBlock && !context.builder.GetInsertBlock()->getTerminator()) {
         context.builder.CreateBr(nextBlock);
         context.builder.SetInsertPoint(nextBlock);
     }
 
-    return block;
+    return CodegenResult(block);
 }
 
 CodegenResult NReturnStatement::codegen(ASTContext &context) {
@@ -192,6 +195,11 @@ CodegenResult NForStatement::codegen(ASTContext &context) {
     initializationNode->codegen(context);
     context.builder.CreateBr(loopCondition);
 
+    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() {
+        context.popJumpContext();
+    });
+    context.pushJumpContext(std::make_shared<NJumpContext>(loopIncrement, afterBlock));
+
     bodyNode->setParent(this);
     bodyNode->setName("for_body");
     bodyNode->setNextBlock(loopIncrement);
@@ -253,6 +261,11 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
     }
     conditionValue = castResult.getValue();
 
+    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() {
+        context.popJumpContext();
+    });
+    context.pushJumpContext(std::make_shared<NJumpContext>(loopCondition, afterBlock));
+
     bodyNode->setParent(this);
     bodyNode->setName("while_body");
     bodyNode->setNextBlock(loopCondition);
@@ -275,4 +288,51 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
     context.builder.SetInsertPoint(afterBlock);
 
     return afterBlock;
+}
+
+CodegenResult NBreakStatement::codegen(ASTContext &context) {
+    auto jumpCtx = context.getCurrentJumpContext();
+    if (!jumpCtx) {
+        return CodegenResult("Break statement not within a loop or switch");
+    }
+
+    if (!jumpCtx->supportsBreak()) {
+        return CodegenResult("Break statement not supported in current context");
+    }
+
+    // Get the break target from the jump context
+    llvm::BasicBlock *breakTarget = jumpCtx->getBreakTarget();
+    context.builder.CreateBr(breakTarget);
+
+    // Create an unreachable block after the break to avoid dangling insert point
+    llvm::Function *function = context.builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *unreachableBlock = llvm::BasicBlock::Create(
+        context.llvmContext, "after_break", function);
+    context.builder.SetInsertPoint(unreachableBlock);
+
+    return CodegenResult();
+}
+
+CodegenResult NContinueStatement::codegen(ASTContext &context) {
+    auto jumpCtx = context.getCurrentJumpContext();
+    if (!jumpCtx) {
+        return CodegenResult("Continue statement not within a loop");
+    }
+
+    if (!jumpCtx->supportsContinue()) {
+        return CodegenResult("Continue statement not supported in " +
+                           jumpCtx->getContextName() + " context");
+    }
+
+    // Get the continue target from the jump context
+    llvm::BasicBlock *continueTarget = jumpCtx->getContinueTarget();
+    context.builder.CreateBr(continueTarget);
+
+    // Create an unreachable block after the continue to avoid dangling insert point
+    llvm::Function *function = context.builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *unreachableBlock = llvm::BasicBlock::Create(
+        context.llvmContext, "after_continue", function);
+    context.builder.SetInsertPoint(unreachableBlock);
+
+    return CodegenResult();
 }
