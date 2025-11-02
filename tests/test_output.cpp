@@ -219,6 +219,61 @@ TEST_F(OutputTest, ExecutionResult_ShiftOperations) {
     EXPECT_EQ(exitCode, 20) << "移位運算結果不正確，期望 20，實際 " << exitCode;
 }
 
+TEST_F(OutputTest, ExecutionResult_TernaryOperator) {
+    std::string inputFile = "tests/fixtures/output/operators/ternary_test.c";
+    std::string execFile = test_output_dir + "/ternary_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 10) << "三元運算子結果不正確，期望 10，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_TernaryNested) {
+    std::string inputFile = "tests/fixtures/output/operators/ternary_nested_test.c";
+    std::string execFile = test_output_dir + "/ternary_nested_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 15) << "巢狀三元運算子結果不正確，期望 15，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_BitwiseOperations) {
+    std::string inputFile = "tests/fixtures/output/operators/bitwise_test.c";
+    std::string execFile = test_output_dir + "/bitwise_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 28) << "位元運算結果不正確，期望 28，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_BitwiseNot) {
+    std::string inputFile = "tests/fixtures/output/operators/bitwise_not_test.c";
+    std::string execFile = test_output_dir + "/bitwise_not_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 5) << "位元 NOT 運算結果不正確，期望 5，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_CompoundAssignment) {
+    std::string inputFile = "tests/fixtures/output/operators/compound_assignment_test.c";
+    std::string execFile = test_output_dir + "/compound_assignment_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 10) << "複合賦值運算結果不正確，期望 10，實際 " << exitCode;
+}
+
 TEST_F(OutputTest, ExecutionResult_SimpleFunction) {
     std::string inputFile = "tests/fixtures/output/functions/simple_function.c";
     std::string execFile = test_output_dir + "/simple_function";
@@ -272,6 +327,17 @@ TEST_F(OutputTest, ExecutionResult_WhileLoop) {
 
     int exitCode = executeProgram(execFile);
     EXPECT_EQ(exitCode, 10) << "while 迴圈結果不正確，期望 10 (1+2+3+4)，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_DoWhileLoop) {
+    std::string inputFile = "tests/fixtures/output/control_flow/do_while_test.c";
+    std::string execFile = test_output_dir + "/do_while_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 10) << "do-while 迴圈結果不正確，期望 10 (0+1+2+3+4)，實際 " << exitCode;
 }
 
 TEST_F(OutputTest, ExecutionResult_Break) {
