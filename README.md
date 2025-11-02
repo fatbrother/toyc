@@ -69,7 +69,8 @@ The compiler supports function definitions with parameters and return types, inc
 ### Control Flow Statements
 - `if`/`else` statements
 - `for`/`while`/`do-while` loops
-- `return` statements
+- `return`/`break`/`continue` statements
+- `goto` statements with label definitions and jumps
 
 ### Expressions and Operators
 The compiler supports a comprehensive set of expressions including:
@@ -103,9 +104,6 @@ The compiler supports structure definitions and member access using the dot (`.`
 This is a educational/toy C compiler that implements a significant subset of C functionality, but it's not a complete C implementation. Notable limitations include the absence of:
 - Arrays and array indexing
 - Switch statements
-- Break/continue statements (tokens defined but not implemented in grammar)
-- Preprocessing directives
-- Complex pointer arithmetic beyond basic dereference
 - Global variables and static storage duration
 - Full support for type qualifiers (e.g., `const`, `volatile`)
 - More operators (e.g., bitwise operators, conditional operator)
