@@ -83,6 +83,7 @@ The compiler supports a comprehensive set of expressions including:
 - Address and dereference: `&`, `*`
 - Basic assignment: `=`
 - Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
+- Shift operators: `<<`, `>>` and their compound assignments `<<=`, `>>=`
 
 ### Literals and Constants
 - Integer constants (decimal, octal, hexadecimal)
