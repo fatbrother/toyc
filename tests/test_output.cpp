@@ -505,6 +505,39 @@ TEST_F(OutputTest, ExecutionResult_SwitchFallthrough) {
     EXPECT_EQ(exitCode, 30) << "switch fall-through 結果不正確，期望 30 (10+20)，實際 " << exitCode;
 }
 
+TEST_F(OutputTest, ExecutionResult_SwitchCascade) {
+    std::string inputFile = "tests/fixtures/output/control_flow/switch_cascade_test.c";
+    std::string execFile = test_output_dir + "/switch_cascade_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 15) << "switch cascade 結果不正確，期望 15 (5+4+3+2+1)，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_DuffDevice) {
+    std::string inputFile = "tests/fixtures/output/control_flow/duff_device_test.c";
+    std::string execFile = test_output_dir + "/duff_device_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 36) << "達夫裝置結果不正確，期望 36 (8+7+6+5+4+3+2+1)，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_SwitchNoDefault) {
+    std::string inputFile = "tests/fixtures/output/control_flow/switch_no_default_test.c";
+    std::string execFile = test_output_dir + "/switch_no_default_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 100) << "沒有 default 的 switch 結果不正確，期望 100，實際 " << exitCode;
+}
+
 // 整合測試：完整編譯流程
 TEST_F(OutputTest, CompleteCompilationPipeline) {
     std::string inputFile = "tests/fixtures/output/simple_programs/simple_variable.c";
