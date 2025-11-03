@@ -9,6 +9,47 @@
 
 namespace fs = std::filesystem;
 
+// 執行結果測試的參數化結構
+struct ExecutionTestCase {
+    std::string testName;
+    std::string inputFile;
+    int expectedExitCode;
+    std::string description;
+};
+
+// 為 ExecutionTestCase 提供輸出運算子,避免顯示亂碼
+std::ostream& operator<<(std::ostream& os, const ExecutionTestCase& testCase) {
+    os << "ExecutionTestCase{" << testCase.testName << ", " << testCase.inputFile << ", exitCode=" << testCase.expectedExitCode << "}";
+    return os;
+}
+
+// LLVM IR 生成測試的參數化結構
+struct LLVMIRTestCase {
+    std::string testName;
+    std::string inputFile;
+    std::vector<std::string> expectedPatterns;  // 期望在 IR 中找到的模式
+    std::string description;
+};
+
+// 為 LLVMIRTestCase 提供輸出運算子,避免顯示亂碼
+std::ostream& operator<<(std::ostream& os, const LLVMIRTestCase& testCase) {
+    os << "LLVMIRTestCase{" << testCase.testName << ", " << testCase.inputFile << "}";
+    return os;
+}
+
+// 自訂測試名稱生成函數
+struct ExecutionTestNameGenerator {
+    std::string operator()(const ::testing::TestParamInfo<ExecutionTestCase>& info) const {
+        return info.param.testName;
+    }
+};
+
+struct LLVMIRTestNameGenerator {
+    std::string operator()(const ::testing::TestParamInfo<LLVMIRTestCase>& info) const {
+        return info.param.testName;
+    }
+};
+
 class OutputTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -71,474 +112,117 @@ protected:
         std::string content = readFile(llvmFile);
         return content.find(pattern) != std::string::npos;
     }
+
+    // 輔助方法：驗證並編譯測試檔案
+    bool validateAndCompile(const std::string& inputFile, const std::string& execFile) {
+        if (!fileExists(inputFile)) {
+            ADD_FAILURE() << "測試檔案不存在: " << inputFile;
+            return false;
+        }
+
+        if (!compileFile(inputFile, execFile)) {
+            ADD_FAILURE() << "編譯失敗: " << inputFile;
+            return false;
+        }
+
+        return true;
+    }
 };
 
-// LLVM IR 生成測試
-TEST_F(OutputTest, GenerateLLVMIR_ReturnConstant) {
-    std::string inputFile = "tests/fixtures/output/simple_programs/return_constant.c";
-    std::string llvmFile = test_output_dir + "/return_constant.ll";
+// ============================================================================
+// 參數化測試：LLVM IR 生成測試
+// ============================================================================
 
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "LLVM IR 生成失敗";
-    EXPECT_TRUE(fileExists(llvmFile)) << "LLVM IR 檔案未生成";
+class LLVMIRGenerationTest : public OutputTest,
+                             public ::testing::WithParamInterface<LLVMIRTestCase> {
+};
 
-    // 檢查 LLVM IR 內容是否包含 main 函數
-    EXPECT_TRUE(llvmIRContains(llvmFile, "define")) << "LLVM IR 缺少函數定義";
-    EXPECT_TRUE(llvmIRContains(llvmFile, "main")) << "LLVM IR 缺少 main 函數";
-}
+TEST_P(LLVMIRGenerationTest, IRGeneration) {
+    const LLVMIRTestCase& testCase = GetParam();
+    std::string llvmFile = test_output_dir + "/" + testCase.testName + ".ll";
 
-TEST_F(OutputTest, GenerateLLVMIR_SimpleCalculation) {
-    std::string inputFile = "tests/fixtures/output/calculations/addition.c";
-    std::string llvmFile = test_output_dir + "/addition.ll";
+    ASSERT_TRUE(fileExists(testCase.inputFile))
+        << "測試檔案不存在: " << testCase.inputFile;
 
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "LLVM IR 生成失敗";
-    EXPECT_TRUE(fileExists(llvmFile)) << "LLVM IR 檔案未生成";
+    EXPECT_TRUE(generateLLVMIR(testCase.inputFile, llvmFile))
+        << testCase.description;
 
-    // 檢查是否包含算術運算指令
-    EXPECT_TRUE(llvmIRContains(llvmFile, "add")) << "LLVM IR 缺少加法指令";
-}
+    EXPECT_TRUE(fileExists(llvmFile))
+        << "LLVM IR 檔案未生成";
 
-TEST_F(OutputTest, GenerateLLVMIR_FunctionCall) {
-    std::string inputFile = "tests/fixtures/output/functions/simple_function.c";
-    std::string llvmFile = test_output_dir + "/simple_function.ll";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "LLVM IR 生成失敗";
-    EXPECT_TRUE(fileExists(llvmFile)) << "LLVM IR 檔案未生成";
-
-    // 檢查是否包含函數調用
-    EXPECT_TRUE(llvmIRContains(llvmFile, "call")) << "LLVM IR 缺少函數調用指令";
-}
-
-TEST_F(OutputTest, GenerateLLVMIR_ShiftOperations) {
-    std::string inputFile = "tests/fixtures/output/operators/shift_operations.c";
-    std::string llvmFile = test_output_dir + "/shift_operations.ll";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "LLVM IR 生成失敗";
-    EXPECT_TRUE(fileExists(llvmFile)) << "LLVM IR 檔案未生成";
-
-    EXPECT_TRUE(llvmIRContains(llvmFile, "shl")) << "LLVM IR 缺少左移指令";
-    EXPECT_TRUE(llvmIRContains(llvmFile, "lshr")) << "LLVM IR 缺少右移指令";
-}
-
-// 可執行檔案生成測試
-TEST_F(OutputTest, GenerateExecutable_ReturnConstant) {
-    std::string inputFile = "tests/fixtures/output/simple_programs/return_constant.c";
-    std::string execFile = test_output_dir + "/return_constant";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(compileFile(inputFile, execFile)) << "可執行檔案編譯失敗";
-    EXPECT_TRUE(fileExists(execFile)) << "可執行檔案未生成";
-}
-
-TEST_F(OutputTest, GenerateExecutable_AllTestFiles) {
-    std::vector<std::pair<std::string, std::string>> testFiles = {
-        {"tests/fixtures/output/simple_programs/return_zero.c", "return_zero"},
-        {"tests/fixtures/output/simple_programs/simple_variable.c", "simple_variable"},
-        {"tests/fixtures/output/calculations/multiplication.c", "multiplication"},
-        {"tests/fixtures/output/functions/simple_function.c", "simple_function"},
-        {"tests/fixtures/output/operators/shift_operations.c", "shift_operations"}
-    };
-
-    for (const auto& testFile : testFiles) {
-        std::string inputFile = testFile.first;
-        std::string execFile = test_output_dir + "/" + testFile.second;
-
-        ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-        EXPECT_TRUE(compileFile(inputFile, execFile)) << "可執行檔案編譯失敗: " << inputFile;
-        EXPECT_TRUE(fileExists(execFile)) << "可執行檔案未生成: " << execFile;
+    // 檢查所有期望的模式
+    for (const auto& pattern : testCase.expectedPatterns) {
+        EXPECT_TRUE(llvmIRContains(llvmFile, pattern))
+            << "LLVM IR 缺少: " << pattern;
     }
 }
 
-// 程式執行結果測試
-TEST_F(OutputTest, ExecutionResult_ReturnConstant) {
-    std::string inputFile = "tests/fixtures/output/simple_programs/return_constant.c";
-    std::string execFile = test_output_dir + "/return_constant";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 42) << "程式返回值不正確，期望 42，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ReturnZero) {
-    std::string inputFile = "tests/fixtures/output/simple_programs/return_zero.c";
-    std::string execFile = test_output_dir + "/return_zero";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 0) << "程式返回值不正確，期望 0，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_Addition) {
-    std::string inputFile = "tests/fixtures/output/calculations/addition.c";
-    std::string execFile = test_output_dir + "/addition";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 15) << "加法計算結果不正確，期望 15，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_Multiplication) {
-    std::string inputFile = "tests/fixtures/output/calculations/multiplication.c";
-    std::string execFile = test_output_dir + "/multiplication";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 42) << "乘法計算結果不正確，期望 42，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ComplexArithmetic) {
-    std::string inputFile = "tests/fixtures/output/calculations/complex_arithmetic.c";
-    std::string execFile = test_output_dir + "/complex_arithmetic";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 15) << "複雜算術計算結果不正確，期望 15，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ShiftOperations) {
-    std::string inputFile = "tests/fixtures/output/operators/shift_operations.c";
-    std::string execFile = test_output_dir + "/shift_operations";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 20) << "移位運算結果不正確，期望 20，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_TernaryOperator) {
-    std::string inputFile = "tests/fixtures/output/operators/ternary_test.c";
-    std::string execFile = test_output_dir + "/ternary_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 10) << "三元運算子結果不正確，期望 10，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_TernaryNested) {
-    std::string inputFile = "tests/fixtures/output/operators/ternary_nested_test.c";
-    std::string execFile = test_output_dir + "/ternary_nested_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 15) << "巢狀三元運算子結果不正確，期望 15，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_BitwiseOperations) {
-    std::string inputFile = "tests/fixtures/output/operators/bitwise_test.c";
-    std::string execFile = test_output_dir + "/bitwise_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 28) << "位元運算結果不正確，期望 28，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_BitwiseNot) {
-    std::string inputFile = "tests/fixtures/output/operators/bitwise_not_test.c";
-    std::string execFile = test_output_dir + "/bitwise_not_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 5) << "位元 NOT 運算結果不正確，期望 5，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_CompoundAssignment) {
-    std::string inputFile = "tests/fixtures/output/operators/compound_assignment_test.c";
-    std::string execFile = test_output_dir + "/compound_assignment_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 10) << "複合賦值運算結果不正確，期望 10，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ShortCircuitAnd) {
-    std::string inputFile = "tests/fixtures/output/operators/short_circuit_test.c";
-    std::string execFile = test_output_dir + "/short_circuit_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 0) << "AND 短路求值結果不正確，期望 0，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ShortCircuitOr) {
-    std::string inputFile = "tests/fixtures/output/operators/short_circuit_or_test.c";
-    std::string execFile = test_output_dir + "/short_circuit_or_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 0) << "OR 短路求值結果不正確，期望 0，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ShortCircuitAndEval) {
-    std::string inputFile = "tests/fixtures/output/operators/short_circuit_and_eval_test.c";
-    std::string execFile = test_output_dir + "/short_circuit_and_eval_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 1) << "AND 求值結果不正確，期望 1，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ShortCircuitComplex) {
-    std::string inputFile = "tests/fixtures/output/operators/short_circuit_complex_test.c";
-    std::string execFile = test_output_dir + "/short_circuit_complex_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 1) << "複雜短路求值結果不正確，期望 1，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ShortCircuitDivZero) {
-    std::string inputFile = "tests/fixtures/output/operators/short_circuit_div_zero_test.c";
-    std::string execFile = test_output_dir + "/short_circuit_div_zero_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 5) << "短路求值防除零結果不正確，期望 5，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_SimpleFunction) {
-    std::string inputFile = "tests/fixtures/output/functions/simple_function.c";
-    std::string execFile = test_output_dir + "/simple_function";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 15) << "函數調用結果不正確，期望 15，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_RecursiveFunction) {
-    std::string inputFile = "tests/fixtures/output/functions/recursive_function.c";
-    std::string execFile = test_output_dir + "/recursive_function";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 120) << "遞歸函數結果不正確，期望 120 (5!)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_IfElse) {
-    std::string inputFile = "tests/fixtures/output/control_flow/if_else_test.c";
-    std::string execFile = test_output_dir + "/if_else_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 1) << "if-else 結果不正確，期望 1，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_ForLoop) {
-    std::string inputFile = "tests/fixtures/output/control_flow/for_loop_test.c";
-    std::string execFile = test_output_dir + "/for_loop_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 15) << "for 迴圈結果不正確，期望 15 (1+2+3+4+5)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_WhileLoop) {
-    std::string inputFile = "tests/fixtures/output/control_flow/while_loop_test.c";
-    std::string execFile = test_output_dir + "/while_loop_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 10) << "while 迴圈結果不正確，期望 10 (1+2+3+4)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_DoWhileLoop) {
-    std::string inputFile = "tests/fixtures/output/control_flow/do_while_test.c";
-    std::string execFile = test_output_dir + "/do_while_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 10) << "do-while 迴圈結果不正確，期望 10 (0+1+2+3+4)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_Break) {
-    std::string inputFile = "tests/fixtures/output/control_flow/break_test.c";
-    std::string execFile = test_output_dir + "/break_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 10) << "break 語句結果不正確，期望 10 (0+1+2+3+4)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_Continue) {
-    std::string inputFile = "tests/fixtures/output/control_flow/continue_test.c";
-    std::string execFile = test_output_dir + "/continue_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 40) << "continue 語句結果不正確，期望 40 (0+1+2+3+4+6+7+8+9)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_NestedBreakContinue) {
-    std::string inputFile = "tests/fixtures/output/control_flow/nested_break_continue_test.c";
-    std::string execFile = test_output_dir + "/nested_break_continue_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 90) << "巢狀 break/continue 結果不正確，期望 90，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_GotoSimple) {
-    std::string inputFile = "tests/fixtures/output/control_flow/goto_simple_test.c";
-    std::string execFile = test_output_dir + "/goto_simple_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 5) << "簡單 goto 結果不正確，期望 5，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_GotoLoop) {
-    std::string inputFile = "tests/fixtures/output/control_flow/goto_loop_test.c";
-    std::string execFile = test_output_dir + "/goto_loop_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 10) << "goto 循環結果不正確，期望 10 (0+1+2+3+4)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_GotoNested) {
-    std::string inputFile = "tests/fixtures/output/control_flow/goto_nested_test.c";
-    std::string execFile = test_output_dir + "/goto_nested_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 35) << "goto 跳出巢狀循環結果不正確，期望 35，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_GotoMultipleLabels) {
-    std::string inputFile = "tests/fixtures/output/control_flow/goto_multiple_labels_test.c";
-    std::string execFile = test_output_dir + "/goto_multiple_labels_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 111) << "多標籤 goto 結果不正確，期望 111，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_SwitchBasic) {
-    std::string inputFile = "tests/fixtures/output/control_flow/switch_test.c";
-    std::string execFile = test_output_dir + "/switch_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 30) << "switch 語句結果不正確，期望 30，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_SwitchDefault) {
-    std::string inputFile = "tests/fixtures/output/control_flow/switch_default_test.c";
-    std::string execFile = test_output_dir + "/switch_default_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 99) << "switch default 結果不正確，期望 99，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_SwitchFallthrough) {
-    std::string inputFile = "tests/fixtures/output/control_flow/switch_fallthrough_test.c";
-    std::string execFile = test_output_dir + "/switch_fallthrough_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 30) << "switch fall-through 結果不正確，期望 30 (10+20)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_SwitchCascade) {
-    std::string inputFile = "tests/fixtures/output/control_flow/switch_cascade_test.c";
-    std::string execFile = test_output_dir + "/switch_cascade_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 15) << "switch cascade 結果不正確，期望 15 (5+4+3+2+1)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_DuffDevice) {
-    std::string inputFile = "tests/fixtures/output/control_flow/duff_device_test.c";
-    std::string execFile = test_output_dir + "/duff_device_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 36) << "達夫裝置結果不正確，期望 36 (8+7+6+5+4+3+2+1)，實際 " << exitCode;
-}
-
-TEST_F(OutputTest, ExecutionResult_SwitchNoDefault) {
-    std::string inputFile = "tests/fixtures/output/control_flow/switch_no_default_test.c";
-    std::string execFile = test_output_dir + "/switch_no_default_test";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
-
-    int exitCode = executeProgram(execFile);
-    EXPECT_EQ(exitCode, 100) << "沒有 default 的 switch 結果不正確，期望 100，實際 " << exitCode;
-}
-
-// 整合測試：完整編譯流程
+INSTANTIATE_TEST_SUITE_P(
+    AllLLVMIRTests,
+    LLVMIRGenerationTest,
+    ::testing::Values(
+        // 基本功能測試
+        LLVMIRTestCase{"return_constant", "tests/fixtures/output/simple_programs/return_constant.c",
+                       {"define", "main", "ret"}, "基本 LLVM IR 生成失敗"},
+
+        // 算術運算測試
+        LLVMIRTestCase{"addition", "tests/fixtures/output/calculations/addition.c",
+                       {"add"}, "加法 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"multiplication", "tests/fixtures/output/calculations/multiplication.c",
+                       {"mul"}, "乘法 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"complex_arithmetic", "tests/fixtures/output/calculations/complex_arithmetic.c",
+                       {"add", "mul", "sub"}, "複雜算術 LLVM IR 生成失敗"},
+
+        // 函數測試
+        LLVMIRTestCase{"simple_function", "tests/fixtures/output/functions/simple_function.c",
+                       {"call", "define"}, "函數調用 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"recursive_function", "tests/fixtures/output/functions/recursive_function.c",
+                       {"call", "icmp", "br"}, "遞歸函數 LLVM IR 生成失敗"},
+
+        // 運算符測試
+        LLVMIRTestCase{"shift_operations", "tests/fixtures/output/operators/shift_operations.c",
+                       {"shl", "lshr"}, "移位運算 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"bitwise_operations", "tests/fixtures/output/operators/bitwise_test.c",
+                       {"and", "or", "xor"}, "位元運算 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"ternary_operator", "tests/fixtures/output/operators/ternary_test.c",
+                       {"icmp", "br", "phi"}, "三元運算子 LLVM IR 生成失敗"},
+
+        // 控制流測試
+        LLVMIRTestCase{"if_else", "tests/fixtures/output/control_flow/if_else_test.c",
+                       {"icmp", "br", "label"}, "if-else LLVM IR 生成失敗"},
+        LLVMIRTestCase{"for_loop", "tests/fixtures/output/control_flow/for_loop_test.c",
+                       {"br", "icmp"}, "for 迴圈 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"while_loop", "tests/fixtures/output/control_flow/while_loop_test.c",
+                       {"br", "icmp"}, "while 迴圈 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"do_while_loop", "tests/fixtures/output/control_flow/do_while_test.c",
+                       {"br", "icmp"}, "do-while 迴圈 LLVM IR 生成失敗"},
+
+        // Switch 語句測試
+        LLVMIRTestCase{"switch_basic", "tests/fixtures/output/control_flow/switch_test.c",
+                       {"switch", "label"}, "switch 語句 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"switch_fallthrough", "tests/fixtures/output/control_flow/switch_fallthrough_test.c",
+                       {"switch", "br"}, "switch fall-through LLVM IR 生成失敗"},
+        LLVMIRTestCase{"duff_device", "tests/fixtures/output/control_flow/duff_device_test.c",
+                       {"switch", "br", "icmp"}, "達夫裝置 LLVM IR 生成失敗"},
+
+        // Struct 測試
+        LLVMIRTestCase{"basic_struct", "tests/fixtures/output/structures/basic_struct_compile.c",
+                       {"alloca", "getelementptr", "store", "load"}, "基本 struct LLVM IR 生成失敗"},
+        LLVMIRTestCase{"complex_struct", "tests/fixtures/output/structures/complex_struct_compile.c",
+                       {"alloca", "getelementptr", "mul"}, "複雜 struct LLVM IR 生成失敗"},
+        LLVMIRTestCase{"struct_return_value", "tests/fixtures/output/structures/struct_return_value.c",
+                       {"alloca", "load", "store", "add"}, "struct 返回值 LLVM IR 生成失敗"},
+
+        // 短路求值測試
+        LLVMIRTestCase{"short_circuit_and", "tests/fixtures/output/operators/short_circuit_test.c",
+                       {"br", "label", "phi"}, "AND 短路求值 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"short_circuit_or", "tests/fixtures/output/operators/short_circuit_or_test.c",
+                       {"br", "label", "phi"}, "OR 短路求值 LLVM IR 生成失敗"}
+    ),
+    LLVMIRTestNameGenerator()
+);
+
+// 整合測試:完整編譯流程
 TEST_F(OutputTest, CompleteCompilationPipeline) {
     std::string inputFile = "tests/fixtures/output/simple_programs/simple_variable.c";
     std::string llvmFile = test_output_dir + "/simple_variable.ll";
@@ -560,70 +244,86 @@ TEST_F(OutputTest, CompleteCompilationPipeline) {
     EXPECT_EQ(exitCode, 10) << "程式執行結果不正確，期望 10，實際 " << exitCode;
 }
 
-// Struct 輸出測試
-TEST_F(OutputTest, BasicStructCompile) {
-    std::string inputFile = "tests/fixtures/output/structures/basic_struct_compile.c";
-    std::string execFile = test_output_dir + "/basic_struct_compile";
+// ============================================================================
+// 參數化測試：程式執行結果測試
+// ============================================================================
 
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(compileFile(inputFile, execFile)) << "基本 struct 編譯失敗";
+class ExecutionResultTest : public OutputTest,
+                            public ::testing::WithParamInterface<ExecutionTestCase> {
+};
 
-    if (fileExists(execFile)) {
-        int exitCode = executeProgram(execFile);
-        EXPECT_EQ(exitCode, 30) << "基本 struct 執行結果不正確，期望 30 (10+20)，實際 " << exitCode;
-    }
+TEST_P(ExecutionResultTest, ProgramExecution) {
+    const ExecutionTestCase& testCase = GetParam();
+    std::string execFile = test_output_dir + "/" + testCase.testName;
+
+    ASSERT_TRUE(validateAndCompile(testCase.inputFile, execFile));
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, testCase.expectedExitCode)
+        << testCase.description << "，期望 " << testCase.expectedExitCode
+        << "，實際 " << exitCode;
 }
 
-TEST_F(OutputTest, StructSizeTest) {
-    std::string inputFile = "tests/fixtures/output/structures/struct_size_test.c";
-    std::string execFile = test_output_dir + "/struct_size_test";
+INSTANTIATE_TEST_SUITE_P(
+    AllExecutionTests,
+    ExecutionResultTest,
+    ::testing::Values(
+        // 簡單程式測試
+        ExecutionTestCase{"return_constant", "tests/fixtures/output/simple_programs/return_constant.c", 42, "程式返回值不正確"},
+        ExecutionTestCase{"return_zero", "tests/fixtures/output/simple_programs/return_zero.c", 0, "程式返回值不正確"},
 
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(compileFile(inputFile, execFile)) << "struct 大小測試編譯失敗";
+        // 計算測試
+        ExecutionTestCase{"addition", "tests/fixtures/output/calculations/addition.c", 15, "加法計算結果不正確"},
+        ExecutionTestCase{"multiplication", "tests/fixtures/output/calculations/multiplication.c", 42, "乘法計算結果不正確"},
+        ExecutionTestCase{"complex_arithmetic", "tests/fixtures/output/calculations/complex_arithmetic.c", 15, "複雜算術計算結果不正確"},
 
-    if (fileExists(execFile)) {
-        int exitCode = executeProgram(execFile);
-        EXPECT_EQ(exitCode, 42) << "struct 大小測試執行結果不正確，期望 42，實際 " << exitCode;
-    }
-}
+        // 運算子測試
+        ExecutionTestCase{"shift_operations", "tests/fixtures/output/operators/shift_operations.c", 20, "移位運算結果不正確"},
+        ExecutionTestCase{"ternary_test", "tests/fixtures/output/operators/ternary_test.c", 10, "三元運算子結果不正確"},
+        ExecutionTestCase{"ternary_nested", "tests/fixtures/output/operators/ternary_nested_test.c", 15, "巢狀三元運算子結果不正確"},
+        ExecutionTestCase{"bitwise_test", "tests/fixtures/output/operators/bitwise_test.c", 28, "位元運算結果不正確"},
+        ExecutionTestCase{"bitwise_not", "tests/fixtures/output/operators/bitwise_not_test.c", 5, "位元 NOT 運算結果不正確"},
+        ExecutionTestCase{"compound_assignment", "tests/fixtures/output/operators/compound_assignment_test.c", 10, "複合賦值運算結果不正確"},
 
-TEST_F(OutputTest, StructReturnValue) {
-    std::string inputFile = "tests/fixtures/output/structures/struct_return_value.c";
-    std::string execFile = test_output_dir + "/struct_return_value";
+        // 短路求值測試
+        ExecutionTestCase{"short_circuit_and", "tests/fixtures/output/operators/short_circuit_test.c", 0, "AND 短路求值結果不正確"},
+        ExecutionTestCase{"short_circuit_or", "tests/fixtures/output/operators/short_circuit_or_test.c", 0, "OR 短路求值結果不正確"},
+        ExecutionTestCase{"short_circuit_and_eval", "tests/fixtures/output/operators/short_circuit_and_eval_test.c", 1, "AND 求值結果不正確"},
+        ExecutionTestCase{"short_circuit_complex", "tests/fixtures/output/operators/short_circuit_complex_test.c", 1, "複雜短路求值結果不正確"},
+        ExecutionTestCase{"short_circuit_div_zero", "tests/fixtures/output/operators/short_circuit_div_zero_test.c", 5, "短路求值防除零結果不正確"},
 
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(compileFile(inputFile, execFile)) << "struct 返回值測試編譯失敗";
+        // 函數測試
+        ExecutionTestCase{"simple_function", "tests/fixtures/output/functions/simple_function.c", 15, "函數調用結果不正確"},
+        ExecutionTestCase{"recursive_function", "tests/fixtures/output/functions/recursive_function.c", 120, "遞歸函數結果不正確 (5!)"},
 
-    if (fileExists(execFile)) {
-        int exitCode = executeProgram(execFile);
-        EXPECT_EQ(exitCode, 40) << "struct 返回值測試執行結果不正確，期望 40 (15+25)，實際 " << exitCode;
-    }
-}
+        // 控制流測試
+        ExecutionTestCase{"if_else", "tests/fixtures/output/control_flow/if_else_test.c", 1, "if-else 結果不正確"},
+        ExecutionTestCase{"for_loop", "tests/fixtures/output/control_flow/for_loop_test.c", 15, "for 迴圈結果不正確 (1+2+3+4+5)"},
+        ExecutionTestCase{"while_loop", "tests/fixtures/output/control_flow/while_loop_test.c", 10, "while 迴圈結果不正確 (1+2+3+4)"},
+        ExecutionTestCase{"do_while", "tests/fixtures/output/control_flow/do_while_test.c", 10, "do-while 迴圈結果不正確 (0+1+2+3+4)"},
+        ExecutionTestCase{"break_test", "tests/fixtures/output/control_flow/break_test.c", 10, "break 語句結果不正確 (0+1+2+3+4)"},
+        ExecutionTestCase{"continue_test", "tests/fixtures/output/control_flow/continue_test.c", 40, "continue 語句結果不正確 (0+1+2+3+4+6+7+8+9)"},
+        ExecutionTestCase{"nested_break_continue", "tests/fixtures/output/control_flow/nested_break_continue_test.c", 90, "巢狀 break/continue 結果不正確"},
 
-TEST_F(OutputTest, ComplexStructCompile) {
-    std::string inputFile = "tests/fixtures/output/structures/complex_struct_compile.c";
-    std::string execFile = test_output_dir + "/complex_struct_compile";
+        // Goto 測試
+        ExecutionTestCase{"goto_simple", "tests/fixtures/output/control_flow/goto_simple_test.c", 5, "簡單 goto 結果不正確"},
+        ExecutionTestCase{"goto_loop", "tests/fixtures/output/control_flow/goto_loop_test.c", 10, "goto 循環結果不正確 (0+1+2+3+4)"},
+        ExecutionTestCase{"goto_nested", "tests/fixtures/output/control_flow/goto_nested_test.c", 35, "goto 跳出巢狀循環結果不正確"},
+        ExecutionTestCase{"goto_multiple_labels", "tests/fixtures/output/control_flow/goto_multiple_labels_test.c", 111, "多標籤 goto 結果不正確"},
 
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(compileFile(inputFile, execFile)) << "複雜 struct 編譯失敗";
+        // Switch 測試
+        ExecutionTestCase{"switch_basic", "tests/fixtures/output/control_flow/switch_test.c", 30, "switch 語句結果不正確"},
+        ExecutionTestCase{"switch_default", "tests/fixtures/output/control_flow/switch_default_test.c", 99, "switch default 結果不正確"},
+        ExecutionTestCase{"switch_fallthrough", "tests/fixtures/output/control_flow/switch_fallthrough_test.c", 30, "switch fall-through 結果不正確 (10+20)"},
+        ExecutionTestCase{"switch_cascade", "tests/fixtures/output/control_flow/switch_cascade_test.c", 15, "switch cascade 結果不正確 (5+4+3+2+1)"},
+        ExecutionTestCase{"duff_device", "tests/fixtures/output/control_flow/duff_device_test.c", 36, "達夫裝置結果不正確 (8+7+6+5+4+3+2+1)"},
+        ExecutionTestCase{"switch_no_default", "tests/fixtures/output/control_flow/switch_no_default_test.c", 100, "沒有 default 的 switch 結果不正確"},
 
-    if (fileExists(execFile)) {
-        int exitCode = executeProgram(execFile);
-        EXPECT_EQ(exitCode, 50) << "複雜 struct 執行結果不正確，期望 50 (10*5)，實際 " << exitCode;
-    }
-}
-
-// Struct LLVM IR 生成測試
-TEST_F(OutputTest, BasicStructLLVMIR) {
-    std::string inputFile = "tests/fixtures/output/structures/basic_struct_compile.c";
-    std::string llvmFile = test_output_dir + "/basic_struct.ll";
-
-    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
-    EXPECT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "基本 struct LLVM IR 生成失敗";
-    EXPECT_TRUE(fileExists(llvmFile)) << "LLVM IR 檔案未生成";
-
-    if (fileExists(llvmFile)) {
-        EXPECT_TRUE(llvmIRContains(llvmFile, "define")) << "LLVM IR 缺少函數定義";
-        EXPECT_TRUE(llvmIRContains(llvmFile, "main")) << "LLVM IR 缺少 main 函數";
-    }
-}
+        // Struct 測試
+        ExecutionTestCase{"basic_struct", "tests/fixtures/output/structures/basic_struct_compile.c", 30, "基本 struct 執行結果不正確 (10+20)"},
+        ExecutionTestCase{"struct_size", "tests/fixtures/output/structures/struct_size_test.c", 42, "struct 大小測試執行結果不正確"},
+        ExecutionTestCase{"struct_return_value", "tests/fixtures/output/structures/struct_return_value.c", 40, "struct 返回值測試執行結果不正確 (15+25)"},
+        ExecutionTestCase{"complex_struct", "tests/fixtures/output/structures/complex_struct_compile.c", 50, "複雜 struct 執行結果不正確 (10*5)"}
+    ),
+    ExecutionTestNameGenerator()
+);

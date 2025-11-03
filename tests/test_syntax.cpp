@@ -5,6 +5,20 @@
 #include "utility/parse_file.hpp"
 #include "utility/error_handler.hpp"
 
+// 參數化測試的結構
+struct SyntaxTestCase {
+    std::string testName;
+    std::string inputFile;
+    std::string description;
+};
+
+// 自訂測試名稱生成函數
+struct SyntaxTestNameGenerator {
+    std::string operator()(const ::testing::TestParamInfo<SyntaxTestCase>& info) const {
+        return info.param.testName;
+    }
+};
+
 class SyntaxTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -33,268 +47,86 @@ protected:
     }
 };
 
-// 資料類型測試
-TEST_F(SyntaxTest, BasicDataTypes) {
-    std::string filepath = "tests/fixtures/syntax/data_types/basic_types.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "基本資料類型解析失敗";
+// ============================================================================
+// 參數化測試：語法解析測試
+// ============================================================================
+
+class SyntaxParsingTest : public SyntaxTest,
+                          public ::testing::WithParamInterface<SyntaxTestCase> {
+};
+
+TEST_P(SyntaxParsingTest, FileParsing) {
+    const SyntaxTestCase& testCase = GetParam();
+
+    ASSERT_TRUE(fileExists(testCase.inputFile))
+        << "測試檔案不存在: " << testCase.inputFile;
+
+    EXPECT_TRUE(testFileParsing(testCase.inputFile))
+        << testCase.description;
 }
 
-TEST_F(SyntaxTest, PointerTypes) {
-    std::string filepath = "tests/fixtures/syntax/data_types/pointer_types.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "指標類型解析失敗";
-}
+INSTANTIATE_TEST_SUITE_P(
+    AllSyntaxTests,
+    SyntaxParsingTest,
+    ::testing::Values(
+        // 資料類型測試
+        SyntaxTestCase{"basic_data_types", "tests/fixtures/syntax/data_types/basic_types.c", "基本資料類型解析失敗"},
+        SyntaxTestCase{"pointer_types", "tests/fixtures/syntax/data_types/pointer_types.c", "指標類型解析失敗"},
+        SyntaxTestCase{"void_type", "tests/fixtures/syntax/data_types/void_type.c", "void 類型解析失敗"},
 
-TEST_F(SyntaxTest, VoidType) {
-    std::string filepath = "tests/fixtures/syntax/data_types/void_type.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "void 類型解析失敗";
-}
+        // 運算符測試
+        SyntaxTestCase{"arithmetic_operators", "tests/fixtures/syntax/operators/arithmetic.c", "算術運算符解析失敗"},
+        SyntaxTestCase{"comparison_operators", "tests/fixtures/syntax/operators/comparison.c", "比較運算符解析失敗"},
+        SyntaxTestCase{"logical_operators", "tests/fixtures/syntax/operators/logical.c", "邏輯運算符解析失敗"},
+        SyntaxTestCase{"bitwise_operators", "tests/fixtures/syntax/operators/bitwise.c", "位元運算符解析失敗"},
+        SyntaxTestCase{"assignment_operators", "tests/fixtures/syntax/operators/assignment.c", "賦值運算符解析失敗"},
+        SyntaxTestCase{"increment_decrement", "tests/fixtures/syntax/operators/increment_decrement.c", "遞增遞減運算符解析失敗"},
+        SyntaxTestCase{"address_dereference", "tests/fixtures/syntax/operators/address_dereference.c", "位址和解參考運算符解析失敗"},
+        SyntaxTestCase{"ternary_operator", "tests/fixtures/syntax/operators/ternary.c", "三元運算符解析失敗"},
+        SyntaxTestCase{"short_circuit", "tests/fixtures/syntax/operators/short_circuit.c", "短路求值解析失敗"},
 
-// 運算符測試
-TEST_F(SyntaxTest, ArithmeticOperators) {
-    std::string filepath = "tests/fixtures/syntax/operators/arithmetic.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "算術運算符解析失敗";
-}
+        // 控制流測試
+        SyntaxTestCase{"if_else", "tests/fixtures/syntax/control_flow/if_else.c", "if-else 語句解析失敗"},
+        SyntaxTestCase{"for_loop", "tests/fixtures/syntax/control_flow/for_loop.c", "for 迴圈解析失敗"},
+        SyntaxTestCase{"while_loop", "tests/fixtures/syntax/control_flow/while_loop.c", "while 迴圈解析失敗"},
+        SyntaxTestCase{"do_while_loop", "tests/fixtures/syntax/control_flow/do_while_loop.c", "do-while 迴圈解析失敗"},
+        SyntaxTestCase{"return_statement", "tests/fixtures/syntax/control_flow/return_statement.c", "return 語句解析失敗"},
+        SyntaxTestCase{"break_continue", "tests/fixtures/syntax/control_flow/break_continue.c", "break/continue 語句解析失敗"},
+        SyntaxTestCase{"goto_statement", "tests/fixtures/syntax/control_flow/goto_statement.c", "goto 語句解析失敗"},
+        SyntaxTestCase{"switch_statement", "tests/fixtures/syntax/control_flow/switch_statement.c", "switch 語句解析失敗"},
 
-TEST_F(SyntaxTest, ComparisonOperators) {
-    std::string filepath = "tests/fixtures/syntax/operators/comparison.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "比較運算符解析失敗";
-}
+        // 函數測試
+        SyntaxTestCase{"function_definition", "tests/fixtures/syntax/functions/function_definition.c", "函數定義解析失敗"},
+        SyntaxTestCase{"function_parameters", "tests/fixtures/syntax/functions/function_parameters.c", "函數參數解析失敗"},
+        SyntaxTestCase{"function_calls", "tests/fixtures/syntax/functions/function_calls.c", "函數調用解析失敗"},
+        SyntaxTestCase{"variadic_functions", "tests/fixtures/syntax/functions/variadic_functions.c", "可變參數函數解析失敗"},
 
-TEST_F(SyntaxTest, LogicalOperators) {
-    std::string filepath = "tests/fixtures/syntax/operators/logical.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "邏輯運算符解析失敗";
-}
+        // 變數測試
+        SyntaxTestCase{"variable_declaration", "tests/fixtures/syntax/variables/variable_declaration.c", "變數聲明解析失敗"},
+        SyntaxTestCase{"variable_initialization", "tests/fixtures/syntax/variables/variable_initialization.c", "變數初始化解析失敗"},
+        SyntaxTestCase{"variable_scope", "tests/fixtures/syntax/variables/variable_scope.c", "變數作用域解析失敗"},
 
-TEST_F(SyntaxTest, BitwiseOperators) {
-    std::string filepath = "tests/fixtures/syntax/operators/bitwise.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "位元運算符解析失敗";
-}
+        // 字面值測試
+        SyntaxTestCase{"integer_literals", "tests/fixtures/syntax/literals/integer_literals.c", "整數字面值解析失敗"},
+        SyntaxTestCase{"float_literals", "tests/fixtures/syntax/literals/float_literals.c", "浮點字面值解析失敗"},
+        SyntaxTestCase{"string_literals", "tests/fixtures/syntax/literals/string_literals.c", "字串字面值解析失敗"},
 
-TEST_F(SyntaxTest, AssignmentOperators) {
-    std::string filepath = "tests/fixtures/syntax/operators/assignment.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "賦值運算符解析失敗";
-}
+        // 複合測試
+        SyntaxTestCase{"complex_expressions", "tests/fixtures/syntax/complex_expressions.c", "複雜表達式解析失敗"},
+        SyntaxTestCase{"complete_program", "tests/fixtures/syntax/complete_program.c", "完整程式解析失敗"},
 
-TEST_F(SyntaxTest, IncrementDecrementOperators) {
-    std::string filepath = "tests/fixtures/syntax/operators/increment_decrement.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "遞增遞減運算符解析失敗";
-}
-
-TEST_F(SyntaxTest, AddressDereferenceOperators) {
-    std::string filepath = "tests/fixtures/syntax/operators/address_dereference.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "位址和解參考運算符解析失敗";
-}
-
-TEST_F(SyntaxTest, TernaryOperator) {
-    std::string filepath = "tests/fixtures/syntax/operators/ternary.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "三元運算符解析失敗";
-}
-
-TEST_F(SyntaxTest, ShortCircuitEvaluation) {
-    std::string filepath = "tests/fixtures/syntax/operators/short_circuit.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "短路求值解析失敗";
-}
-
-// 控制流測試
-TEST_F(SyntaxTest, IfElseStatements) {
-    std::string filepath = "tests/fixtures/syntax/control_flow/if_else.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "if-else 語句解析失敗";
-}
-
-TEST_F(SyntaxTest, ForLoops) {
-    std::string filepath = "tests/fixtures/syntax/control_flow/for_loop.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "for 迴圈解析失敗";
-}
-
-TEST_F(SyntaxTest, WhileLoops) {
-    std::string filepath = "tests/fixtures/syntax/control_flow/while_loop.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "while 迴圈解析失敗";
-}
-
-TEST_F(SyntaxTest, DoWhileLoops) {
-    std::string filepath = "tests/fixtures/syntax/control_flow/do_while_loop.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "do-while 迴圈解析失敗";
-}
-
-TEST_F(SyntaxTest, ReturnStatements) {
-    std::string filepath = "tests/fixtures/syntax/control_flow/return_statement.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "return 語句解析失敗";
-}
-
-TEST_F(SyntaxTest, BreakContinueStatements) {
-    std::string filepath = "tests/fixtures/syntax/control_flow/break_continue.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "break/continue 語句解析失敗";
-}
-
-TEST_F(SyntaxTest, GotoStatements) {
-    std::string filepath = "tests/fixtures/syntax/control_flow/goto_statement.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "goto 語句解析失敗";
-}
-
-TEST_F(SyntaxTest, SwitchStatements) {
-    std::string filepath = "tests/fixtures/syntax/control_flow/switch_statement.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "switch 語句解析失敗";
-}
-
-// 函數測試
-TEST_F(SyntaxTest, FunctionDefinitions) {
-    std::string filepath = "tests/fixtures/syntax/functions/function_definition.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "函數定義解析失敗";
-}
-
-TEST_F(SyntaxTest, FunctionParameters) {
-    std::string filepath = "tests/fixtures/syntax/functions/function_parameters.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "函數參數解析失敗";
-}
-
-TEST_F(SyntaxTest, FunctionCalls) {
-    std::string filepath = "tests/fixtures/syntax/functions/function_calls.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "函數調用解析失敗";
-}
-
-TEST_F(SyntaxTest, VariadicFunctions) {
-    std::string filepath = "tests/fixtures/syntax/functions/variadic_functions.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "可變參數函數解析失敗";
-}
-
-// 變數測試
-TEST_F(SyntaxTest, VariableDeclarations) {
-    std::string filepath = "tests/fixtures/syntax/variables/variable_declaration.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "變數聲明解析失敗";
-}
-
-TEST_F(SyntaxTest, VariableInitialization) {
-    std::string filepath = "tests/fixtures/syntax/variables/variable_initialization.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "變數初始化解析失敗";
-}
-
-TEST_F(SyntaxTest, VariableScope) {
-    std::string filepath = "tests/fixtures/syntax/variables/variable_scope.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "變數作用域解析失敗";
-}
-
-// 字面值測試
-TEST_F(SyntaxTest, IntegerLiterals) {
-    std::string filepath = "tests/fixtures/syntax/literals/integer_literals.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "整數字面值解析失敗";
-}
-
-TEST_F(SyntaxTest, FloatLiterals) {
-    std::string filepath = "tests/fixtures/syntax/literals/float_literals.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "浮點字面值解析失敗";
-}
-
-TEST_F(SyntaxTest, StringLiterals) {
-    std::string filepath = "tests/fixtures/syntax/literals/string_literals.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "字串字面值解析失敗";
-}
-
-// 複合測試
-TEST_F(SyntaxTest, ComplexExpressions) {
-    std::string filepath = "tests/fixtures/syntax/complex_expressions.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "複雜表達式解析失敗";
-}
-
-TEST_F(SyntaxTest, CompleteProgram) {
-    std::string filepath = "tests/fixtures/syntax/complete_program.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "完整程式解析失敗";
-}
-
-// Struct 語法測試
-TEST_F(SyntaxTest, BasicStruct) {
-    std::string filepath = "tests/fixtures/syntax/structures/basic_struct.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "基本 struct 定義解析失敗";
-}
-
-TEST_F(SyntaxTest, SimpleStructDefinition) {
-    std::string filepath = "tests/fixtures/syntax/structures/simple_struct_definition.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "簡單 struct 定義解析失敗";
-}
-
-TEST_F(SyntaxTest, StructInitialization) {
-    std::string filepath = "tests/fixtures/syntax/structures/struct_initialization.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "struct 初始化解析失敗";
-}
-
-TEST_F(SyntaxTest, AnonymousStruct) {
-    std::string filepath = "tests/fixtures/syntax/structures/anonymous_struct.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "匿名 struct 解析失敗";
-}
-
-TEST_F(SyntaxTest, ForwardDeclaration) {
-    std::string filepath = "tests/fixtures/syntax/structures/forward_declaration.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "struct 前向聲明解析失敗";
-}
-
-TEST_F(SyntaxTest, StructForwardOnly) {
-    std::string filepath = "tests/fixtures/syntax/structures/struct_forward_only.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "僅前向聲明的 struct 解析失敗";
-}
-
-TEST_F(SyntaxTest, NestedStruct) {
-    std::string filepath = "tests/fixtures/syntax/structures/nested_struct.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "嵌套 struct 解析失敗";
-}
-
-TEST_F(SyntaxTest, StructPointer) {
-    std::string filepath = "tests/fixtures/syntax/structures/struct_pointer.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "struct 指標解析失敗";
-}
-
-TEST_F(SyntaxTest, StructAsParameter) {
-    std::string filepath = "tests/fixtures/syntax/structures/struct_as_parameter.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "struct 作為參數解析失敗";
-}
-
-TEST_F(SyntaxTest, ComplexStruct) {
-    std::string filepath = "tests/fixtures/syntax/structures/complex_struct.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "複雜 struct 解析失敗";
-}
-
-TEST_F(SyntaxTest, StructVariableDeclaration) {
-    std::string filepath = "tests/fixtures/syntax/structures/struct_variable_declaration.c";
-    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
-    EXPECT_TRUE(testFileParsing(filepath)) << "struct 變數聲明解析失敗";
-}
+        // Struct 語法測試
+        SyntaxTestCase{"basic_struct", "tests/fixtures/syntax/structures/basic_struct.c", "基本 struct 定義解析失敗"},
+        SyntaxTestCase{"simple_struct_definition", "tests/fixtures/syntax/structures/simple_struct_definition.c", "簡單 struct 定義解析失敗"},
+        SyntaxTestCase{"struct_initialization", "tests/fixtures/syntax/structures/struct_initialization.c", "struct 初始化解析失敗"},
+        SyntaxTestCase{"anonymous_struct", "tests/fixtures/syntax/structures/anonymous_struct.c", "匿名 struct 解析失敗"},
+        SyntaxTestCase{"forward_declaration", "tests/fixtures/syntax/structures/forward_declaration.c", "struct 前向聲明解析失敗"},
+        SyntaxTestCase{"struct_forward_only", "tests/fixtures/syntax/structures/struct_forward_only.c", "僅前向聲明的 struct 解析失敗"},
+        SyntaxTestCase{"nested_struct", "tests/fixtures/syntax/structures/nested_struct.c", "嵌套 struct 解析失敗"},
+        SyntaxTestCase{"struct_pointer", "tests/fixtures/syntax/structures/struct_pointer.c", "struct 指標解析失敗"},
+        SyntaxTestCase{"struct_as_parameter", "tests/fixtures/syntax/structures/struct_as_parameter.c", "struct 作為參數解析失敗"},
+        SyntaxTestCase{"complex_struct", "tests/fixtures/syntax/structures/complex_struct.c", "複雜 struct 解析失敗"},
+        SyntaxTestCase{"struct_variable_declaration", "tests/fixtures/syntax/structures/struct_variable_declaration.c", "struct 變數聲明解析失敗"}
+    ),
+    SyntaxTestNameGenerator()
+);
