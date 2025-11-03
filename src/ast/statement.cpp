@@ -229,10 +229,10 @@ CodegenResult NForStatement::codegen(ASTContext &context) {
     if (false == conditionCastResult.isSuccess()) {
         return conditionCastResult << CodegenResult("Type cast failed for for loop condition");
     }
-    
+
     // Get the actual block after condition evaluation (may have changed due to short-circuit)
     llvm::BasicBlock *conditionEndBlock = context.builder.GetInsertBlock();
-    
+
     if (nullptr == conditionValue) {
         context.builder.CreateBr(loopBody);
     } else {
@@ -268,7 +268,7 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
         return castResult << CodegenResult("Type cast failed for while loop condition");
     }
     conditionValue = castResult.getValue();
-    
+
     // Get the actual block after condition evaluation (may have changed due to short-circuit)
     llvm::BasicBlock *conditionEndBlock = context.builder.GetInsertBlock();
 
@@ -403,6 +403,126 @@ CodegenResult NGotoStatement::codegen(ASTContext &context) {
     llvm::BasicBlock *afterGoto = llvm::BasicBlock::Create(
         context.llvmContext, "after_goto", function);
     context.builder.SetInsertPoint(afterGoto);
+
+    return CodegenResult();
+}
+
+CodegenResult NSwitchStatement::codegen(ASTContext &context) {
+    CodegenResult condResult = condition->codegen(context);
+    llvm::Value *condValue = condResult.getValue();
+    NTypePtr condType = condResult.getType();
+
+    if (false == condResult.isSuccess() || nullptr == condValue) {
+        return condResult << CodegenResult("Failed to evaluate switch condition");
+    }
+
+    CodegenResult castResult = typeCast(condValue, condType, VAR_TYPE_INT, context);
+    if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
+        return castResult << CodegenResult("Failed to cast switch condition to integer");
+    }
+    condValue = castResult.getValue();
+
+    llvm::Function *function = context.currentFunction->getFunction();
+    llvm::BasicBlock *currentBlock = context.builder.GetInsertBlock();
+    llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(
+        context.llvmContext, "switch_after", function);
+    llvm::BasicBlock *switchBlock = llvm::BasicBlock::Create(
+        context.llvmContext, "switch_entry", function);
+    llvm::BasicBlock *defaultBlock = llvm::BasicBlock::Create(
+        context.llvmContext, "switch_default", function);
+    context.builder.SetInsertPoint(currentBlock);
+    context.builder.CreateBr(switchBlock);
+    context.builder.SetInsertPoint(switchBlock);
+
+    llvm::SwitchInst *switchInst = context.builder.CreateSwitch(
+        condValue,
+        defaultBlock,
+        10  // Estimated number of cases
+    );
+
+    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() {
+        context.popJumpContext();
+    });
+    context.pushJumpContext(std::make_shared<NSwitchContext>(afterBlock));
+
+    // Store switch info in context for case statements to register themselves
+    llvm::SwitchInst *oldSwitch = context.currentSwitch;
+    llvm::BasicBlock *oldSwitchAfter = context.currentSwitchAfter;
+    llvm::BasicBlock *oldDefaultBlock = context.currentSwitchDefault;
+    bool oldHasDefault = context.switchHasDefault;
+    auto restoreGuard = toyc::utility::makeScopeGuard([&context, oldSwitch, oldSwitchAfter, oldDefaultBlock, oldHasDefault]() {
+        context.currentSwitch = oldSwitch;
+        context.currentSwitchAfter = oldSwitchAfter;
+        context.currentSwitchDefault = oldDefaultBlock;
+        context.switchHasDefault = oldHasDefault;
+    });
+    context.currentSwitch = switchInst;
+    context.currentSwitchAfter = afterBlock;
+    context.currentSwitchDefault = defaultBlock;
+    context.switchHasDefault = false;
+
+    CodegenResult bodyResult = body->codegen(context);
+    if (false == bodyResult.isSuccess()) {
+        return bodyResult << CodegenResult("Failed to generate switch body");
+    }
+
+    llvm::BasicBlock *lastBlock = context.builder.GetInsertBlock();
+    if (!lastBlock->getTerminator()) {
+        context.builder.CreateBr(afterBlock);
+    }
+
+    // If no default case was found, make default block jump to after block
+    if (!context.switchHasDefault) {
+        context.builder.SetInsertPoint(defaultBlock);
+        context.builder.CreateBr(afterBlock);
+    }
+
+    context.builder.SetInsertPoint(afterBlock);
+
+    return CodegenResult(afterBlock);
+}
+
+CodegenResult NCaseStatement::codegen(ASTContext &context) {
+    llvm::Function *function = context.currentFunction->getFunction();
+
+    llvm::SwitchInst *switchInst = context.currentSwitch;
+    if (!switchInst) {
+        return CodegenResult("Case statement outside of switch");
+    }
+
+    llvm::BasicBlock *caseBlock;
+    
+    if (isDefault) {
+        // Use the pre-created default block
+        caseBlock = context.currentSwitchDefault;
+        context.switchHasDefault = true;
+    } else {
+        caseBlock = llvm::BasicBlock::Create(context.llvmContext, "switch_case", function);
+    }
+
+    // If current block doesn't have a terminator, branch to this case (fall-through)
+    llvm::BasicBlock *currentBlock = context.builder.GetInsertBlock();
+    if (currentBlock && !currentBlock->getTerminator()) {
+        context.builder.CreateBr(caseBlock);
+    }
+
+    // Register the case with the switch instruction
+    if (false == isDefault) {
+        CodegenResult valResult = value->codegen(context);
+        llvm::Value *caseValue = valResult.getValue();
+        if (false == valResult.isSuccess() || nullptr == caseValue) {
+            return valResult << CodegenResult("Failed to evaluate case value");
+        }
+
+        llvm::ConstantInt *constInt = llvm::dyn_cast<llvm::ConstantInt>(caseValue);
+        if (!constInt) {
+            return CodegenResult("Case value must be a constant integer");
+        }
+
+        switchInst->addCase(constInt, caseBlock);
+    }
+
+    context.builder.SetInsertPoint(caseBlock);
 
     return CodegenResult();
 }

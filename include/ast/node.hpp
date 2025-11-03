@@ -9,6 +9,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Instructions.h>
 
 namespace toyc::ast {
 
@@ -159,6 +160,17 @@ protected:
     llvm::BasicBlock *breakTarget;
 };
 
+// Switch context - only supports break, not continue
+class NSwitchContext : public NJumpContext {
+public:
+    NSwitchContext(llvm::BasicBlock *breakTarget)
+        : NJumpContext(nullptr, breakTarget) {}
+
+    virtual bool supportsContinue() const override { return false; }
+    virtual bool supportsBreak() const override { return true; }
+    virtual std::string getContextName() const override { return "switch"; }
+};
+
 struct ASTContext {
     llvm::LLVMContext llvmContext;
     llvm::Module module;
@@ -177,6 +189,12 @@ struct ASTContext {
     // Label management for goto statements
     std::map<std::string, llvm::BasicBlock*> labels;
     std::unordered_set<std::string> pendingGotos;
+
+    // Switch statement tracking (for case/default statements)
+    llvm::SwitchInst *currentSwitch = nullptr;
+    llvm::BasicBlock *currentSwitchAfter = nullptr;
+    llvm::BasicBlock *currentSwitchDefault = nullptr;
+    bool switchHasDefault = false;
 
     ASTContext() : module("toyc", llvmContext), builder(llvmContext) {
         pushScope();

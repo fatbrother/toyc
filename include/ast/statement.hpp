@@ -58,6 +58,7 @@ public:
     virtual std::string getType() const override { return "Block"; }
     void setName(const std::string &name) { this->name = name; }
     void setNextBlock(llvm::BasicBlock *nextBlock) { this->nextBlock = nextBlock; }
+    NStatement* getStatements() const { return statements; }
 
 private:
     std::string name;
@@ -200,6 +201,50 @@ public:
 
 private:
     std::string label;
+};
+
+class NSwitchStatement : public NStatement {
+public:
+    NSwitchStatement(NExpression *condition, NStatement *body)
+        : condition(condition), body(body) {}
+    ~NSwitchStatement() {
+        SAFE_DELETE(condition);
+        SAFE_DELETE(body);
+    }
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "SwitchStatement"; }
+
+private:
+    NExpression *condition;
+    NStatement *body;
+};
+
+class NCaseStatement : public NStatement {
+public:
+    NCaseStatement(NExpression *value, NStatement *statements = nullptr)
+        : value(value), statements(statements), isDefault(false) {}
+
+    NCaseStatement(bool isDefault, NStatement *statements = nullptr)
+        : value(nullptr), statements(statements), isDefault(isDefault) {}
+
+    ~NCaseStatement() {
+        SAFE_DELETE(value);
+        SAFE_DELETE(statements);
+    }
+
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "CaseStatement"; }
+
+    NExpression* getValue() const { return value; }
+    bool getIsDefault() const { return isDefault; }
+    NStatement* getStatements() const { return statements; }
+
+private:
+    NExpression *value;
+    NStatement *statements;
+    bool isDefault;
+
+    friend class NSwitchStatement;
 };
 
 } // namespace toyc::ast

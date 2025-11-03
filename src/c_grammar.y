@@ -69,7 +69,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 %type   <parameter> parameter_list parameter_declaration
 %type   <declaration_specifiers> declaration_specifiers
 %type   <statement> statement statement_list expression_statement jump_statement for_statement_init_declaration
-%type   <statement>  if_statement for_statement while_statement do_while_statement labeled_statement
+%type   <statement>  if_statement for_statement while_statement do_while_statement labeled_statement switch_statement
 %type   <block> compound_statement
 %type   <external_declaration> program external_declaration external_declaration_list function_definition
 %type   <arguments> argument_expression_list
@@ -199,6 +199,9 @@ statement
 	| do_while_statement {
 		$$ = $1;
 	}
+	| switch_statement {
+		$$ = $1;
+	}
 	;
 
 for_statement_init_declaration
@@ -228,10 +231,22 @@ do_while_statement
 	}
 	;
 
+switch_statement
+	: SWITCH '(' expression ')' compound_statement {
+		$$ = new toyc::ast::NSwitchStatement($3, $5);
+	}
+	;
+
 labeled_statement
 	: IDENTIFIER ':' statement {
 		$$ = new toyc::ast::NLabelStatement(*$1, $3);
 		delete $1;
+	}
+	| CASE expression ':' {
+		$$ = new toyc::ast::NCaseStatement($2);
+	}
+	| DEFAULT ':' {
+		$$ = new toyc::ast::NCaseStatement(true);
 	}
 	;
 
