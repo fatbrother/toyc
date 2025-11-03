@@ -274,6 +274,61 @@ TEST_F(OutputTest, ExecutionResult_CompoundAssignment) {
     EXPECT_EQ(exitCode, 10) << "複合賦值運算結果不正確，期望 10，實際 " << exitCode;
 }
 
+TEST_F(OutputTest, ExecutionResult_ShortCircuitAnd) {
+    std::string inputFile = "tests/fixtures/output/operators/short_circuit_test.c";
+    std::string execFile = test_output_dir + "/short_circuit_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 0) << "AND 短路求值結果不正確，期望 0，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_ShortCircuitOr) {
+    std::string inputFile = "tests/fixtures/output/operators/short_circuit_or_test.c";
+    std::string execFile = test_output_dir + "/short_circuit_or_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 0) << "OR 短路求值結果不正確，期望 0，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_ShortCircuitAndEval) {
+    std::string inputFile = "tests/fixtures/output/operators/short_circuit_and_eval_test.c";
+    std::string execFile = test_output_dir + "/short_circuit_and_eval_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 1) << "AND 求值結果不正確，期望 1，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_ShortCircuitComplex) {
+    std::string inputFile = "tests/fixtures/output/operators/short_circuit_complex_test.c";
+    std::string execFile = test_output_dir + "/short_circuit_complex_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 1) << "複雜短路求值結果不正確，期望 1，實際 " << exitCode;
+}
+
+TEST_F(OutputTest, ExecutionResult_ShortCircuitDivZero) {
+    std::string inputFile = "tests/fixtures/output/operators/short_circuit_div_zero_test.c";
+    std::string execFile = test_output_dir + "/short_circuit_div_zero_test";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "測試檔案不存在: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "編譯失敗";
+
+    int exitCode = executeProgram(execFile);
+    EXPECT_EQ(exitCode, 5) << "短路求值防除零結果不正確，期望 5，實際 " << exitCode;
+}
+
 TEST_F(OutputTest, ExecutionResult_SimpleFunction) {
     std::string inputFile = "tests/fixtures/output/functions/simple_function.c";
     std::string execFile = test_output_dir + "/simple_function";

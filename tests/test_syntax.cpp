@@ -101,6 +101,12 @@ TEST_F(SyntaxTest, TernaryOperator) {
     EXPECT_TRUE(testFileParsing(filepath)) << "三元運算符解析失敗";
 }
 
+TEST_F(SyntaxTest, ShortCircuitEvaluation) {
+    std::string filepath = "tests/fixtures/syntax/operators/short_circuit.c";
+    ASSERT_TRUE(fileExists(filepath)) << "測試檔案不存在: " << filepath;
+    EXPECT_TRUE(testFileParsing(filepath)) << "短路求值解析失敗";
+}
+
 // 控制流測試
 TEST_F(SyntaxTest, IfElseStatements) {
     std::string filepath = "tests/fixtures/syntax/control_flow/if_else.c";
