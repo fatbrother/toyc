@@ -126,7 +126,13 @@ INSTANTIATE_TEST_SUITE_P(
         SyntaxTestCase{"struct_pointer", "tests/fixtures/syntax/structures/struct_pointer.c", "struct 指標解析失敗"},
         SyntaxTestCase{"struct_as_parameter", "tests/fixtures/syntax/structures/struct_as_parameter.c", "struct 作為參數解析失敗"},
         SyntaxTestCase{"complex_struct", "tests/fixtures/syntax/structures/complex_struct.c", "複雜 struct 解析失敗"},
-        SyntaxTestCase{"struct_variable_declaration", "tests/fixtures/syntax/structures/struct_variable_declaration.c", "struct 變數聲明解析失敗"}
+        SyntaxTestCase{"struct_variable_declaration", "tests/fixtures/syntax/structures/struct_variable_declaration.c", "struct 變數聲明解析失敗"},
+
+        // Array 語法測試
+        SyntaxTestCase{"array_declaration", "tests/fixtures/syntax/arrays/array_declaration.c", "陣列聲明解析失敗"},
+        SyntaxTestCase{"array_initialization", "tests/fixtures/syntax/arrays/array_initialization.c", "陣列初始化解析失敗"},
+        SyntaxTestCase{"array_indexing", "tests/fixtures/syntax/arrays/array_indexing.c", "陣列索引解析失敗"},
+        SyntaxTestCase{"multidimensional_arrays", "tests/fixtures/syntax/arrays/multidimensional_arrays.c", "多維陣列解析失敗"}
     ),
     SyntaxTestNameGenerator()
 );

@@ -217,7 +217,15 @@ INSTANTIATE_TEST_SUITE_P(
         LLVMIRTestCase{"short_circuit_and", "tests/fixtures/output/operators/short_circuit_test.c",
                        {"br", "label", "phi"}, "AND 短路求值 LLVM IR 生成失敗"},
         LLVMIRTestCase{"short_circuit_or", "tests/fixtures/output/operators/short_circuit_or_test.c",
-                       {"br", "label", "phi"}, "OR 短路求值 LLVM IR 生成失敗"}
+                       {"br", "label", "phi"}, "OR 短路求值 LLVM IR 生成失敗"},
+
+        // Array 測試
+        LLVMIRTestCase{"basic_array", "tests/fixtures/output/arrays/basic_array.c",
+                       {"alloca", "getelementptr", "store", "load"}, "基本陣列 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"array_initialization", "tests/fixtures/output/arrays/array_initialization.c",
+                       {"alloca", "getelementptr", "store"}, "陣列初始化 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"multidimensional_array", "tests/fixtures/output/arrays/multidimensional_array.c",
+                       {"alloca", "getelementptr"}, "多維陣列 LLVM IR 生成失敗"}
     ),
     LLVMIRTestNameGenerator()
 );
@@ -323,7 +331,16 @@ INSTANTIATE_TEST_SUITE_P(
         ExecutionTestCase{"basic_struct", "tests/fixtures/output/structures/basic_struct_compile.c", 30, "基本 struct 執行結果不正確 (10+20)"},
         ExecutionTestCase{"struct_size", "tests/fixtures/output/structures/struct_size_test.c", 42, "struct 大小測試執行結果不正確"},
         ExecutionTestCase{"struct_return_value", "tests/fixtures/output/structures/struct_return_value.c", 40, "struct 返回值測試執行結果不正確 (15+25)"},
-        ExecutionTestCase{"complex_struct", "tests/fixtures/output/structures/complex_struct_compile.c", 50, "複雜 struct 執行結果不正確 (10*5)"}
+        ExecutionTestCase{"complex_struct", "tests/fixtures/output/structures/complex_struct_compile.c", 50, "複雜 struct 執行結果不正確 (10*5)"},
+
+        // Array 測試
+        ExecutionTestCase{"basic_array", "tests/fixtures/output/arrays/basic_array.c", 60, "基本陣列操作結果不正確 (10+20+30)"},
+        ExecutionTestCase{"array_initialization", "tests/fixtures/output/arrays/array_initialization.c", 6, "陣列初始化結果不正確 (1+5)"},
+        ExecutionTestCase{"array_loop", "tests/fixtures/output/arrays/array_loop.c", 20, "陣列迴圈操作結果不正確 (0+2+4+6+8)"},
+        ExecutionTestCase{"multidimensional_array", "tests/fixtures/output/arrays/multidimensional_array.c", 7, "多維陣列結果不正確 (1+6)"},
+        ExecutionTestCase{"array_as_parameter", "tests/fixtures/output/arrays/array_as_parameter.c", 50, "陣列作為參數結果不正確 (5+10+15+20)"},
+        ExecutionTestCase{"char_array_string", "tests/fixtures/output/arrays/char_array_string.c", 5, "字元陣列結果不正確 (strlen)"},
+        ExecutionTestCase{"array_modify_in_loop", "tests/fixtures/output/arrays/array_modify_in_loop.c", 120, "迴圈中修改陣列結果不正確 (20+40+60)"}
     ),
     ExecutionTestNameGenerator()
 );
