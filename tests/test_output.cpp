@@ -268,6 +268,7 @@ TEST_P(ExecutionResultTest, ProgramExecution) {
 
     int exitCode = executeProgram(execFile);
     EXPECT_EQ(exitCode, testCase.expectedExitCode)
+        << "檔案位置: " << testCase.inputFile << "\n"
         << testCase.description << "，期望 " << testCase.expectedExitCode
         << "，實際 " << exitCode;
 }
