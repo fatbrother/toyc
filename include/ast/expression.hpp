@@ -25,10 +25,18 @@ public:
     virtual CodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "BinaryOperator"; }
 
-private:
+protected:
     NExpression *lhs;
     NExpression *rhs;
     BineryOperator op;
+};
+
+class NLogicalOperator : public NBinaryOperator {
+public:
+    NLogicalOperator(NExpression *lhs, BineryOperator op, NExpression *rhs)
+        : NBinaryOperator(lhs, op, rhs) {}
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "LogicalOperator"; }
 };
 
 class NUnaryExpression : public NExpression {

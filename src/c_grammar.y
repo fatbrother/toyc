@@ -384,7 +384,7 @@ logical_or_expression
 		$$ = $1;
 	  }
 	| logical_or_expression OR_OP expression {
-		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::OR, $3);
+		$$ = new toyc::ast::NLogicalOperator($1, toyc::ast::BineryOperator::OR, $3);
 	  }
 	;
 
@@ -393,7 +393,7 @@ logical_and_expression
 		$$ = $1;
 	  }
 	| logical_and_expression  AND_OP expression {
-		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::AND, $3);
+		$$ = new toyc::ast::NLogicalOperator($1, toyc::ast::BineryOperator::AND, $3);
 	  }
 	;
 

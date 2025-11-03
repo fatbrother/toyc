@@ -158,6 +158,9 @@ CodegenResult NIfStatement::codegen(ASTContext &context) {
         return condResult << CodegenResult("Condition code generation failed for if statement");
     }
 
+    // Get the actual block after condition evaluation (may have changed due to short-circuit)
+    llvm::BasicBlock *conditionEndBlock = context.builder.GetInsertBlock();
+
     thenBlockNode->setParent(parent);
     thenBlockNode->setName("if_then");
     thenBlockNode->setNextBlock(mergeBlock);
@@ -178,7 +181,7 @@ CodegenResult NIfStatement::codegen(ASTContext &context) {
         }
     }
 
-    context.builder.SetInsertPoint(conditionBlock);
+    context.builder.SetInsertPoint(conditionEndBlock);
     context.builder.CreateCondBr(conditionValue, thenBlock, (nullptr != elseBlock) ? elseBlock : mergeBlock);
     context.builder.SetInsertPoint(mergeBlock);
     return mergeBlock;
@@ -226,9 +229,14 @@ CodegenResult NForStatement::codegen(ASTContext &context) {
     if (false == conditionCastResult.isSuccess()) {
         return conditionCastResult << CodegenResult("Type cast failed for for loop condition");
     }
+    
+    // Get the actual block after condition evaluation (may have changed due to short-circuit)
+    llvm::BasicBlock *conditionEndBlock = context.builder.GetInsertBlock();
+    
     if (nullptr == conditionValue) {
         context.builder.CreateBr(loopBody);
     } else {
+        context.builder.SetInsertPoint(conditionEndBlock);
         context.builder.CreateCondBr(conditionValue, loopBody, afterBlock);
     }
 
@@ -260,6 +268,9 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
         return castResult << CodegenResult("Type cast failed for while loop condition");
     }
     conditionValue = castResult.getValue();
+    
+    // Get the actual block after condition evaluation (may have changed due to short-circuit)
+    llvm::BasicBlock *conditionEndBlock = context.builder.GetInsertBlock();
 
     auto jumpGuard = toyc::utility::makeScopeGuard([&context]() {
         context.popJumpContext();
@@ -275,7 +286,7 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
         return bodyResult << CodegenResult("While loop body generation failed");
     }
 
-    context.builder.SetInsertPoint(loopCondition);
+    context.builder.SetInsertPoint(conditionEndBlock);
     context.builder.CreateCondBr(conditionValue, loopBody, afterBlock);
 
     context.builder.SetInsertPoint(previousBlock);

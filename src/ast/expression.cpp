@@ -7,9 +7,76 @@
 
 using namespace toyc::ast;
 
-CodegenResult NBinaryOperator::codegen(ASTContext &context) {
+CodegenResult NLogicalOperator::codegen(ASTContext &context) {
+    // Evaluate left operand
     CodegenResult lhsResult = lhs->codegen(context);
+    llvm::Value *lhsValue = lhsResult.getValue();
+    NTypePtr lhsType = lhsResult.getType();
+
+    if (false == lhsResult.isSuccess() || nullptr == lhsValue) {
+        return lhsResult << CodegenResult("Failed to generate code for left operand in logical operation");
+    }
+
+    // Cast lhs to bool
+    CodegenResult castLhsResult = typeCast(lhsValue, lhsType, VAR_TYPE_BOOL, context);
+    if (false == castLhsResult.isSuccess() || nullptr == castLhsResult.getValue()) {
+        return castLhsResult << CodegenResult("Type cast failed for left-hand side in logical operation");
+    }
+    lhsValue = castLhsResult.getValue();
+
+    // Create basic blocks for short-circuit evaluation
+    llvm::Function *function = context.builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock *rhsBlock = llvm::BasicBlock::Create(context.llvmContext, "rhs", function);
+    llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(context.llvmContext, "merge", function);
+    llvm::BasicBlock *lhsEndBlock = context.builder.GetInsertBlock();
+
+    // Convert to i1 for conditional branch
+    llvm::Value *lhsCond = context.builder.CreateICmpNE(
+        lhsValue,
+        llvm::ConstantInt::get(lhsValue->getType(), 0),
+        "lhs_cond");
+
+    // Create conditional branch based on operator
+    if (op == AND) {
+        // AND: if lhs is false, skip rhs evaluation
+        context.builder.CreateCondBr(lhsCond, rhsBlock, mergeBlock);
+    } else { // OR
+        // OR: if lhs is true, skip rhs evaluation
+        context.builder.CreateCondBr(lhsCond, mergeBlock, rhsBlock);
+    }
+
+    // Generate rhs block
+    context.builder.SetInsertPoint(rhsBlock);
     CodegenResult rhsResult = rhs->codegen(context);
+    llvm::Value *rhsValue = rhsResult.getValue();
+    NTypePtr rhsType = rhsResult.getType();
+
+    if (false == rhsResult.isSuccess() || nullptr == rhsValue) {
+        return rhsResult << CodegenResult("Failed to generate code for right operand in logical operation");
+    }
+
+    // Cast rhs to bool
+    CodegenResult castRhsResult = typeCast(rhsValue, rhsType, VAR_TYPE_BOOL, context);
+    if (false == castRhsResult.isSuccess() || nullptr == castRhsResult.getValue()) {
+        return castRhsResult << CodegenResult("Type cast failed for right-hand side in logical operation");
+    }
+    rhsValue = castRhsResult.getValue();
+
+    llvm::BasicBlock *rhsEndBlock = context.builder.GetInsertBlock();
+    context.builder.CreateBr(mergeBlock);
+
+    // Merge block with PHI node
+    context.builder.SetInsertPoint(mergeBlock);
+    llvm::PHINode *phiNode = context.builder.CreatePHI(lhsValue->getType(), 2, "logical_result");
+    phiNode->addIncoming(lhsValue, lhsEndBlock);
+    phiNode->addIncoming(rhsValue, rhsEndBlock);
+
+    return CodegenResult(phiNode, std::make_shared<NType>(VarType::VAR_TYPE_BOOL));
+}
+
+CodegenResult NBinaryOperator::codegen(ASTContext &context) {
+    CodegenResult rhsResult = rhs->codegen(context);
+    CodegenResult lhsResult = lhs->codegen(context);
     llvm::Value *result = nullptr;
     NTypePtr resultType = nullptr;
     VarType targetType = VAR_TYPE_INT;
@@ -25,9 +92,6 @@ CodegenResult NBinaryOperator::codegen(ASTContext &context) {
     if (op == EQ || op == NE || op == LE || op == GE || op == LT || op == GT) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
         targetType = (lhsType->type > rhsType->type) ? lhsType->type : rhsType->type;
-    } else if (op == AND || op == OR) {
-        targetType = VAR_TYPE_BOOL;
-        resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
     } else {
         targetType = (true == isFloatingPointType(lhsType->type)) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;
         resultType = std::make_shared<NType>(targetType);
@@ -54,12 +118,6 @@ CodegenResult NBinaryOperator::codegen(ASTContext &context) {
     rhsValue = castRhsResult.getValue();
 
     switch (op) {
-        case AND:
-            result = context.builder.CreateLogicalAnd(lhsValue, rhsValue, "and");
-            break;
-        case OR:
-            result = context.builder.CreateLogicalOr(lhsValue, rhsValue, "or");
-            break;
         case ADD:
             if (true == isFloatingPointType(targetType))
                 result = context.builder.CreateFAdd(lhsValue, rhsValue, "add");
