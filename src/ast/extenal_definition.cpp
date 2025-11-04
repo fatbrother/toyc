@@ -28,16 +28,16 @@ NFunctionDefinition::~NFunctionDefinition() {
     SAFE_DELETE(body);
 }
 
-CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
+StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     llvm::Type *llvmReturnType = nullptr;
     std::vector<llvm::Type *> paramTypes;
     std::vector<std::string> paramNames;
     llvm::FunctionType *functionType = nullptr;
     bool isVariadic = false;
 
-    CodegenResult returnTypeResult = returnType->getLLVMType(context);
-    if (false == returnTypeResult.isSuccess() || nullptr == returnTypeResult.getLLVMType()) {
-        return returnTypeResult << CodegenResult("Failed to get LLVM type for function return type");
+    TypeCodegenResult returnTypeResult = returnType->getLLVMType(context);
+    if (false == returnTypeResult.isSuccess()) {
+        return StmtCodegenResult("Failed to get LLVM type for function return type") << returnTypeResult;
     }
     llvmReturnType = returnTypeResult.getLLVMType();
 
@@ -47,13 +47,13 @@ CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
             break;
         }
 
-        CodegenResult paramTypeResult = paramIt->getVarType()->getLLVMType(context);
-        if (false == paramTypeResult.isSuccess() || nullptr == paramTypeResult.getLLVMType()) {
-            return paramTypeResult << CodegenResult("Failed to get LLVM type for parameter");
+        TypeCodegenResult paramTypeResult = paramIt->getVarType()->getLLVMType(context);
+        if (false == paramTypeResult.isSuccess()) {
+            return StmtCodegenResult("Failed to get LLVM type for parameter") << paramTypeResult;
         }
         llvm::Type *paramType = paramTypeResult.getLLVMType();
         if (nullptr == paramType) {
-            return CodegenResult("Parameter type is null");
+            return StmtCodegenResult("Parameter type is null");
         }
 
         paramTypes.push_back(paramType);
@@ -63,7 +63,7 @@ CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     functionType = llvm::FunctionType::get(llvmReturnType, paramTypes, isVariadic);
     llvmFunction = static_cast<llvm::Function *>(context.module.getOrInsertFunction(name, functionType).getCallee());
     if (nullptr == llvmFunction) {
-        return CodegenResult("Function creation failed for " + name);
+        return StmtCodegenResult("Function creation failed for " + name);
     }
 
     NParameter* paramIt = params;
@@ -75,7 +75,7 @@ CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     context.functionDefinitions[name] = this;
 
     if (nullptr == body) {
-        return CodegenResult(llvmFunction);
+        return StmtCodegenResult();
     }
 
     context.currentFunction = this;
@@ -84,23 +84,23 @@ CodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     auto labelGuard = toyc::utility::makeScopeGuard([&context]() {
         context.clearLabels();
     });
-    CodegenResult bodyResult = body->codegen(context);
+    StmtCodegenResult bodyResult = body->codegen(context);
     if (false == bodyResult.isSuccess()) {
-        return bodyResult << CodegenResult("Function body code generation failed for " + name);
+        return StmtCodegenResult("Function body code generation failed for " + name) << bodyResult;
     }
     context.currentFunction = nullptr;
     context.isInitializingFunction = false;
 
     // Resolve pending goto statements
     if (!context.pendingGotos.empty()) {
-        return CodegenResult("Undefined label in goto statement in function " + name);
+        return StmtCodegenResult("Undefined label in goto statement in function " + name);
     }
 
     std::string Error;
     llvm::raw_string_ostream ErrorOS(Error);
     if (false != llvm::verifyFunction(*llvmFunction, &ErrorOS)) {
-        return CodegenResult(ErrorOS.str());
+        return StmtCodegenResult(ErrorOS.str());
     }
 
-    return CodegenResult(llvmFunction);
+    return StmtCodegenResult();
 }

@@ -2,19 +2,6 @@
 
 namespace toyc::ast {
 
-CodegenResult& CodegenResult::operator<<(const CodegenResult &other) {
-    if (!other.isSuccess()) {
-        if (false == this->isSuccess()) {
-            if (!this->errorMessage.empty()) {
-                this->errorMessage += "\n";
-            }
-
-            this->errorMessage += other.errorMessage;
-        }
-    }
-    return *this;
-}
-
 ASTContext::ASTContext() : module("toyc", llvmContext), builder(llvmContext) {
     pushScope();
 }
@@ -65,9 +52,5 @@ void ASTContext::popScope() {
     }
 }
 
-// BasicNode implementation
-CodegenResult BasicNode::codegen(ASTContext &context) {
-    return CodegenResult("Codegen not implemented for this node type: " + getType());
-}
 
 } // namespace toyc::ast

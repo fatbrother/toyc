@@ -57,28 +57,138 @@ enum UnaryOperator {
 
 class NFunctionDefinition;
 
+template<typename T>
 class CodegenResult {
 public:
-    CodegenResult() : errorMessage(""), value(nullptr) {}
-    CodegenResult(llvm::Type *type) : errorMessage(""), llvmType(type), value(nullptr) {}
-    CodegenResult(llvm::Value *val) : errorMessage(""), value(val), type(nullptr) {}
-    CodegenResult(llvm::Value *val, NTypePtr type) : errorMessage(""), value(val), type(type) {}
-    CodegenResult(const std::string &errMsg) : errorMessage(errMsg), value(nullptr) {}
+    CodegenResult() : errorMessage("") {}
+    CodegenResult(const T& data) : data(data), errorMessage("") {}
+    CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
+    CodegenResult(const char *errMsg) : errorMessage(std::string(errMsg)) {}
 
-    CodegenResult& operator<<(const CodegenResult &other);
+    template<typename... Args>
+    CodegenResult(Args... args) : data(args...), errorMessage("") {}
 
-    bool isSuccess() const { return "" == errorMessage; }
+    template<typename U>
+    CodegenResult& operator<<(const CodegenResult<U>& other) {
+        if (!other.isSuccess()) {
+            if (errorMessage.empty()) {
+                errorMessage = other.getErrorMessage();
+            } else {
+                errorMessage = errorMessage + "\n" + other.getErrorMessage();
+            }
+        }
+        return *this;
+    }
+
+    bool isSuccess() const {
+        if constexpr (std::is_same_v<T, void>) {
+            return errorMessage.empty();
+        } else {
+            return isSuccessImpl(0);
+        }
+    }
+
+private:
+    template<typename U = T>
+    auto isSuccessImpl(int) const -> decltype(std::declval<U>().isValid(), bool()) {
+        return errorMessage.empty() && data.isValid();
+    }
+
+    template<typename U = T>
+    bool isSuccessImpl(long) const {
+        return errorMessage.empty();
+    }
+
+public:
+
     std::string getErrorMessage() const { return errorMessage; }
-    llvm::Value *getValue() const { return value; }
-    llvm::Type *getLLVMType() const { return llvmType; }
-    NTypePtr getType() const { return type; }
+
+    // Mixin methods - provides getValue() for types that have a 'value' member
+    template<typename U = T>
+    auto getValue() const -> decltype(std::declval<U>().value) {
+        return data.value;
+    }
+
+    template<typename U = T>
+    auto getType() const -> decltype(std::declval<U>().type) {
+        return data.type;
+    }
+
+    template<typename U = T>
+    auto getAllocaInst() const -> decltype(std::declval<U>().allocInst) {
+        return data.allocInst;
+    }
+
+    template<typename U = T>
+    auto getLLVMType() const -> decltype(std::declval<U>().llvmType) {
+        return data.llvmType;
+    }
+
+private:
+
+    T data;
+    std::string errorMessage;
+};
+
+template<>
+class CodegenResult<void> {
+public:
+    CodegenResult() : errorMessage("") {}
+    CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
+
+    template<typename U>
+    CodegenResult& operator<<(const CodegenResult<U>& other) {
+        if (!other.isSuccess()) {
+            if (errorMessage.empty()) {
+                errorMessage = other.getErrorMessage();
+            } else {
+                errorMessage = errorMessage + "\n" + other.getErrorMessage();
+            }
+        }
+        return *this;
+    }
+
+    bool isSuccess() const { return errorMessage.empty(); }
+    std::string getErrorMessage() const { return errorMessage; }
 
 private:
     std::string errorMessage;
-    llvm::Value *value = nullptr;
-    llvm::Type *llvmType = nullptr;
-    NTypePtr type = nullptr;
 };
+
+/**
+ * Value type for Expression code generation results.
+ */
+struct ExprValue {
+    llvm::Value* value = nullptr;
+    NTypePtr type = nullptr;
+
+    ExprValue() = default;
+    ExprValue(llvm::Value* v, NTypePtr t) : value(v), type(t) {}
+    bool isValid() const { return value != nullptr && type != nullptr; }
+};
+
+struct AllocValue {
+    llvm::Value* allocInst = nullptr;
+    NTypePtr type = nullptr;
+
+    AllocValue() = default;
+    AllocValue(llvm::Value* a, NTypePtr t) : allocInst(a), type(t) {}
+    bool isValid() const { return allocInst != nullptr && type != nullptr; }
+};
+
+struct TypeValue {
+    llvm::Type* llvmType = nullptr;
+
+    TypeValue() = default;
+    TypeValue(llvm::Type* t) : llvmType(t) {}
+    bool isValid() const { return llvmType != nullptr; }
+};
+
+// Type aliases for common use cases
+using ExprCodegenResult = CodegenResult<ExprValue>;
+using StmtCodegenResult = CodegenResult<void>;
+using TypeCodegenResult = CodegenResult<TypeValue>;
+using AllocCodegenResult = CodegenResult<AllocValue>;
 
 template<typename T> class ScopeTable {
 public:
@@ -195,7 +305,6 @@ public:
     BasicNode(BasicNode &&) = default;
     BasicNode &operator=(const BasicNode &) = default;
     virtual std::string getType() const = 0;
-    virtual CodegenResult codegen(ASTContext &context);
 };
 
 class NExternalDeclaration : public BasicNode {
@@ -203,6 +312,8 @@ public:
     virtual ~NExternalDeclaration() {
         SAFE_DELETE(next);
     }
+
+    virtual StmtCodegenResult codegen(ASTContext &context) = 0;
 
 public:
     NExternalDeclaration *next = nullptr;

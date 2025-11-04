@@ -7,7 +7,7 @@
 
 using namespace toyc::ast;
 
-CodegenResult NType::getLLVMType(ASTContext &context) {
+TypeCodegenResult NType::getLLVMType(ASTContext &context) {
     llvm::Type *llvmType = nullptr;
 
     switch (type) {
@@ -39,10 +39,10 @@ CodegenResult NType::getLLVMType(ASTContext &context) {
             // TODO: Handle typedef names
             break;
         default:
-            return CodegenResult("Unsupported type for LLVM type generation: " + varTypeToString(type));
+            return TypeCodegenResult("Unsupported type for LLVM type generation: " + varTypeToString(type));
     }
 
-    return CodegenResult(llvmType);
+    return TypeCodegenResult(llvmType);
 }
 
 NTypePtr NType::getAddrType() {
@@ -55,17 +55,17 @@ NArrayType::NArrayType(NTypePtr elementType, const std::vector<int> &dimensions)
 NArrayType::NArrayType(NType *elementType, const std::vector<int> &dimensions)
     : NArrayType(std::shared_ptr<NType>(elementType), dimensions) {}
 
-CodegenResult NArrayType::getLLVMType(ASTContext &context) {
-    CodegenResult elemResult = elementType->getLLVMType(context);
-    if (!elemResult.isSuccess() || nullptr == elemResult.getLLVMType()) {
-        return elemResult << CodegenResult("Failed to get LLVM type for array element type");
+TypeCodegenResult NArrayType::getLLVMType(ASTContext &context) {
+    TypeCodegenResult elemResult = elementType->getLLVMType(context);
+    if (false == elemResult.isSuccess()) {
+        return TypeCodegenResult("Failed to get LLVM type for array element type") << elemResult;
     }
 
     llvm::Type *arrayType = elemResult.getLLVMType();
     for (auto it = arrayDimensions.rbegin(); it != arrayDimensions.rend(); ++it) {
         arrayType = llvm::ArrayType::get(arrayType, *it);
     }
-    return CodegenResult(arrayType);
+    return TypeCodegenResult(arrayType);
 }
 
 NTypePtr NArrayType::getElementType() const {
@@ -129,14 +129,14 @@ NPointerType::NPointerType(NTypePtr pointeeType, int level)
 NPointerType::NPointerType(VarType pointeeType, int level)
     : NPointerType(std::make_shared<NType>(pointeeType), level) {}
 
-CodegenResult NPointerType::getLLVMType(ASTContext &context) {
+TypeCodegenResult NPointerType::getLLVMType(ASTContext &context) {
     if (pointeeType == nullptr) {
-        return CodegenResult("Pointer type with null pointee type");
+        return TypeCodegenResult("Pointer type with null pointee type");
     }
 
-    CodegenResult pointeeTypeResult = pointeeType->getLLVMType(context);
-    if (!pointeeTypeResult.isSuccess() || nullptr == pointeeTypeResult.getLLVMType()) {
-        return pointeeTypeResult << CodegenResult("Failed to get LLVM type for pointer pointee");
+    TypeCodegenResult pointeeTypeResult = pointeeType->getLLVMType(context);
+    if (!pointeeTypeResult.isSuccess()) {
+        return TypeCodegenResult("Failed to get LLVM type for pointer pointee") << pointeeTypeResult;
     }
 
     llvm::Type *llvmType = pointeeTypeResult.getLLVMType();
@@ -144,7 +144,7 @@ CodegenResult NPointerType::getLLVMType(ASTContext &context) {
         llvmType = llvm::PointerType::get(llvmType, 0);
     }
 
-    return CodegenResult(llvmType);
+    return TypeCodegenResult(llvmType);
 }
 
 NTypePtr NPointerType::getElementType() const {
@@ -172,9 +172,9 @@ NStructType::~NStructType() {
     SAFE_DELETE(members);
 }
 
-CodegenResult NStructType::getLLVMType(ASTContext &context) {
+TypeCodegenResult NStructType::getLLVMType(ASTContext &context) {
     if (llvmStructType != nullptr) {
-        return CodegenResult(llvmStructType);
+        return TypeCodegenResult(llvmStructType);
     }
 
     auto [isFound, typePtr] = context.typeTable->lookup(name);
@@ -182,33 +182,33 @@ CodegenResult NStructType::getLLVMType(ASTContext &context) {
         auto existingStruct = std::static_pointer_cast<NStructType>(typePtr);
         if (existingStruct->llvmStructType != nullptr) {
             llvmStructType = existingStruct->llvmStructType;
-            return CodegenResult(llvmStructType);
+            return TypeCodegenResult(llvmStructType);
         }
     }
 
     if (members == nullptr) {
-        return CodegenResult("Struct has no members: " + name);
+        return TypeCodegenResult("Struct has no members: " + name);
     }
 
     std::vector<llvm::Type *> memberTypes;
     for (auto currentMember = members; currentMember != nullptr; currentMember = currentMember->next) {
-        CodegenResult typeResult = currentMember->type->getLLVMType(context);
-        if (false == typeResult.isSuccess() || nullptr == typeResult.getLLVMType()) {
-            return typeResult << CodegenResult("Failed to get LLVM type for member in struct: " + name);
+        TypeCodegenResult typeResult = currentMember->type->getLLVMType(context);
+        if (false == typeResult.isSuccess()) {
+            return TypeCodegenResult("Failed to get LLVM type for member in struct: " + name) << typeResult;
         }
         llvm::Type *memberType = typeResult.getLLVMType();
         if (memberType == nullptr) {
-            return CodegenResult("Member type is null in struct: " + name);
+            return TypeCodegenResult("Member type is null in struct: " + name);
         }
         memberTypes.push_back(memberType);
     }
 
     llvmStructType = llvm::StructType::create(context.llvmContext, memberTypes, name);
     if (llvmStructType == nullptr) {
-        return CodegenResult("Failed to create struct type: " + name);
+        return TypeCodegenResult("Failed to create struct type: " + name);
     }
 
-    return CodegenResult(llvmStructType);
+    return TypeCodegenResult(llvmStructType);
 }
 
 int NStructType::getMemberIndex(const std::string &memberName) const {

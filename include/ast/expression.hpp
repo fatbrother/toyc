@@ -8,9 +8,10 @@ namespace toyc::ast {
 
 class NExpression : public BasicNode {
 public:
-    virtual CodegenResult allocgen(ASTContext &context) {
-        return CodegenResult("Allocation not supported for " + getType());
-    };
+    virtual ExprCodegenResult codegen(ASTContext &context) = 0;
+    virtual AllocCodegenResult allocgen(ASTContext &context) {
+        return AllocCodegenResult("Allocation not supported for " + getType());
+    }
     virtual std::string getType() const override { return "Expression"; }
 };
 
@@ -22,7 +23,7 @@ public:
         SAFE_DELETE(lhs);
         SAFE_DELETE(rhs);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "BinaryOperator"; }
 
 protected:
@@ -35,7 +36,7 @@ class NLogicalOperator : public NBinaryOperator {
 public:
     NLogicalOperator(NExpression *lhs, BineryOperator op, NExpression *rhs)
         : NBinaryOperator(lhs, op, rhs) {}
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "LogicalOperator"; }
 };
 
@@ -46,9 +47,9 @@ public:
     ~NUnaryExpression() {
         SAFE_DELETE(expr);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "UnaryOperator"; }
-    virtual CodegenResult allocgen(ASTContext &context) override {
+    virtual AllocCodegenResult allocgen(ASTContext &context) override {
         return expr->allocgen(context);
     };
 
@@ -66,7 +67,7 @@ public:
         SAFE_DELETE(trueExpr);
         SAFE_DELETE(falseExpr);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ConditionalExpression"; }
 
 private:
@@ -78,8 +79,8 @@ private:
 class NIdentifier : public NExpression {
 public:
     NIdentifier(const std::string &name) : name(name) {}
-    virtual CodegenResult codegen(ASTContext &context) override;
-    virtual CodegenResult allocgen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
+    virtual AllocCodegenResult allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "Identifier"; }
 
 private:
@@ -89,7 +90,7 @@ private:
 class NInteger : public NExpression {
 public:
     NInteger(int value) : value(value) {}
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Integer"; }
 
 private:
@@ -99,7 +100,7 @@ private:
 class NFloat : public NExpression {
 public:
     NFloat(double value) : value(value) {}
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Float"; }
 
 private:
@@ -109,7 +110,7 @@ private:
 class NString : public NExpression {
 public:
     NString(const std::string &value) : value(value) {}
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "String"; }
 
 private:
@@ -124,9 +125,9 @@ public:
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
     }
-    virtual CodegenResult codegen(ASTContext &context) override {
+    virtual ExprCodegenResult codegen(ASTContext &context) override {
         if (nullptr == expr) {
-            return CodegenResult();
+            return ExprCodegenResult();
         }
         return expr->codegen(context);
     }
@@ -164,7 +165,7 @@ public:
         SAFE_DELETE(lhs);
         SAFE_DELETE(rhs);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Assignment"; }
 
 private:
@@ -179,7 +180,7 @@ public:
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Arguments"; }
 
 public:
@@ -194,7 +195,7 @@ public:
     ~NFunctionCall() {
         SAFE_DELETE(argNodes);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionCall"; }
 
 private:
@@ -209,8 +210,8 @@ public:
     ~NMemberAccess() {
         SAFE_DELETE(base);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
-    virtual CodegenResult allocgen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
+    virtual AllocCodegenResult allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "MemberAccess"; }
 
 private:
@@ -227,8 +228,8 @@ public:
         SAFE_DELETE(array);
         SAFE_DELETE(index);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
-    virtual CodegenResult allocgen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
+    virtual AllocCodegenResult allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "ArraySubscript"; }
 
 private:
@@ -244,7 +245,7 @@ public:
             SAFE_DELETE(elem);
         }
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "InitializerList"; }
 
     const std::vector<NExpression*>& getElements() const { return elements; }

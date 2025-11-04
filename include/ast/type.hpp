@@ -12,7 +12,9 @@ namespace llvm {
 namespace toyc::ast {
 
 class ASTContext;
-class CodegenResult;
+class TypeValue;
+template<typename T> class CodegenResult;
+using TypeCodegenResult = CodegenResult<TypeValue>;
 class NType;
 using NTypePtr = std::shared_ptr<NType>;
 
@@ -42,7 +44,7 @@ public:
     virtual ~NType() = default;
 
     virtual std::string getType() const { return "Type"; }
-    virtual CodegenResult getLLVMType(ASTContext &context);
+    virtual TypeCodegenResult getLLVMType(ASTContext &context);
 
     virtual bool isArray() const { return type == VAR_TYPE_ARRAY; }
     virtual bool isPointer() const { return type == VAR_TYPE_PTR; }
@@ -62,7 +64,7 @@ public:
     NPointerType(VarType pointeeType, int level = 1);
 
     virtual std::string getType() const override { return "PointerType"; }
-    virtual CodegenResult getLLVMType(ASTContext &context) override;
+    virtual TypeCodegenResult getLLVMType(ASTContext &context) override;
     virtual NTypePtr getElementType() const override;
     virtual NTypePtr getAddrType() override;
     virtual std::string getName() const override {
@@ -80,7 +82,7 @@ public:
     NArrayType(NType *elementType, const std::vector<int> &dimensions);
 
     virtual std::string getType() const override { return "ArrayType"; }
-    virtual CodegenResult getLLVMType(ASTContext &context) override;
+    virtual TypeCodegenResult getLLVMType(ASTContext &context) override;
     virtual NTypePtr getElementType() const override;
     virtual std::string getName() const override {
         std::string name = elementType->getName();
@@ -116,7 +118,7 @@ public:
     virtual ~NStructType();
 
     virtual std::string getType() const override { return "StructType"; }
-    virtual CodegenResult getLLVMType(ASTContext &context) override;
+    virtual TypeCodegenResult getLLVMType(ASTContext &context) override;
     virtual std::string getName() const override { return name; }
 
     int getMemberIndex(const std::string &memberName) const;

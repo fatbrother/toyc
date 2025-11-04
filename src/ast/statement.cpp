@@ -14,50 +14,55 @@ NStatement::~NStatement() {
     SAFE_DELETE(next);
 }
 
-CodegenResult NExpressionStatement::codegen(ASTContext &context) {
+StmtCodegenResult NExpressionStatement::codegen(ASTContext &context) {
     if (nullptr == expression) {
-        return CodegenResult();
+        return StmtCodegenResult();
     }
 
-    return expression->codegen(context);
+    ExprCodegenResult exprResult = expression->codegen(context);
+    if (false == exprResult.isSuccess()) {
+        return StmtCodegenResult("Failed to generate code for expression statement") << exprResult;
+    }
+
+    return StmtCodegenResult();
 }
 
-CodegenResult NDeclarationStatement::codegen(ASTContext &context) {
+StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
     llvm::AllocaInst *allocaInst = nullptr;
 
     if (true == type->isStruct()) {
         auto structType = std::static_pointer_cast<NStructType>(type);
         if (nullptr != structType->getMembers()) {
-            CodegenResult structCodegenResult = structType->getLLVMType(context);
-            if (false == structCodegenResult.isSuccess() || nullptr == structCodegenResult.getLLVMType()) {
-                return structCodegenResult << CodegenResult("Failed to generate LLVM type for struct declaration");
+            TypeCodegenResult structStmtCodegenResult = structType->getLLVMType(context);
+            if (false == structStmtCodegenResult.isSuccess()) {
+                return StmtCodegenResult("Failed to generate LLVM type for struct declaration") << structStmtCodegenResult;
             }
 
             if (context.typeTable->lookup(structType->getName()).first) {
-                return CodegenResult("Struct type already declared: " + structType->getName());
+                return StmtCodegenResult("Struct type already declared: " + structType->getName());
             } else {
                 context.typeTable->insert(structType->getName(), type);
             }
         }
     }
 
-    CodegenResult typeResult = type->getLLVMType(context);
-    if (false == typeResult.isSuccess() || nullptr == typeResult.getLLVMType()) {
-        return typeResult << CodegenResult("Failed to get LLVM type for declaration");
+    TypeCodegenResult typeResult = type->getLLVMType(context);
+    if (false == typeResult.isSuccess()) {
+        return StmtCodegenResult("Failed to get LLVM type for variable declaration") << typeResult;
     }
 
     for (auto currentDeclarator = declarator; currentDeclarator != nullptr; currentDeclarator = currentDeclarator->next) {
         if (true == context.variableTable->lookup(currentDeclarator->getName(), false).first) {
-            return CodegenResult("Variable already declared in this scope: " + currentDeclarator->getName());
+            return StmtCodegenResult("Variable already declared in this scope: " + currentDeclarator->getName());
         }
 
         if (currentDeclarator->isArray()) {
             const std::vector<int>& dimensions = currentDeclarator->getArrayDimensions();
             NTypePtr arrayVarType = std::make_shared<NArrayType>(type, dimensions);
-            CodegenResult arrayTypeResult = arrayVarType->getLLVMType(context);
+            TypeCodegenResult arrayTypeResult = arrayVarType->getLLVMType(context);
             llvm::Type *arrayType = arrayTypeResult.getLLVMType();
             if (!arrayTypeResult.isSuccess() || nullptr == arrayType) {
-                return arrayTypeResult << CodegenResult("Failed to get LLVM type for array");
+                return StmtCodegenResult("Failed to get LLVM type for array declaration") << arrayTypeResult;
             }
 
             allocaInst = context.builder.CreateAlloca(
@@ -83,20 +88,20 @@ CodegenResult NDeclarationStatement::codegen(ASTContext &context) {
                             indices
                         );
 
-                        CodegenResult elemResult = elements[i]->codegen(context);
+                        ExprCodegenResult elemResult = elements[i]->codegen(context);
                         if (false == elemResult.isSuccess() || nullptr == elemResult.getValue()) {
-                            return elemResult << CodegenResult("Array initializer element " + std::to_string(i) + " codegen failed");
+                            return StmtCodegenResult("Array initializer element " + std::to_string(i) + " codegen failed") << elemResult;
                         }
 
-                        CodegenResult castResult = typeCast(elemResult.getValue(), elemResult.getType(), type, context);
+                        ExprCodegenResult castResult = typeCast(elemResult.getValue(), elemResult.getType(), type, context);
                         if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
-                            return castResult << CodegenResult("Type cast failed for array initializer element " + std::to_string(i));
+                            return StmtCodegenResult("Type cast failed for array initializer element " + std::to_string(i)) << castResult;
                         }
 
                         context.builder.CreateStore(castResult.getValue(), elementPtr);
                     }
                 } else {
-                    return CodegenResult("Array must be initialized with initializer list");
+                    return StmtCodegenResult("Array must be initialized with initializer list");
                 }
             }
             continue;
@@ -117,26 +122,26 @@ CodegenResult NDeclarationStatement::codegen(ASTContext &context) {
             continue;
         }
 
-        CodegenResult codegenResult = currentDeclarator->codegen(context);
+        ExprCodegenResult codegenResult = currentDeclarator->codegen(context);
         llvm::Value *value = codegenResult.getValue();
         NTypePtr valType = codegenResult.getType();
         if ((false == codegenResult.isSuccess()) || (nullptr == value)) {
-            return codegenResult << CodegenResult("Initializer codegen failed for variable: " + currentDeclarator->getName());
+            return StmtCodegenResult("Initializer codegen failed for variable: " + currentDeclarator->getName()) << codegenResult;
         } else {
-            CodegenResult castResult = typeCast(value, valType, type, context);
+            ExprCodegenResult castResult = typeCast(value, valType, type, context);
             if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
-                return castResult << CodegenResult("Type cast failed for initializer of variable: " + currentDeclarator->getName());
+                return StmtCodegenResult("Type cast failed for initializer of variable: " + currentDeclarator->getName()) << castResult;
             }
             context.builder.CreateStore(value, allocaInst);
         }
     }
 
-    return CodegenResult(allocaInst);
+    return StmtCodegenResult();
 }
 
-CodegenResult NBlock::codegen(ASTContext &context) {
+StmtCodegenResult NBlock::codegen(ASTContext &context) {
     llvm::Function *parentFunction = context.currentFunction->getFunction();
-    llvm::BasicBlock *block = llvm::BasicBlock::Create(context.llvmContext, name, parentFunction);
+    block = llvm::BasicBlock::Create(context.llvmContext, name, parentFunction);
 
     context.builder.SetInsertPoint(block);
 
@@ -161,9 +166,9 @@ CodegenResult NBlock::codegen(ASTContext &context) {
             stmt->setParent(parent);
         }
 
-        CodegenResult stmtResult = stmt->codegen(context);
+        StmtCodegenResult stmtResult = stmt->codegen(context);
         if (false == stmtResult.isSuccess()) {
-            return stmtResult << CodegenResult("Failed to generate code for block statement");
+            return stmtResult << StmtCodegenResult("Failed to generate code for block statement");
         }
     }
 
@@ -173,34 +178,34 @@ CodegenResult NBlock::codegen(ASTContext &context) {
         context.builder.SetInsertPoint(nextBlock);
     }
 
-    return CodegenResult(block);
+    return StmtCodegenResult();
 }
 
-CodegenResult NReturnStatement::codegen(ASTContext &context) {
+StmtCodegenResult NReturnStatement::codegen(ASTContext &context) {
     if (nullptr != expression) {
-        CodegenResult exprResult = expression->codegen(context);
+        ExprCodegenResult exprResult = expression->codegen(context);
         llvm::Value *value = exprResult.getValue();
         NTypePtr type = exprResult.getType();
         if (false == exprResult.isSuccess() || nullptr == value) {
-            return exprResult << CodegenResult("Failed to generate code for return expression");
+            return StmtCodegenResult("Failed to generate code for return expression") << exprResult;
         }
-        CodegenResult castResult = typeCast(
+        ExprCodegenResult castResult = typeCast(
             value,
             type,
             context.currentFunction->getReturnType(),
             context);
         if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
-            return castResult << CodegenResult("Type cast failed for return statement");
+            return StmtCodegenResult("Type cast failed for return statement") << castResult;
         }
-        return CodegenResult(context.builder.CreateRet(value));
+        context.builder.CreateRet(value);
     } else {
-        return CodegenResult(context.builder.CreateRetVoid());
+        context.builder.CreateRetVoid();
     }
 
-    return CodegenResult();
+    return StmtCodegenResult();
 }
 
-CodegenResult NIfStatement::codegen(ASTContext &context) {
+StmtCodegenResult NIfStatement::codegen(ASTContext &context) {
     llvm::Function *function = context.currentFunction->getFunction();
     llvm::BasicBlock *thenBlock = nullptr;
     llvm::BasicBlock *elseBlock = nullptr;
@@ -210,10 +215,10 @@ CodegenResult NIfStatement::codegen(ASTContext &context) {
 
     context.builder.CreateBr(conditionBlock);
     context.builder.SetInsertPoint(conditionBlock);
-    CodegenResult condResult = conditionNode->codegen(context);
+    ExprCodegenResult condResult = conditionNode->codegen(context);
     conditionValue = condResult.getValue();
-    if (false == condResult.isSuccess() || nullptr == conditionValue) {
-        return condResult << CodegenResult("Condition code generation failed for if statement");
+    if (false == condResult.isSuccess()) {
+        return StmtCodegenResult("Condition code generation failed for if statement") << condResult;
     }
 
     // Get the actual block after condition evaluation (may have changed due to short-circuit)
@@ -222,30 +227,30 @@ CodegenResult NIfStatement::codegen(ASTContext &context) {
     thenBlockNode->setParent(parent);
     thenBlockNode->setName("if_then");
     thenBlockNode->setNextBlock(mergeBlock);
-    CodegenResult thenBlockResult = thenBlockNode->codegen(context);
-    thenBlock = static_cast<llvm::BasicBlock *>(thenBlockResult.getValue());
-    if (false == thenBlockResult.isSuccess() || nullptr == thenBlock) {
-        return thenBlockResult << CodegenResult("Then block generation failed for if statement");
+    StmtCodegenResult thenBlockResult = thenBlockNode->codegen(context);
+    if (false == thenBlockResult.isSuccess()) {
+        return StmtCodegenResult("Then block generation failed for if statement") << thenBlockResult;
     }
+    thenBlock = thenBlockNode->getBlock();
 
     if (nullptr != elseBlockNode) {
         elseBlockNode->setParent(parent);
         elseBlockNode->setName("if_else");
         elseBlockNode->setNextBlock(mergeBlock);
-        CodegenResult elseBlockResult = elseBlockNode->codegen(context);
-        elseBlock = static_cast<llvm::BasicBlock *>(elseBlockResult.getValue());
-        if (false == elseBlockResult.isSuccess() || nullptr == elseBlock) {
-            return elseBlockResult << CodegenResult("Else block generation failed for if statement");
+        StmtCodegenResult elseBlockResult = elseBlockNode->codegen(context);
+        if (false == elseBlockResult.isSuccess()) {
+            return StmtCodegenResult("Else block generation failed for if statement") << elseBlockResult;
         }
+        elseBlock = elseBlockNode->getBlock();
     }
 
     context.builder.SetInsertPoint(conditionEndBlock);
     context.builder.CreateCondBr(conditionValue, thenBlock, (nullptr != elseBlock) ? elseBlock : mergeBlock);
     context.builder.SetInsertPoint(mergeBlock);
-    return mergeBlock;
+    return StmtCodegenResult();
 }
 
-CodegenResult NForStatement::codegen(ASTContext &context) {
+StmtCodegenResult NForStatement::codegen(ASTContext &context) {
     llvm::Function *function = context.currentFunction->getFunction();
     llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(context.llvmContext, "for_after", function);
     llvm::BasicBlock *loopCondition = llvm::BasicBlock::Create(context.llvmContext, "for_condition", function);
@@ -264,28 +269,28 @@ CodegenResult NForStatement::codegen(ASTContext &context) {
     bodyNode->setParent(this);
     bodyNode->setName("for_body");
     bodyNode->setNextBlock(loopIncrement);
-    CodegenResult bodyResult = bodyNode->codegen(context);
-    loopBody = static_cast<llvm::BasicBlock *>(bodyResult.getValue());
-    if (false == bodyResult.isSuccess() || nullptr == loopBody) {
-        return bodyResult << CodegenResult("For loop body generation failed");
+    StmtCodegenResult bodyResult = bodyNode->codegen(context);
+    if (false == bodyResult.isSuccess()) {
+        return StmtCodegenResult("For loop body generation failed") << bodyResult;
     }
+    loopBody = bodyNode->getBlock();
 
     incrementNode->codegen(context);
     context.builder.CreateBr(loopCondition);
     context.builder.SetInsertPoint(loopCondition);
-    CodegenResult condResult = conditionNode->codegen(context);
+    ExprCodegenResult condResult = conditionNode->codegen(context);
     llvm::Value *conditionValue = condResult.getValue();
     NTypePtr conditionType = condResult.getType();
-    if (false == condResult.isSuccess() || nullptr == conditionValue) {
-        return condResult << CodegenResult("For loop condition generation failed");
+    if (false == condResult.isSuccess()) {
+        return StmtCodegenResult("For loop condition generation failed") << condResult;
     }
-    CodegenResult conditionCastResult = typeCast(
+    ExprCodegenResult conditionCastResult = typeCast(
         conditionValue,
         conditionType,
         VAR_TYPE_BOOL,
         context);
     if (false == conditionCastResult.isSuccess()) {
-        return conditionCastResult << CodegenResult("Type cast failed for for loop condition");
+        return StmtCodegenResult("Type cast failed for for loop condition") << conditionCastResult;
     }
 
     // Get the actual block after condition evaluation (may have changed due to short-circuit)
@@ -300,10 +305,10 @@ CodegenResult NForStatement::codegen(ASTContext &context) {
 
     context.builder.SetInsertPoint(afterBlock);
 
-    return CodegenResult(afterBlock);
+    return StmtCodegenResult();
 }
 
-CodegenResult NWhileStatement::codegen(ASTContext &context) {
+StmtCodegenResult NWhileStatement::codegen(ASTContext &context) {
     llvm::Function *function = context.builder.GetInsertBlock()->getParent();
     llvm::BasicBlock *loopCondition = llvm::BasicBlock::Create(context.llvmContext, "while_condition", function);
     llvm::BasicBlock *loopBody = nullptr;
@@ -311,19 +316,19 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
     llvm::BasicBlock *previousBlock = context.builder.GetInsertBlock();
 
     context.builder.SetInsertPoint(loopCondition);
-    CodegenResult condResult = conditionNode->codegen(context);
+    ExprCodegenResult condResult = conditionNode->codegen(context);
     llvm::Value *conditionValue = condResult.getValue();
     NTypePtr conditionType = condResult.getType();
-    if (false == condResult.isSuccess() || nullptr == conditionValue) {
-        return condResult << CodegenResult("While loop condition generation failed");
+    if (false == condResult.isSuccess()) {
+        return StmtCodegenResult("While loop condition generation failed") << condResult;
     }
-    CodegenResult castResult = typeCast(
+    ExprCodegenResult castResult = typeCast(
         conditionValue,
         conditionType,
         VAR_TYPE_BOOL,
         context);
     if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
-        return castResult << CodegenResult("Type cast failed for while loop condition");
+        return StmtCodegenResult("Type cast failed for while loop condition") << castResult;
     }
     conditionValue = castResult.getValue();
 
@@ -338,10 +343,10 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
     bodyNode->setParent(this);
     bodyNode->setName("while_body");
     bodyNode->setNextBlock(loopCondition);
-    CodegenResult bodyResult = bodyNode->codegen(context);
-    loopBody = static_cast<llvm::BasicBlock *>(bodyResult.getValue());
+    StmtCodegenResult bodyResult = bodyNode->codegen(context);
+    loopBody = bodyNode->getBlock();
     if (false == bodyResult.isSuccess() || nullptr == loopBody) {
-        return bodyResult << CodegenResult("While loop body generation failed");
+        return StmtCodegenResult("While loop body generation failed") << bodyResult;
     }
 
     context.builder.SetInsertPoint(conditionEndBlock);
@@ -356,17 +361,17 @@ CodegenResult NWhileStatement::codegen(ASTContext &context) {
 
     context.builder.SetInsertPoint(afterBlock);
 
-    return afterBlock;
+    return StmtCodegenResult();
 }
 
-CodegenResult NBreakStatement::codegen(ASTContext &context) {
+StmtCodegenResult NBreakStatement::codegen(ASTContext &context) {
     auto jumpCtx = context.getCurrentJumpContext();
     if (!jumpCtx) {
-        return CodegenResult("Break statement not within a loop or switch");
+        return StmtCodegenResult("Break statement not within a loop or switch");
     }
 
     if (!jumpCtx->supportsBreak()) {
-        return CodegenResult("Break statement not supported in current context");
+        return StmtCodegenResult("Break statement not supported in current context");
     }
 
     // Get the break target from the jump context
@@ -379,17 +384,17 @@ CodegenResult NBreakStatement::codegen(ASTContext &context) {
         context.llvmContext, "after_break", function);
     context.builder.SetInsertPoint(unreachableBlock);
 
-    return CodegenResult();
+    return StmtCodegenResult();
 }
 
-CodegenResult NContinueStatement::codegen(ASTContext &context) {
+StmtCodegenResult NContinueStatement::codegen(ASTContext &context) {
     auto jumpCtx = context.getCurrentJumpContext();
     if (!jumpCtx) {
-        return CodegenResult("Continue statement not within a loop");
+        return StmtCodegenResult("Continue statement not within a loop");
     }
 
     if (!jumpCtx->supportsContinue()) {
-        return CodegenResult("Continue statement not supported in " +
+        return StmtCodegenResult("Continue statement not supported in " +
                            jumpCtx->getContextName() + " context");
     }
 
@@ -403,16 +408,16 @@ CodegenResult NContinueStatement::codegen(ASTContext &context) {
         context.llvmContext, "after_continue", function);
     context.builder.SetInsertPoint(unreachableBlock);
 
-    return CodegenResult();
+    return StmtCodegenResult();
 }
 
-CodegenResult NLabelStatement::codegen(ASTContext &context) {
+StmtCodegenResult NLabelStatement::codegen(ASTContext &context) {
     llvm::Function *function = context.builder.GetInsertBlock()->getParent();
     llvm::BasicBlock *labelBlock = context.getLabel(label);
 
     if (labelBlock) {
         if (!labelBlock->empty()) {
-            return CodegenResult("Label '" + label + "' is already defined");
+            return StmtCodegenResult("Label '" + label + "' is already defined");
         }
         context.pendingGotos.erase(label);
     } else {
@@ -432,16 +437,16 @@ CodegenResult NLabelStatement::codegen(ASTContext &context) {
 
     // Generate code for the statement after the label
     if (statement) {
-        CodegenResult result = statement->codegen(context);
+        StmtCodegenResult result = statement->codegen(context);
         if (!result.isSuccess()) {
-            return result << CodegenResult("Failed to generate code for statement after label");
+            return result << StmtCodegenResult("Failed to generate code for statement after label");
         }
     }
 
-    return CodegenResult(labelBlock);
+    return StmtCodegenResult();
 }
 
-CodegenResult NGotoStatement::codegen(ASTContext &context) {
+StmtCodegenResult NGotoStatement::codegen(ASTContext &context) {
     llvm::Function *function = context.builder.GetInsertBlock()->getParent();
     llvm::BasicBlock *targetBlock = context.getLabel(label);
 
@@ -462,21 +467,21 @@ CodegenResult NGotoStatement::codegen(ASTContext &context) {
         context.llvmContext, "after_goto", function);
     context.builder.SetInsertPoint(afterGoto);
 
-    return CodegenResult();
+    return StmtCodegenResult();
 }
 
-CodegenResult NSwitchStatement::codegen(ASTContext &context) {
-    CodegenResult condResult = condition->codegen(context);
+StmtCodegenResult NSwitchStatement::codegen(ASTContext &context) {
+    ExprCodegenResult condResult = condition->codegen(context);
     llvm::Value *condValue = condResult.getValue();
     NTypePtr condType = condResult.getType();
 
-    if (false == condResult.isSuccess() || nullptr == condValue) {
-        return condResult << CodegenResult("Failed to evaluate switch condition");
+    if (false == condResult.isSuccess()) {
+        return StmtCodegenResult("Failed to evaluate switch condition") << condResult;
     }
 
-    CodegenResult castResult = typeCast(condValue, condType, VAR_TYPE_INT, context);
+    ExprCodegenResult castResult = typeCast(condValue, condType, VAR_TYPE_INT, context);
     if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
-        return castResult << CodegenResult("Failed to cast switch condition to integer");
+        return StmtCodegenResult("Failed to cast switch condition to integer") << castResult;
     }
     condValue = castResult.getValue();
 
@@ -519,9 +524,9 @@ CodegenResult NSwitchStatement::codegen(ASTContext &context) {
     context.currentSwitchDefault = defaultBlock;
     context.switchHasDefault = false;
 
-    CodegenResult bodyResult = body->codegen(context);
+    StmtCodegenResult bodyResult = body->codegen(context);
     if (false == bodyResult.isSuccess()) {
-        return bodyResult << CodegenResult("Failed to generate switch body");
+        return bodyResult << StmtCodegenResult("Failed to generate switch body");
     }
 
     llvm::BasicBlock *lastBlock = context.builder.GetInsertBlock();
@@ -537,15 +542,15 @@ CodegenResult NSwitchStatement::codegen(ASTContext &context) {
 
     context.builder.SetInsertPoint(afterBlock);
 
-    return CodegenResult(afterBlock);
+    return StmtCodegenResult();
 }
 
-CodegenResult NCaseStatement::codegen(ASTContext &context) {
+StmtCodegenResult NCaseStatement::codegen(ASTContext &context) {
     llvm::Function *function = context.currentFunction->getFunction();
 
     llvm::SwitchInst *switchInst = context.currentSwitch;
     if (!switchInst) {
-        return CodegenResult("Case statement outside of switch");
+        return StmtCodegenResult("Case statement outside of switch");
     }
 
     llvm::BasicBlock *caseBlock;
@@ -566,15 +571,15 @@ CodegenResult NCaseStatement::codegen(ASTContext &context) {
 
     // Register the case with the switch instruction
     if (false == isDefault) {
-        CodegenResult valResult = value->codegen(context);
+        ExprCodegenResult valResult = value->codegen(context);
         llvm::Value *caseValue = valResult.getValue();
-        if (false == valResult.isSuccess() || nullptr == caseValue) {
-            return valResult << CodegenResult("Failed to evaluate case value");
+        if (false == valResult.isSuccess()) {
+            return StmtCodegenResult("Failed to evaluate case value") << valResult;
         }
 
         llvm::ConstantInt *constInt = llvm::dyn_cast<llvm::ConstantInt>(caseValue);
-        if (!constInt) {
-            return CodegenResult("Case value must be a constant integer");
+        if (nullptr == constInt) {
+            return StmtCodegenResult("Case value must be a constant integer");
         }
 
         switchInst->addCase(constInt, caseBlock);
@@ -582,5 +587,5 @@ CodegenResult NCaseStatement::codegen(ASTContext &context) {
 
     context.builder.SetInsertPoint(caseBlock);
 
-    return CodegenResult();
+    return StmtCodegenResult();
 }

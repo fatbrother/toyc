@@ -10,7 +10,7 @@ namespace toyc::ast {
 class NStatement : public BasicNode {
 public:
     virtual ~NStatement() override;
-    virtual CodegenResult codegen(ASTContext &context) = 0;
+    virtual StmtCodegenResult codegen(ASTContext &context) = 0;
     virtual std::string getType() const override { return "Statement"; }
     void setParent(NStatement *parent) { this->parent = parent; }
 
@@ -26,7 +26,7 @@ public:
     ~NDeclarationStatement() {
         SAFE_DELETE(declarator);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "DeclarationStatement"; }
 
 private:
@@ -40,7 +40,7 @@ public:
     ~NExpressionStatement() {
         SAFE_DELETE(expression);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ExpressionStatement"; }
 
 private:
@@ -54,16 +54,18 @@ public:
     ~NBlock() {
         SAFE_DELETE(statements);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Block"; }
     void setName(const std::string &name) { this->name = name; }
     void setNextBlock(llvm::BasicBlock *nextBlock) { this->nextBlock = nextBlock; }
     NStatement* getStatements() const { return statements; }
+    llvm::BasicBlock* getBlock() const { return block; }
 
 private:
     std::string name;
     NStatement *statements;
     llvm::BasicBlock *nextBlock = nullptr;
+    llvm::BasicBlock *block = nullptr;
 };
 
 class NReturnStatement : public NStatement {
@@ -72,7 +74,7 @@ public:
     ~NReturnStatement() {
         SAFE_DELETE(expression);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ReturnStatement"; }
 
 private:
@@ -103,7 +105,7 @@ public:
         SAFE_DELETE(thenBlockNode);
         SAFE_DELETE(elseBlockNode);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "IfStatement"; }
 
 private:
@@ -128,7 +130,7 @@ public:
         SAFE_DELETE(incrementNode);
         SAFE_DELETE(bodyNode);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ForStatement"; }
 
 private:
@@ -152,7 +154,7 @@ public:
         SAFE_DELETE(conditionNode);
         SAFE_DELETE(bodyNode);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "WhileStatement"; }
 
 private:
@@ -165,7 +167,7 @@ class NBreakStatement : public NStatement {
 public:
     NBreakStatement() = default;
     ~NBreakStatement() = default;
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "BreakStatement"; }
 };
 
@@ -173,7 +175,7 @@ class NContinueStatement : public NStatement {
 public:
     NContinueStatement() = default;
     ~NContinueStatement() = default;
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ContinueStatement"; }
 };
 
@@ -184,7 +186,7 @@ public:
     ~NLabelStatement() {
         SAFE_DELETE(statement);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "LabelStatement"; }
 
 private:
@@ -196,7 +198,7 @@ class NGotoStatement : public NStatement {
 public:
     NGotoStatement(const std::string& label) : label(label) {}
     ~NGotoStatement() = default;
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "GotoStatement"; }
 
 private:
@@ -211,7 +213,7 @@ public:
         SAFE_DELETE(condition);
         SAFE_DELETE(body);
     }
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "SwitchStatement"; }
 
 private:
@@ -232,7 +234,7 @@ public:
         SAFE_DELETE(statements);
     }
 
-    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "CaseStatement"; }
 
     NExpression* getValue() const { return value; }
