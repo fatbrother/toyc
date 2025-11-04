@@ -21,7 +21,6 @@ WS  [ \t\v\n\f]
 #include "ast/node.hpp"
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
-#include "ast/structure.hpp"
 #include "ast/external_definition.hpp"
 #include "y.tab.hpp"
 
@@ -94,7 +93,7 @@ yycolumn += yyleng;
 {HP}{H}+{IS}?				        { SAVE_TOKEN; return I_CONSTANT; }
 {NZ}{D}*{IS}?				        { SAVE_TOKEN; return I_CONSTANT; }
 "0"{O}*{IS}?				        { SAVE_TOKEN; return I_CONSTANT; }
-{CP}?"'"([^'\\\n]|{ES})+"'"		    { SAVE_TOKEN; return I_CONSTANT; }
+{CP}?"'"([^'\\\n]|{ES})+"'"		    { SAVE_TOKEN; return C_CONSTANT; }
 
 {D}+{E}{FS}?				        { SAVE_TOKEN; return F_CONSTANT; }
 {D}*"."{D}+{E}?{FS}?			    { SAVE_TOKEN; return F_CONSTANT; }

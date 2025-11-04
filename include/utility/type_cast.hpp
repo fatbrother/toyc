@@ -1,0 +1,24 @@
+#pragma once
+
+#include <string>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LLVMContext.h>
+
+#include "ast/type.hpp"
+
+namespace toyc::utility {
+
+toyc::ast::CodegenResult castFromBool(llvm::Value *value, toyc::ast::VarType toType,
+                                      llvm::LLVMContext &context, llvm::IRBuilder<> &builder);
+
+toyc::ast::CodegenResult castToBool(llvm::Value *value, toyc::ast::VarType fromType,
+                        llvm::LLVMContext &context, llvm::IRBuilder<> &builder);
+
+toyc::ast::CodegenResult typeCast(llvm::Value *value, const toyc::ast::NTypePtr fromType,
+                                  const toyc::ast::NTypePtr toType, toyc::ast::ASTContext &context);
+
+toyc::ast::CodegenResult typeCast(llvm::Value *value, const toyc::ast::NTypePtr fromType,
+                                  toyc::ast::VarType toType, toyc::ast::ASTContext &context);
+
+} // namespace toyc::utility

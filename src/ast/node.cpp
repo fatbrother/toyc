@@ -1,0 +1,73 @@
+#include "ast/node.hpp"
+
+namespace toyc::ast {
+
+CodegenResult& CodegenResult::operator<<(const CodegenResult &other) {
+    if (!other.isSuccess()) {
+        if (false == this->isSuccess()) {
+            if (!this->errorMessage.empty()) {
+                this->errorMessage += "\n";
+            }
+
+            this->errorMessage += other.errorMessage;
+        }
+    }
+    return *this;
+}
+
+ASTContext::ASTContext() : module("toyc", llvmContext), builder(llvmContext) {
+    pushScope();
+}
+
+void ASTContext::pushJumpContext(std::shared_ptr<NJumpContext> ctx) {
+    jumpContextStack.push(ctx);
+}
+
+void ASTContext::popJumpContext() {
+    if (!jumpContextStack.empty()) {
+        jumpContextStack.pop();
+    }
+}
+
+std::shared_ptr<NJumpContext> ASTContext::getCurrentJumpContext() const {
+    return jumpContextStack.empty() ? nullptr : jumpContextStack.top();
+}
+
+void ASTContext::registerLabel(const std::string& name, llvm::BasicBlock* block) {
+    labels[name] = block;
+}
+
+llvm::BasicBlock* ASTContext::getLabel(const std::string& name) {
+    auto it = labels.find(name);
+    return (it != labels.end()) ? it->second : nullptr;
+}
+
+void ASTContext::clearLabels() {
+    labels.clear();
+    pendingGotos.clear();
+}
+
+void ASTContext::pushScope() {
+    variableTable = new ScopeTable<std::pair<llvm::AllocaInst *, NTypePtr>>(variableTable);
+    typeTable = new ScopeTable<NTypePtr>(typeTable);
+}
+
+void ASTContext::popScope() {
+    if (variableTable) {
+        ScopeTable<std::pair<llvm::AllocaInst *, NTypePtr>> *parent = variableTable->parent;
+        delete variableTable;
+        variableTable = parent;
+    }
+    if (typeTable) {
+        ScopeTable<NTypePtr> *parent = typeTable->parent;
+        delete typeTable;
+        typeTable = parent;
+    }
+}
+
+// BasicNode implementation
+CodegenResult BasicNode::codegen(ASTContext &context) {
+    return CodegenResult("Codegen not implemented for this node type: " + getType());
+}
+
+} // namespace toyc::ast

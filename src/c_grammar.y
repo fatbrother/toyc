@@ -5,7 +5,6 @@
 #include "ast/node.hpp"
 #include "ast/expression.hpp"
 #include "ast/statement.hpp"
-#include "ast/structure.hpp"
 #include "ast/external_definition.hpp"
 #include "utility/error_handler.hpp"
 
@@ -38,6 +37,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 	toyc::ast::NParameter *parameter;
 	toyc::ast::NArguments *arguments;
 	toyc::ast::NStructDeclaration *struct_declaration;
+	toyc::ast::NInitializerList *initializer_list;
 	toyc::ast::BineryOperator bop;
 	std::string *string;
 	int token;
@@ -46,7 +46,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 
 %define parse.error verbose
 
-%token	<string> IDENTIFIER I_CONSTANT F_CONSTANT STRING_LITERAL TYPEDEF_NAME
+%token	<string> IDENTIFIER I_CONSTANT F_CONSTANT C_CONSTANT STRING_LITERAL TYPEDEF_NAME
 %token	INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP PTR_OP AND_OP OR_OP
 %token	MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
@@ -62,6 +62,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 %type	<expression> expression unary_expression assignment_expression relational_expression equality_expression shift_expression additive_expression
 %type	<expression> multiplicative_expression primary_expression numeric postfix_expression conditional_expression logical_or_expression
 %type	<expression> logical_and_expression inclusive_or_expression exclusive_or_expression and_expression initializer
+%type   <initializer_list> initializer_list
 %type   <type_specifier> type_specifier struct_specifier
 %type   <struct_declaration> struct_declaration struct_declaration_list
 %type	<bop> relational_expression_op
@@ -301,9 +302,42 @@ init_declarator
 declarator
 	: pointer IDENTIFIER {
 		$$ = new toyc::ast::NDeclarator(*$2, $1);
+		delete $2;
 	}
 	| IDENTIFIER {
 		$$ = new toyc::ast::NDeclarator(*$1);
+		delete $1;
+	}
+	| pointer IDENTIFIER '[' I_CONSTANT ']' {
+		$$ = new toyc::ast::NDeclarator(*$2, $1);
+		$$->addArrayDimension(std::stoi(*$4));
+		delete $2;
+		delete $4;
+	}
+	| IDENTIFIER '[' I_CONSTANT ']' {
+		$$ = new toyc::ast::NDeclarator(*$1);
+		$$->addArrayDimension(std::stoi(*$3));
+		delete $1;
+		delete $3;
+	}
+	| pointer IDENTIFIER '[' ']' {
+		$$ = new toyc::ast::NDeclarator(*$2, $1);
+		$$->addArrayDimension(0);
+		delete $2;
+	}
+	| IDENTIFIER '[' ']' {
+		$$ = new toyc::ast::NDeclarator(*$1);
+		$$->addArrayDimension(0);
+		delete $1;
+	}
+	| declarator '[' I_CONSTANT ']' {
+		$$ = $1;
+		$$->addArrayDimension(std::stoi(*$3));
+		delete $3;
+	}
+	| declarator '[' ']' {
+		$$ = $1;
+		$$->addArrayDimension(0);
 	}
 	;
 
@@ -319,6 +353,23 @@ pointer
 initializer
 	: assignment_expression {
 		$$ = $1;
+	}
+	| '{' initializer_list '}' {
+		$$ = $2;
+	}
+	| '{' initializer_list ',' '}' {
+		$$ = $2;
+	}
+	;
+
+initializer_list
+	: initializer {
+		$$ = new toyc::ast::NInitializerList();
+		$$->push_back($1);
+	}
+	| initializer_list ',' initializer {
+		$$ = $1;
+		$$->push_back($3);
 	}
 	;
 
@@ -533,6 +584,9 @@ postfix_expression
 	: primary_expression {
 		$$ = $1;
 	  }
+	| postfix_expression '[' expression ']' {
+		$$ = new toyc::ast::NArraySubscript($1, $3);
+	  }
 	| postfix_expression INC_OP {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::R_INC, $1);
 	  }
@@ -590,6 +644,10 @@ numeric
         $$ = new toyc::ast::NInteger(atoi($1->c_str()));
 		delete $1;
       }
+	| C_CONSTANT {
+		$$ = new toyc::ast::NInteger((int)(*($1))[1]);
+		delete $1;
+	  }
     | F_CONSTANT {
 		$$ = new toyc::ast::NFloat(atof($1->c_str()));
 		delete $1;
@@ -613,8 +671,7 @@ relational_expression_op
 
 type_specifier
 	: TYPEDEF_NAME {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_DEFINED, *$1);
-		delete $1;
+
 	}
 	| BOOL {
 		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_BOOL);

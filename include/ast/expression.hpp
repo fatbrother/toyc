@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ast/node.hpp>
+#include "ast/node.hpp"
 
 #include <iostream>
 
@@ -134,10 +134,23 @@ public:
     std::string getName() const { return name; }
     bool isNonInitialized() const { return expr == nullptr; }
 
+    void addArrayDimension(int size) {
+        arrayDimensions.push_back(size);
+    }
+
+    bool isArray() const {
+        return !arrayDimensions.empty();
+    }
+
+    const std::vector<int>& getArrayDimensions() const {
+        return arrayDimensions;
+    }
+
 public:
     int pointerLevel = 0;
     NDeclarator *next = nullptr;
     NExpression *expr = nullptr;
+    std::vector<int> arrayDimensions;
 
 private:
     std::string name;
@@ -204,6 +217,41 @@ private:
     NExpression *base;
     std::string memberName;
     bool isPointerAccess;
+};
+
+class NArraySubscript : public NExpression {
+public:
+    NArraySubscript(NExpression *array, NExpression *index)
+        : array(array), index(index) {}
+    ~NArraySubscript() {
+        SAFE_DELETE(array);
+        SAFE_DELETE(index);
+    }
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual CodegenResult allocgen(ASTContext &context) override;
+    virtual std::string getType() const override { return "ArraySubscript"; }
+
+private:
+    NExpression *array;
+    NExpression *index;
+};
+
+class NInitializerList : public NExpression {
+public:
+    NInitializerList() {}
+    ~NInitializerList() {
+        for (auto elem : elements) {
+            SAFE_DELETE(elem);
+        }
+    }
+    virtual CodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "InitializerList"; }
+
+    const std::vector<NExpression*>& getElements() const { return elements; }
+    void push_back(NExpression *expr) { elements.push_back(expr); }
+
+private:
+    std::vector<NExpression*> elements;
 };
 
 } // namespace toyc::ast

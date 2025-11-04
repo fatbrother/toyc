@@ -25,9 +25,9 @@ public:
 public:
     NParameter *next = nullptr;
     bool isVariadic = false;
+    NTypePtr type;
 
 private:
-    NTypePtr type;
     std::string name;
 };
 

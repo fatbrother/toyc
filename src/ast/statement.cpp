@@ -1,12 +1,13 @@
 #include "ast/statement.hpp"
 
 #include "ast/external_definition.hpp"
-#include "ast/structure.hpp"
 #include "utility/raii_guard.hpp"
+#include "utility/type_cast.hpp"
 
 #include <iostream>
 
 using namespace toyc::ast;
+using namespace toyc::utility;
 
 NStatement::~NStatement() {
     SAFE_DELETE(parent);
@@ -22,14 +23,21 @@ CodegenResult NExpressionStatement::codegen(ASTContext &context) {
 }
 
 CodegenResult NDeclarationStatement::codegen(ASTContext &context) {
-    llvm::Type *llvmType = nullptr;
     llvm::AllocaInst *allocaInst = nullptr;
 
-    if ("StructType" == type->getType()) {
-        auto structType = static_cast<NStructType *>(type.get());
-        if (nullptr != structType->members) {
-            structType->codegen(context);
-            context.typeTable->insert(structType->name, type);
+    if (true == type->isStruct()) {
+        auto structType = std::static_pointer_cast<NStructType>(type);
+        if (nullptr != structType->getMembers()) {
+            CodegenResult structCodegenResult = structType->getLLVMType(context);
+            if (false == structCodegenResult.isSuccess() || nullptr == structCodegenResult.getLLVMType()) {
+                return structCodegenResult << CodegenResult("Failed to generate LLVM type for struct declaration");
+            }
+
+            if (context.typeTable->lookup(structType->getName()).first) {
+                return CodegenResult("Struct type already declared: " + structType->getName());
+            } else {
+                context.typeTable->insert(structType->getName(), type);
+            }
         }
     }
 
@@ -37,19 +45,69 @@ CodegenResult NDeclarationStatement::codegen(ASTContext &context) {
     if (false == typeResult.isSuccess() || nullptr == typeResult.getLLVMType()) {
         return typeResult << CodegenResult("Failed to get LLVM type for declaration");
     }
-    llvmType = typeResult.getLLVMType();
 
     for (auto currentDeclarator = declarator; currentDeclarator != nullptr; currentDeclarator = currentDeclarator->next) {
         if (true == context.variableTable->lookup(currentDeclarator->getName(), false).first) {
             return CodegenResult("Variable already declared in this scope: " + currentDeclarator->getName());
         }
 
-        allocaInst = context.builder.CreateAlloca(llvmType, nullptr, currentDeclarator->getName());
+        if (currentDeclarator->isArray()) {
+            const std::vector<int>& dimensions = currentDeclarator->getArrayDimensions();
+            NTypePtr arrayVarType = std::make_shared<NArrayType>(type, dimensions);
+            CodegenResult arrayTypeResult = arrayVarType->getLLVMType(context);
+            llvm::Type *arrayType = arrayTypeResult.getLLVMType();
+            if (!arrayTypeResult.isSuccess() || nullptr == arrayType) {
+                return arrayTypeResult << CodegenResult("Failed to get LLVM type for array");
+            }
+
+            allocaInst = context.builder.CreateAlloca(
+                arrayType,
+                nullptr,
+                currentDeclarator->getName()
+            );
+
+            context.variableTable->insert(currentDeclarator->getName(), std::make_pair(allocaInst, arrayVarType));
+
+            if (false == currentDeclarator->isNonInitialized()) {
+                auto *initList = static_cast<NInitializerList*>(currentDeclarator->expr);
+                if (nullptr != initList) {
+                    const std::vector<toyc::ast::NExpression *> &elements = initList->getElements();
+                    for (size_t i = 0; i < elements.size(); i++) {
+                        std::vector<llvm::Value*> indices;
+                        indices.push_back(llvm::ConstantInt::get(context.llvmContext, llvm::APInt(32, 0)));
+                        indices.push_back(llvm::ConstantInt::get(context.llvmContext, llvm::APInt(32, i)));
+
+                        llvm::Value *elementPtr = context.builder.CreateGEP(
+                            arrayType,
+                            allocaInst,
+                            indices
+                        );
+
+                        CodegenResult elemResult = elements[i]->codegen(context);
+                        if (false == elemResult.isSuccess() || nullptr == elemResult.getValue()) {
+                            return elemResult << CodegenResult("Array initializer element " + std::to_string(i) + " codegen failed");
+                        }
+
+                        CodegenResult castResult = typeCast(elemResult.getValue(), elemResult.getType(), type, context);
+                        if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
+                            return castResult << CodegenResult("Type cast failed for array initializer element " + std::to_string(i));
+                        }
+
+                        context.builder.CreateStore(castResult.getValue(), elementPtr);
+                    }
+                } else {
+                    return CodegenResult("Array must be initialized with initializer list");
+                }
+            }
+            continue;
+        }
+
+        allocaInst = context.builder.CreateAlloca(typeResult.getLLVMType(), nullptr, currentDeclarator->getName());
 
         // copy type and pointer level from declaration
         NTypePtr newType = nullptr;
-        if (declarator->pointerLevel > 0) {
-            newType = std::make_shared<NType>(VarType::VAR_TYPE_PTR, type, currentDeclarator->pointerLevel);
+        if (currentDeclarator->pointerLevel > 0) {
+            newType = std::make_shared<NPointerType>(type, currentDeclarator->pointerLevel);
         } else {
             newType = type;
         }
@@ -491,7 +549,7 @@ CodegenResult NCaseStatement::codegen(ASTContext &context) {
     }
 
     llvm::BasicBlock *caseBlock;
-    
+
     if (isDefault) {
         // Use the pre-created default block
         caseBlock = context.currentSwitchDefault;

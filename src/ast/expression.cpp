@@ -1,11 +1,12 @@
 #include "ast/expression.hpp"
 #include "ast/external_definition.hpp"
-#include "ast/structure.hpp"
+#include "utility/type_cast.hpp"
 
 #include <iostream>
 #include <map>
 
 using namespace toyc::ast;
+using namespace toyc::utility;
 
 CodegenResult NLogicalOperator::codegen(ASTContext &context) {
     // Evaluate left operand
@@ -91,9 +92,9 @@ CodegenResult NBinaryOperator::codegen(ASTContext &context) {
 
     if (op == EQ || op == NE || op == LE || op == GE || op == LT || op == GT) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
-        targetType = (lhsType->type > rhsType->type) ? lhsType->type : rhsType->type;
+        targetType = (lhsType->getVarType() > rhsType->getVarType()) ? lhsType->getVarType() : rhsType->getVarType();
     } else {
-        targetType = (true == isFloatingPointType(lhsType->type)) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;
+        targetType = (true == isFloatingPointType(lhsType->getVarType())) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;
         resultType = std::make_shared<NType>(targetType);
     }
 
@@ -264,11 +265,9 @@ CodegenResult NUnaryExpression::codegen(ASTContext &context) {
     }
 
     if (op == ADDR) {
-        resultType = type;
-        resultType->pointerLevel++;
+        resultType = type->getAddrType();
     } else if (op == DEREF) {
-        resultType = type;
-        resultType->pointerLevel--;
+        resultType = type->getElementType();
     } else if (op == LOG_NOT) {
         resultType = std::make_shared<NType>(VarType::VAR_TYPE_BOOL);
     } else {
@@ -341,6 +340,21 @@ CodegenResult NIdentifier::codegen(ASTContext &context) {
         return CodegenResult("Variable not found: " + name);
     }
 
+    if (nullptr != type && true == type->isArray()) {
+        std::vector<llvm::Value*> indices(2);
+        indices[0] = llvm::ConstantInt::get(context.llvmContext, llvm::APInt(32, 0));
+        indices[1] = llvm::ConstantInt::get(context.llvmContext, llvm::APInt(32, 0));
+
+        value = context.builder.CreateGEP(
+            allocaInst->getAllocatedType(),
+            allocaInst,
+            indices,
+            name + "_decay"
+        );
+
+        return CodegenResult(value, std::make_shared<NPointerType>(type->getElementType()));
+    }
+
     value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
     if (nullptr == value) {
         return CodegenResult("Load failed for variable: " + name);
@@ -398,7 +412,7 @@ CodegenResult NFunctionCall::codegen(ASTContext &context) {
 
     NParameter *paramIt = nullptr;
     NArguments* argNode = nullptr;
-    for (paramIt = function->getParams(), argNode = argNodes; paramIt != nullptr && argNode != nullptr; paramIt = paramIt->next, argNode = argNodes->next) {
+    for (paramIt = function->getParams(), argNode = argNodes; paramIt != nullptr && argNode != nullptr; paramIt = paramIt->next, argNode = argNode->next) {
         CodegenResult argResult = argNode->codegen(context);
         llvm::Value *argValue = argResult.getValue();
         NTypePtr argType = argResult.getType();
@@ -408,7 +422,7 @@ CodegenResult NFunctionCall::codegen(ASTContext &context) {
         CodegenResult castResult = typeCast(
             argValue,
             argType,
-            paramIt->getVarType()->type,
+            paramIt->getVarType(),
             context);
         if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
             return castResult << CodegenResult("Type cast failed for argument in function call: " + name);
@@ -451,7 +465,7 @@ CodegenResult NMemberAccess::allocgen(ASTContext &context) {
         return baseResult << CodegenResult("Base expression code generation failed for member access: " + memberName);
     }
 
-    if (baseType->pointerLevel > 0) {
+    if (true == baseType->isPointer() && true == isPointerAccess) {
         CodegenResult derefTypeResult = baseType->getLLVMType(context);
         if (false == derefTypeResult.isSuccess() || nullptr == derefTypeResult.getLLVMType()) {
             return derefTypeResult << CodegenResult("Failed to get LLVM type for dereferencing in member access");
@@ -459,21 +473,20 @@ CodegenResult NMemberAccess::allocgen(ASTContext &context) {
         baseValue = context.builder.CreateLoad(
             derefTypeResult.getLLVMType(),
             baseValue,
-            "deref_member_access");
-        baseType->pointerLevel--;
+            "deref_base");
+        baseType = baseType->getElementType();
     }
 
-    if (baseType->type != VarType::VAR_TYPE_STRUCT) {
+    if (false == baseType->isStruct()) {
         return CodegenResult("Base type is not a struct for member access: " + memberName);
     }
 
-    auto [isFound, typePtr] = context.typeTable->lookup(baseType->name);
-    if (false == isFound) {
-        return CodegenResult("Struct type not found in type table: " + baseType->name);
+    auto [isFound, typeDef] = context.typeTable->lookup(baseType->getName());
+    if (false == isFound || nullptr == typeDef) {
+        return CodegenResult("Struct type not found: " + baseType->getName());
     }
-    NStructType *structType = static_cast<NStructType *>(typePtr.get());
-
-    int memberIndex = structType->getMemberIndex(memberName);
+    auto structDef = std::static_pointer_cast<NStructType>(typeDef);
+    int memberIndex = structDef->getMemberIndex(memberName);
     if (memberIndex < 0) {
         return CodegenResult("Member not found in struct: " + memberName);
     }
@@ -483,12 +496,12 @@ CodegenResult NMemberAccess::allocgen(ASTContext &context) {
     indices.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), memberIndex));
 
     llvm::Value *memberPtr = context.builder.CreateGEP(
-        structType->llvmStructType,
+        structDef->getLLVMType(context).getLLVMType(),
         baseValue,
         indices,
         "member_ptr");
 
-    NTypePtr memberType = structType->getMemberType(memberName);
+    NTypePtr memberType = structDef->getMemberType(memberName);
 
     return CodegenResult(memberPtr, memberType);
 }
@@ -510,6 +523,75 @@ CodegenResult NFloat::codegen(ASTContext &context) {
 CodegenResult NString::codegen(ASTContext &context) {
     return CodegenResult(
         context.builder.CreateGlobalStringPtr(value, "string_literal"),
-        std::make_shared<NType>(VarType::VAR_TYPE_PTR, std::make_shared<NType>(VarType::VAR_TYPE_CHAR))
+        std::make_shared<NPointerType>(VarType::VAR_TYPE_CHAR)
     );
 }
+
+CodegenResult NArraySubscript::codegen(ASTContext &context) {
+    CodegenResult ptrResult = allocgen(context);
+    if (false == ptrResult.isSuccess()) {
+        return ptrResult << CodegenResult("Failed to generate pointer for array subscript");
+    }
+
+    llvm::Value *value = context.builder.CreateLoad(
+        ptrResult.getType()->getLLVMType(context).getLLVMType(),
+        ptrResult.getValue(),
+        "arrayelem"
+    );
+
+    return CodegenResult(value, ptrResult.getType());
+}
+
+CodegenResult NArraySubscript::allocgen(ASTContext &context) {
+    CodegenResult indexResult = index->codegen(context);
+    if (false == indexResult.isSuccess()) {
+        return indexResult << CodegenResult("Failed to generate code for array index expression");
+    }
+
+    CodegenResult arrayCodegenResult = array->codegen(context);
+    if (arrayCodegenResult.isSuccess() && arrayCodegenResult.getType() && arrayCodegenResult.getType()->isPointer()) {
+        CodegenResult elemLLVMTypeResult = arrayCodegenResult.getType()->getElementType()->getLLVMType(context);
+        if (false == elemLLVMTypeResult.isSuccess()) {
+            return elemLLVMTypeResult << CodegenResult("Failed to get element type for pointer subscript");
+        }
+
+        llvm::Value *elementPtr = context.builder.CreateGEP(
+            elemLLVMTypeResult.getLLVMType(),
+            arrayCodegenResult.getValue(),
+            indexResult.getValue(),
+            "arrayidx"
+        );
+
+        return CodegenResult(elementPtr, arrayCodegenResult.getType()->getElementType());
+    }
+
+    CodegenResult arrayResult = array->allocgen(context);
+    if (false == arrayResult.isSuccess()) {
+        return arrayResult << CodegenResult("Failed to generate lvalue for array in subscript operation");
+    }
+
+    llvm::Value *basePtr = arrayResult.getValue();
+    NTypePtr elemType = arrayResult.getType()->getElementType();
+    std::vector<llvm::Value*> indices(2);
+    indices[0] = llvm::ConstantInt::get(context.llvmContext, llvm::APInt(32, 0));
+    indices[1] = indexResult.getValue();
+
+    CodegenResult typeResult = elemType->getLLVMType(context);
+    if (false == typeResult.isSuccess() || nullptr == typeResult.getLLVMType()) {
+        return typeResult << CodegenResult("Failed to get LLVM type for array element in subscript operation");
+    }
+
+    llvm::Value *elementPtr = context.builder.CreateGEP(
+        arrayResult.getType()->getLLVMType(context).getLLVMType(),
+        basePtr,
+        indices,
+        "arrayidx"
+    );
+
+    return CodegenResult(elementPtr, elemType);
+}
+
+CodegenResult NInitializerList::codegen(ASTContext &context) {
+    return CodegenResult("InitializerList cannot be used directly in expressions");
+}
+

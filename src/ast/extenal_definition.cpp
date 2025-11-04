@@ -10,8 +10,11 @@ NParameter::NParameter(NType *type, NDeclarator *declarator)
     : isVariadic(false), type(nullptr), name("") {
     if (declarator) {
         name = declarator->getName();
-        if (declarator->pointerLevel > 0) {
-            this->type = std::make_shared<NType>(VarType::VAR_TYPE_PTR, type, declarator->pointerLevel);
+
+        if (declarator->isArray()) {
+            this->type = std::make_shared<NPointerType>(std::shared_ptr<NType>(type), 1);
+        } else if (declarator->pointerLevel > 0) {
+            this->type = std::make_shared<NPointerType>(std::shared_ptr<NType>(type), declarator->pointerLevel);
         } else {
             this->type = std::shared_ptr<NType>(type);
         }
