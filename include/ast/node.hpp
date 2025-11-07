@@ -267,6 +267,8 @@ struct ASTContext {
     std::map<std::string, NFunctionDefinition *> functionDefinitions;
     bool isInitializingFunction = false;
 
+    std::unique_ptr<TypeFactory> typeFactory;
+
     // Jump context stack for break/continue statements
     // Used by loops (for/while/do-while) and switch statements
     std::stack<std::shared_ptr<NJumpContext>> jumpContextStack;

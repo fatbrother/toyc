@@ -28,7 +28,7 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 %union
 {
 	toyc::ast::NExpression *expression;
-	toyc::ast::NType *type_specifier;
+	toyc::ast::TypeDescriptor *type_specifier;
 	toyc::ast::NDeclarator *declarator;
 	toyc::ast::NStatement *statement;
 	toyc::ast::NDeclarationStatement *declaration_specifiers;
@@ -674,28 +674,28 @@ type_specifier
 
 	}
 	| BOOL {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_BOOL);
+		$$ = toyc::ast::makeBoolDesc().release();
 	}
 	| CHAR {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_CHAR);
+		$$ = toyc::ast::makeCharDesc().release();
 	}
 	| SHORT {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_SHORT);
+		$$ = toyc::ast::makeShortDesc().release();
 	}
 	| INT {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_INT);
+		$$ = toyc::ast::makeIntDesc().release();
 	}
 	| LONG {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_LONG);
+		$$ = toyc::ast::makeLongDesc().release();
 	}
 	| FLOAT {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_FLOAT);
+		$$ = toyc::ast::makeFloatDesc().release();
 	}
 	| DOUBLE {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_DOUBLE);
+		$$ = toyc::ast::makeDoubleDesc().release();
 	}
 	| VOID {
-		$$ = new toyc::ast::NType(toyc::ast::VarType::VAR_TYPE_VOID);
+		$$ = toyc::ast::makeVoidDesc().release();
 	}
 	| struct_specifier {
 		$$ = $1;
@@ -704,14 +704,14 @@ type_specifier
 
 struct_specifier
 	: STRUCT IDENTIFIER '{' struct_declaration_list '}' {
-		$$ = new toyc::ast::NStructType(*$2, $4);
+		$$ = toyc::ast::makeStructDesc(*$2, $4).release();
 		delete $2;
 	}
 	| STRUCT '{' struct_declaration_list '}' {
-		$$ = new toyc::ast::NStructType("", $3);
+		$$ = toyc::ast::makeStructDesc("", $3).release();
 	}
 	| STRUCT IDENTIFIER {
-		$$ = new toyc::ast::NStructType(*$2, nullptr);
+		$$ = toyc::ast::makeStructDesc(*$2, nullptr).release();
 		delete $2;
 	}
 	;

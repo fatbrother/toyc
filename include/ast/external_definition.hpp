@@ -8,34 +8,33 @@
 
 namespace toyc::ast {
 
+class TypeDescriptor;
+
 class NParameter : public BasicNode {
 public:
-    NParameter() : isVariadic(true), type(nullptr), name("") {}
-    NParameter(NType *type, NDeclarator *declarator);
+    NParameter() : isVariadic(true), typeDesc(nullptr), name("") {}
+    NParameter(TypeDescriptor *typeDesc, NDeclarator *declarator);
 
-    ~NParameter() {
-        SAFE_DELETE(next);
-    }
+    ~NParameter();
     virtual std::string getType() const override { return "Parameter"; }
-    NTypePtr getVarType() const {
-        return type;
-    }
+
+    TypeDescriptor* getTypeDescriptor() const { return typeDesc; }
     std::string getName() const { return name; }
 
 public:
     NParameter *next = nullptr;
     bool isVariadic = false;
-    NTypePtr type;
 
 private:
+    TypeDescriptor *typeDesc;
     std::string name;
 };
 
 
 class NFunctionDefinition : public NExternalDeclaration {
 public:
-    NFunctionDefinition(NType *returnType, const std::string &name, NParameter *params, NBlock *body)
-        : returnType(returnType), name(name), params(params), body(body) {}
+    NFunctionDefinition(TypeDescriptor *returnTypeDesc, const std::string &name, NParameter *params, NBlock *body)
+        : returnTypeDesc(returnTypeDesc), name(name), params(params), body(body) {}
     ~NFunctionDefinition();
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionDefinition"; }
@@ -46,6 +45,7 @@ public:
 private:
     llvm::Function *llvmFunction = nullptr;
     std::string name;
+    TypeDescriptor *returnTypeDesc;
     NTypePtr returnType;
     NParameter *params;
     NBlock *body;

@@ -2,7 +2,10 @@
 
 namespace toyc::ast {
 
-ASTContext::ASTContext() : module("toyc", llvmContext), builder(llvmContext) {
+ASTContext::ASTContext()
+    : module("toyc", llvmContext),
+      builder(llvmContext),
+      typeFactory(std::make_unique<TypeFactory>()) {
     pushScope();
 }
 

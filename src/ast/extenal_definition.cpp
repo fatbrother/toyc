@@ -6,29 +6,44 @@
 
 using namespace toyc::ast;
 
-NParameter::NParameter(NType *type, NDeclarator *declarator)
-    : isVariadic(false), type(nullptr), name("") {
+NParameter::NParameter(TypeDescriptor *typeDesc, NDeclarator *declarator)
+    : isVariadic(false), typeDesc(typeDesc), name("") {
     if (declarator) {
         name = declarator->getName();
 
         if (declarator->isArray()) {
-            this->type = std::make_shared<NPointerType>(std::shared_ptr<NType>(type), 1);
+            this->typeDesc = new PointerTypeDescriptor(
+                TypeDescriptorPtr(typeDesc),
+                1
+            );
         } else if (declarator->pointerLevel > 0) {
-            this->type = std::make_shared<NPointerType>(std::shared_ptr<NType>(type), declarator->pointerLevel);
-        } else {
-            this->type = std::shared_ptr<NType>(type);
+            this->typeDesc = new PointerTypeDescriptor(
+                TypeDescriptorPtr(typeDesc),
+                declarator->pointerLevel
+            );
         }
     }
 
     SAFE_DELETE(declarator);
 }
 
+NParameter::~NParameter() {
+    SAFE_DELETE(typeDesc);
+    SAFE_DELETE(next);
+}
+
 NFunctionDefinition::~NFunctionDefinition() {
+    SAFE_DELETE(returnTypeDesc);
     SAFE_DELETE(params);
     SAFE_DELETE(body);
 }
 
 StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
+    returnType = context.typeFactory->realize(returnTypeDesc);
+    if (!returnType) {
+        return StmtCodegenResult("Failed to realize return type from descriptor");
+    }
+
     llvm::Type *llvmReturnType = nullptr;
     std::vector<llvm::Type *> paramTypes;
     std::vector<std::string> paramNames;
@@ -47,16 +62,20 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
             break;
         }
 
-        TypeCodegenResult paramTypeResult = paramIt->getVarType()->getLLVMType(context);
+        NTypePtr paramType = context.typeFactory->realize(paramIt->getTypeDescriptor());
+        if (!paramType) {
+            return StmtCodegenResult("Failed to realize parameter type from descriptor");
+        }
+        TypeCodegenResult paramTypeResult = paramType->getLLVMType(context);
         if (false == paramTypeResult.isSuccess()) {
             return StmtCodegenResult("Failed to get LLVM type for parameter") << paramTypeResult;
         }
-        llvm::Type *paramType = paramTypeResult.getLLVMType();
-        if (nullptr == paramType) {
+        llvm::Type *paramLLVMType = paramTypeResult.getLLVMType();
+        if (nullptr == paramLLVMType) {
             return StmtCodegenResult("Parameter type is null");
         }
 
-        paramTypes.push_back(paramType);
+        paramTypes.push_back(paramLLVMType);
         paramNames.push_back(paramIt->getName());
     }
 

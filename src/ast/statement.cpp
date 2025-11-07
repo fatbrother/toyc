@@ -29,6 +29,10 @@ StmtCodegenResult NExpressionStatement::codegen(ASTContext &context) {
 
 StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
     llvm::AllocaInst *allocaInst = nullptr;
+    NTypePtr type = context.typeFactory->realize(typeDesc);
+    if (nullptr == type) {
+        return StmtCodegenResult("Failed to realize type from descriptor");
+    }
 
     if (true == type->isStruct()) {
         auto structType = std::static_pointer_cast<NStructType>(type);
@@ -38,7 +42,7 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
                 return StmtCodegenResult("Failed to generate LLVM type for struct declaration") << structStmtCodegenResult;
             }
 
-            if (context.typeTable->lookup(structType->getName()).first) {
+            if (context.typeTable->lookup(structType->getName()).first, false) {
                 return StmtCodegenResult("Struct type already declared: " + structType->getName());
             } else {
                 context.typeTable->insert(structType->getName(), type);
@@ -58,7 +62,7 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
 
         if (currentDeclarator->isArray()) {
             const std::vector<int>& dimensions = currentDeclarator->getArrayDimensions();
-            NTypePtr arrayVarType = std::make_shared<NArrayType>(type, dimensions);
+            NTypePtr arrayVarType = context.typeFactory->getArrayType(type, dimensions);
             TypeCodegenResult arrayTypeResult = arrayVarType->getLLVMType(context);
             llvm::Type *arrayType = arrayTypeResult.getLLVMType();
             if (!arrayTypeResult.isSuccess() || nullptr == arrayType) {
@@ -112,7 +116,7 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
         // copy type and pointer level from declaration
         NTypePtr newType = nullptr;
         if (currentDeclarator->pointerLevel > 0) {
-            newType = std::make_shared<NPointerType>(type, currentDeclarator->pointerLevel);
+            newType = context.typeFactory->getPointerType(type, currentDeclarator->pointerLevel);
         } else {
             newType = type;
         }
@@ -155,7 +159,11 @@ StmtCodegenResult NBlock::codegen(ASTContext &context) {
         for (auto &arg : context.currentFunction->getFunction()->args()) {
             llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(arg.getType(), nullptr, arg.getName());
             context.builder.CreateStore(&arg, allocaInst);
-            context.variableTable->insert(arg.getName().str(), std::make_pair(allocaInst, param->getVarType()));
+            context.variableTable->insert(
+                arg.getName().str(),
+                std::make_pair(
+                    allocaInst,
+                    context.typeFactory->realize(param->getTypeDescriptor())));
             param = param->next;
         }
     }

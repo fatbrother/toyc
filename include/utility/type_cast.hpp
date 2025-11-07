@@ -11,10 +11,10 @@
 namespace toyc::utility {
 
 toyc::ast::ExprCodegenResult castFromBool(llvm::Value *value, toyc::ast::VarType toType,
-                                      llvm::LLVMContext &context, llvm::IRBuilder<> &builder);
+                                  toyc::ast::ASTContext &context);
 
 toyc::ast::ExprCodegenResult castToBool(llvm::Value *value, toyc::ast::VarType fromType,
-                        llvm::LLVMContext &context, llvm::IRBuilder<> &builder);
+                                  toyc::ast::ASTContext &context);
 
 toyc::ast::ExprCodegenResult typeCast(llvm::Value *value, const toyc::ast::NTypePtr fromType,
                                   const toyc::ast::NTypePtr toType, toyc::ast::ASTContext &context);

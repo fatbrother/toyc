@@ -7,6 +7,8 @@
 
 namespace toyc::ast {
 
+class TypeDescriptor;
+
 class NStatement : public BasicNode {
 public:
     virtual ~NStatement() override;
@@ -21,16 +23,17 @@ public:
 
 class NDeclarationStatement : public NStatement, public NExternalDeclaration {
 public:
-    NDeclarationStatement(NType *type, NDeclarator *declarator)
-        : type(type), declarator(declarator) {}
+    NDeclarationStatement(TypeDescriptor *typeDesc, NDeclarator *declarator)
+        : typeDesc(typeDesc), declarator(declarator) {}
     ~NDeclarationStatement() {
+        SAFE_DELETE(typeDesc);
         SAFE_DELETE(declarator);
     }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "DeclarationStatement"; }
 
 private:
-    NTypePtr type;
+    TypeDescriptor *typeDesc;  // Parser 階段的型別描述符
     NDeclarator *declarator;
 };
 

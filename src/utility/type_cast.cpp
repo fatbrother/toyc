@@ -8,29 +8,28 @@ using namespace toyc::ast;
 
 namespace toyc::utility {
 
-ExprCodegenResult castFromBool(llvm::Value *value, VarType toType,
-                           llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
+ExprCodegenResult castFromBool(llvm::Value *value, VarType toType, ASTContext &context) {
     llvm::Value *result = nullptr;
-    NTypePtr resultType = std::make_shared<NType>(toType);
+    NTypePtr resultType = context.typeFactory->getBasicType(toType);
 
     switch (toType) {
         case VAR_TYPE_CHAR:
-            result = builder.CreateZExt(value, llvm::Type::getInt8Ty(context), "bool_to_char");
+            result = context.builder.CreateZExt(value, llvm::Type::getInt8Ty(context.llvmContext), "bool_to_char");
             break;
         case VAR_TYPE_SHORT:
-            result = builder.CreateZExt(value, llvm::Type::getInt16Ty(context), "bool_to_short");
+            result = context.builder.CreateZExt(value, llvm::Type::getInt16Ty(context.llvmContext), "bool_to_short");
             break;
         case VAR_TYPE_INT:
-            result = builder.CreateZExt(value, llvm::Type::getInt32Ty(context), "bool_to_int");
+            result = context.builder.CreateZExt(value, llvm::Type::getInt32Ty(context.llvmContext), "bool_to_int");
             break;
         case VAR_TYPE_LONG:
-            result = builder.CreateZExt(value, llvm::Type::getInt64Ty(context), "bool_to_long");
+            result = context.builder.CreateZExt(value, llvm::Type::getInt64Ty(context.llvmContext), "bool_to_long");
             break;
         case VAR_TYPE_FLOAT:
-            result = builder.CreateUIToFP(value, llvm::Type::getFloatTy(context), "bool_to_float");
+            result = context.builder.CreateUIToFP(value, llvm::Type::getFloatTy(context.llvmContext), "bool_to_float");
             break;
         case VAR_TYPE_DOUBLE:
-            result = builder.CreateUIToFP(value, llvm::Type::getDoubleTy(context), "bool_to_double");
+            result = context.builder.CreateUIToFP(value, llvm::Type::getDoubleTy(context.llvmContext), "bool_to_double");
             break;
         default:
             return ExprCodegenResult("Unsupported cast from bool to " + std::to_string(toType));
@@ -39,15 +38,14 @@ ExprCodegenResult castFromBool(llvm::Value *value, VarType toType,
     return ExprCodegenResult(result, resultType);
 }
 
-ExprCodegenResult castToBool(llvm::Value *value, VarType fromType,
-                       llvm::LLVMContext &context, llvm::IRBuilder<> &builder) {
+ExprCodegenResult castToBool(llvm::Value *value, VarType fromType, ASTContext &context) {
     llvm::Value *result = nullptr;
-    NTypePtr resultType = std::make_shared<NType>(VAR_TYPE_BOOL);
+    NTypePtr resultType = context.typeFactory->getBasicType(VAR_TYPE_BOOL);
 
     if (isFloatingPointType(fromType)) {
-        result = builder.CreateFCmpONE(value, llvm::ConstantFP::get(value->getType(), 0.0), "to_bool");
+        result = context.builder.CreateFCmpONE(value, llvm::ConstantFP::get(value->getType(), 0.0), "to_bool");
     } else {
-        result = builder.CreateICmpNE(value, llvm::ConstantInt::get(value->getType(), 0), "to_bool");
+        result = context.builder.CreateICmpNE(value, llvm::ConstantInt::get(value->getType(), 0), "to_bool");
     }
 
     return ExprCodegenResult(result, resultType);
@@ -67,11 +65,11 @@ ExprCodegenResult typeCast(llvm::Value *value, const NTypePtr fromType,
     }
 
     if (from == VAR_TYPE_BOOL) {
-        return castFromBool(value, to, context.llvmContext, context.builder);
+        return castFromBool(value, to, context);
     }
 
     if (to == VAR_TYPE_BOOL) {
-        return castToBool(value, from, context.llvmContext, context.builder);
+        return castToBool(value, from, context);
     }
 
     llvm::Value *result = nullptr;
@@ -138,7 +136,7 @@ ExprCodegenResult typeCast(llvm::Value *value, const NTypePtr fromType,
 
 ExprCodegenResult typeCast(llvm::Value *value, const NTypePtr fromType,
                       VarType toType, ASTContext &context) {
-    NTypePtr toNType = std::make_shared<NType>(toType);
+    NTypePtr toNType = context.typeFactory->getBasicType(toType);
     return typeCast(value, fromType, toNType, context);
 }
 
