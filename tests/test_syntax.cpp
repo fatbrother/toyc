@@ -12,6 +12,12 @@ struct SyntaxTestCase {
     std::string description;
 };
 
+// 為 SyntaxTestCase 提供輸出運算子,避免顯示亂碼
+std::ostream& operator<<(std::ostream& os, const SyntaxTestCase& testCase) {
+    os << "SyntaxTestCase{" << testCase.testName << ", " << testCase.inputFile << "}";
+    return os;
+}
+
 // 自訂測試名稱生成函數
 struct SyntaxTestNameGenerator {
     std::string operator()(const ::testing::TestParamInfo<SyntaxTestCase>& info) const {
@@ -84,6 +90,9 @@ INSTANTIATE_TEST_SUITE_P(
         SyntaxTestCase{"address_dereference", "tests/fixtures/syntax/operators/address_dereference.c", "位址和解參考運算符解析失敗"},
         SyntaxTestCase{"ternary_operator", "tests/fixtures/syntax/operators/ternary.c", "三元運算符解析失敗"},
         SyntaxTestCase{"short_circuit", "tests/fixtures/syntax/operators/short_circuit.c", "短路求值解析失敗"},
+        SyntaxTestCase{"sizeof_operator", "tests/fixtures/syntax/operators/sizeof_operator.c", "sizeof 運算符解析失敗"},
+        SyntaxTestCase{"cast_expressions", "tests/fixtures/syntax/operators/cast_expressions.c", "型別轉換表達式解析失敗"},
+        SyntaxTestCase{"comma_operator", "tests/fixtures/syntax/operators/comma_operator.c", "逗號運算符解析失敗"},
 
         // 控制流測試
         SyntaxTestCase{"if_else", "tests/fixtures/syntax/control_flow/if_else.c", "if-else 語句解析失敗"},

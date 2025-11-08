@@ -186,6 +186,12 @@ INSTANTIATE_TEST_SUITE_P(
                        {"and", "or", "xor"}, "位元運算 LLVM IR 生成失敗"},
         LLVMIRTestCase{"ternary_operator", "tests/fixtures/output/operators/ternary_test.c",
                        {"icmp", "br", "phi"}, "三元運算子 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"sizeof_operator", "tests/fixtures/output/operators/sizeof_test.c",
+                       {"alloca", "store"}, "sizeof 運算符 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"cast_expressions", "tests/fixtures/output/operators/cast_test.c",
+                       {"sitofp", "fptosi", "trunc", "sext"}, "型別轉換 LLVM IR 生成失敗"},
+        LLVMIRTestCase{"comma_operator", "tests/fixtures/output/operators/comma_test.c",
+                       {"store", "load"}, "逗號運算符 LLVM IR 生成失敗"},
 
         // 控制流測試
         LLVMIRTestCase{"if_else", "tests/fixtures/output/control_flow/if_else_test.c",
@@ -293,6 +299,9 @@ INSTANTIATE_TEST_SUITE_P(
         ExecutionTestCase{"bitwise_test", "tests/fixtures/output/operators/bitwise_test.c", 28, "位元運算結果不正確"},
         ExecutionTestCase{"bitwise_not", "tests/fixtures/output/operators/bitwise_not_test.c", 5, "位元 NOT 運算結果不正確"},
         ExecutionTestCase{"compound_assignment", "tests/fixtures/output/operators/compound_assignment_test.c", 10, "複合賦值運算結果不正確"},
+        ExecutionTestCase{"sizeof_test", "tests/fixtures/output/operators/sizeof_test.c", 90, "sizeof 運算符結果不正確"},
+        ExecutionTestCase{"cast_test", "tests/fixtures/output/operators/cast_test.c", 840, "型別轉換結果不正確"},
+        ExecutionTestCase{"comma_test", "tests/fixtures/output/operators/comma_test.c", 325, "逗號運算符結果不正確"},
 
         // 短路求值測試
         ExecutionTestCase{"short_circuit_and", "tests/fixtures/output/operators/short_circuit_test.c", 0, "AND 短路求值結果不正確"},
