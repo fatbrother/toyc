@@ -2,10 +2,12 @@
 *.o
 *.out
 toyc
-test_array
+
+# Ignore test executables and output files  
+test_array*
+test
 test.c
 test.ll
-test
 
 # Ignore build directories
 build/
