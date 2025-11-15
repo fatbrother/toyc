@@ -1,4 +1,6 @@
 // 邏輯運算短路求值測試 - AND 短路
+int printf(char *format, ...);
+
 int main() {
     int counter = 0;
 
@@ -7,5 +9,6 @@ int main() {
     int result = 0 && (counter = counter + 1);
 
     // counter 應該還是 0，因為右側沒有被求值
-    return counter;  // 預期輸出: 0
+    printf("%d\n", counter);
+    return 0;  // 預期輸出: 0
 }

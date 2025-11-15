@@ -1,4 +1,6 @@
 // goto 跳出巢狀循環
+int printf(char *format, ...);
+
 int main() {
     int i;
     int j;
@@ -14,5 +16,6 @@ int main() {
     }
 
 found:
-    return result;  // 預期輸出: 35 (3*10 + 5)
+    printf("%d\n", result);
+    return 0;  // 預期輸出: 35 (3*10 + 5)
 }

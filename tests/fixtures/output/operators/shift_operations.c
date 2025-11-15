@@ -1,3 +1,5 @@
+int printf(char *format, ...);
+
 int main() {
     int value = 3;
     int left = value << 2; // 3 << 2 = 12
@@ -7,5 +9,6 @@ int main() {
     assign <<= 1; // 5 << 1 = 10
     assign >>= 2; // 10 >> 2 = 2
 
-    return left + right + assign; // 12 + 6 + 2 = 20
+    printf("%d\n", left + right + assign);
+    return 0; // 12 + 6 + 2 = 20
 }

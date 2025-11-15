@@ -1,5 +1,7 @@
 // Test sizeof operator output
 
+int printf(char *format, ...);
+
 int main() {
     int result = 0;
 
@@ -51,5 +53,6 @@ int main() {
     // result should be 90 (85+5)
 
     // Final result: 90
-    return result;
+    printf("%d\n", result);
+    return 0;
 }

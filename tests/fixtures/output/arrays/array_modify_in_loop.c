@@ -1,3 +1,5 @@
+int printf(char *format, ...);
+
 int main() {
     int arr[3] = {10, 20, 30};
     int i;
@@ -7,5 +9,6 @@ int main() {
         arr[i] = arr[i] * 2;
     }
 
-    return arr[0] + arr[1] + arr[2];  // 應返回 120 (20+40+60)
+    printf("%d\n", arr[0] + arr[1] + arr[2]);
+    return 0;  // 應返回 120 (20+40+60)
 }

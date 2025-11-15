@@ -13,6 +13,8 @@ struct Large {
     double d;
 };
 
+int printf(char *format, ...);
+
 int main() {
     struct Small s;
     struct Medium m;
@@ -23,5 +25,6 @@ int main() {
     l.i = 100;
     l.c = 'B';
     
-    return m.i;  // 應該返回 42
+    printf("%d\n", m.i);
+    return 0;  // 應該返回 42
 }

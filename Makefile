@@ -64,7 +64,17 @@ test-build: $(TEST_OBJS) $(LIB_OBJS) toyc
 test: test-build
 	$(BUILDDIR)/tests/all_tests
 
+# Clean GCC output cache
+clean-cache:
+	@if [ -d "tests/gcc_output_cache" ]; then \
+		echo "Clear GCC cache..."; \
+		find tests/gcc_output_cache -name "*.expected" -delete; \
+		echo "✓ GCC cache cleared."; \
+	else \
+		echo "No GCC cache directory found."; \
+	fi
+
 clean:
 	rm -rf $(BUILDDIR) toyc
 
-.PHONY: all test clean
+.PHONY: all test clean clean-cache test-build

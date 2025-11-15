@@ -1,4 +1,6 @@
 // 使用 goto 實現循環
+int printf(char *format, ...);
+
 int main() {
     int sum = 0;
     int i = 0;
@@ -10,5 +12,6 @@ loop_start:
     i = i + 1;
     goto loop_start;
 loop_end:
-    return sum;  // 預期輸出: 10 (0+1+2+3+4)
+    printf("%d\n", sum);
+    return 0;  // 預期輸出: 10 (0+1+2+3+4)
 }

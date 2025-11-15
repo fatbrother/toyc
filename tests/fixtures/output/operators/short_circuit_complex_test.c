@@ -1,4 +1,6 @@
 // 複雜短路求值測試
+int printf(char *format, ...);
+
 int main() {
     int count_a = 0;
     int count_b = 0;
@@ -9,5 +11,6 @@ int main() {
     int result = (0 && (count_a = count_a + 1)) || (count_b = count_b + 1);
     
     // count_a = 0, count_b = 1
-    return count_a * 10 + count_b;  // 預期輸出: 1
+    printf("%d\n", count_a * 10 + count_b);
+    return 0;  // 預期輸出: 1
 }

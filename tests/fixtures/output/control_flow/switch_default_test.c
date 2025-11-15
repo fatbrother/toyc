@@ -1,4 +1,6 @@
 // switch-case default 測試
+int printf(char *format, ...);
+
 int main() {
     int x = 10;
     int result = 0;
@@ -19,5 +21,6 @@ int main() {
             break;
     }
 
-    return result;  // 應該返回 99
+    printf("%d\n", result);
+    return 0;  // 應該返回 99
 }

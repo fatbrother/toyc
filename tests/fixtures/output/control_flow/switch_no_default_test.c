@@ -1,4 +1,6 @@
 // switch 語句測試 - 沒有 default case
+int printf(char *format, ...);
+
 int main() {
     int x = 5;
     int result = 100;  // 初始值
@@ -18,5 +20,6 @@ int main() {
     }
 
     // result 應該保持原值 100
-    return result;  // 預期輸出: 100
+    printf("%d\n", result);
+    return 0;  // 預期輸出: 100
 }

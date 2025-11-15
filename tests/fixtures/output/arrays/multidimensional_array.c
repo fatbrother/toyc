@@ -1,3 +1,5 @@
+int printf(char *format, ...);
+
 int main() {
     int matrix[2][3];
 
@@ -8,5 +10,6 @@ int main() {
     matrix[1][1] = 5;
     matrix[1][2] = 6;
 
-    return matrix[0][0] + matrix[1][2];  // 應返回 7 (1+6)
+    printf("%d\n", matrix[0][0] + matrix[1][2]);
+    return 0;  // 應返回 7 (1+6)
 }

@@ -1,4 +1,6 @@
 // 位元運算測試
+int printf(char *format, ...);
+
 int main() {
     int a = 12;  // 1100 in binary
     int b = 10;  // 1010 in binary
@@ -9,5 +11,6 @@ int main() {
 
     int result = and_result + or_result + xor_result;
 
-    return result;  // 預期輸出: 28 (8 + 14 + 6)
+    printf("%d\n", result);
+    return 0;  // 預期輸出: 28 (8 + 14 + 6)
 }

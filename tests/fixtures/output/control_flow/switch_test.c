@@ -1,4 +1,6 @@
 // switch-case 語句執行測試
+int printf(char *format, ...);
+
 int main() {
     int x = 3;
     int result = 0;
@@ -22,5 +24,6 @@ int main() {
             break;
     }
 
-    return result;  // 應該返回 30
+    printf("%d\n", result);
+    return 0;  // 應該返回 30
 }

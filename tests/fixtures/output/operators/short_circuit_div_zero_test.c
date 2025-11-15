@@ -1,4 +1,6 @@
 // 短路求值防止除以零
+int printf(char *format, ...);
+
 int main() {
     int x = 10;
     int y = 0;
@@ -12,5 +14,6 @@ int main() {
         result = 5;
     }
 
-    return result;  // 預期輸出: 5
+    printf("%d\n", result);
+    return 0;  // 預期輸出: 5
 }

@@ -4,6 +4,8 @@ struct Point {
     int y;
 };
 
+int printf(char *format, ...);
+
 struct Point createPoint(int x, int y) {
     struct Point p;
     p.x = x;
@@ -17,5 +19,6 @@ int getPointSum(struct Point p) {
 
 int main() {
     struct Point p = createPoint(15, 25);
-    return getPointSum(p);  // 應該返回 40
+    printf("%d\n", getPointSum(p));
+    return 0;  // 應該返回 40
 }

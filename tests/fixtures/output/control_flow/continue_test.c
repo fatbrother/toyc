@@ -1,4 +1,6 @@
 // continue 語句輸出測試
+int printf(char *format, ...);
+
 int main() {
     int i;
     int sum = 0;
@@ -11,5 +13,6 @@ int main() {
         sum = sum + i;
     }
 
-    return sum;  // 預期輸出: 40 (0+1+2+3+4+6+7+8+9)
+    printf("%d\n", sum);
+    return 0;  // 預期輸出: 40 (0+1+2+3+4+6+7+8+9)
 }

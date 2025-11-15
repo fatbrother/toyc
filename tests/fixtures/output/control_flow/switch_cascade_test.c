@@ -1,5 +1,7 @@
 // 簡化版達夫裝置測試
 // 測試 switch 和 do-while 的混合使用
+int printf(char *format, ...);
+
 int main() {
     int n = 5;
     int result = 0;
@@ -30,5 +32,6 @@ int main() {
 
     // n=5: 執行 5+4+3+2+1 = 15, count = 5
     // 返回 result (15)
-    return result;
+    printf("%d\n", result);
+    return 0;
 }

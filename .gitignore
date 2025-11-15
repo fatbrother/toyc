@@ -6,4 +6,8 @@ toyc
 # Ignore build directories
 build/
 
+# Ignore test output cache
+tests/gcc_output_cache/*.expected
+tests/output_temp/
+
 .vscode/

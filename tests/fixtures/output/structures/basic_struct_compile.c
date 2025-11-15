@@ -4,9 +4,12 @@ struct Point {
     int y;
 };
 
+int printf(char *format, ...);
+
 int main() {
     struct Point p;
     p.x = 10;
     p.y = 20;
-    return p.x + p.y;  // 應該返回 30
+    printf("%d\n", p.x + p.y);
+    return 0;  // 應該返回 30
 }

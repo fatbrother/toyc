@@ -1,5 +1,7 @@
 // Test comma operator output
 
+int printf(char *format, ...);
+
 int main() {
     int result = 0;
     int x, y, z;
@@ -82,5 +84,6 @@ int main() {
     result = result + multi;  // +50
     // result = 325
     
-    return result;
+    printf("%d\n", result);
+    return 0;
 }

@@ -9,6 +9,8 @@ struct Rectangle {
     struct Point bottom_right;
 };
 
+int printf(char *format, ...);
+
 int calculateArea(struct Rectangle rect) {
     int width = rect.bottom_right.x - rect.top_left.x;
     int height = rect.bottom_right.y - rect.top_left.y;
@@ -23,5 +25,6 @@ int main() {
     rect.bottom_right.x = 10;
     rect.bottom_right.y = 5;
     
-    return calculateArea(rect);  // 應該返回 50
+    printf("%d\n", calculateArea(rect));
+    return 0;  // 應該返回 50
 }

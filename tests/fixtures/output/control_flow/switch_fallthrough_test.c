@@ -1,4 +1,6 @@
 // switch-case fall-through 測試
+int printf(char *format, ...);
+
 int main() {
     int x = 1;
     int result = 0;
@@ -18,5 +20,6 @@ int main() {
             break;
     }
 
-    return result;  // 應該返回 30 (10 + 20)
+    printf("%d\n", result);
+    return 0;  // 應該返回 30 (10 + 20)
 }

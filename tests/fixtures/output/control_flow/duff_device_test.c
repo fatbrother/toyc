@@ -1,5 +1,7 @@
 // 達夫裝置 (Duff's Device) 測試
 // 這是一個經典的優化技巧，結合了 switch 和循環
+int printf(char *format, ...);
+
 int main() {
     int count = 8;
     int result = 0;
@@ -39,5 +41,6 @@ int main() {
     }
 
     // count = 8: 應該累加 8+7+6+5+4+3+2+1 = 36
-    return result;
+    printf("%d\n", result);
+    return 0;
 }

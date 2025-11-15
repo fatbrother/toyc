@@ -1,4 +1,6 @@
 // 遞歸函數測試
+int printf(char *format, ...);
+
 int factorial(int n) {
     if (n <= 1) {
         return 1;
@@ -7,5 +9,6 @@ int factorial(int n) {
 }
 
 int main() {
-    return factorial(5);  // 應該返回 120
+    printf("%d\n", factorial(5));
+    return 0;  // 應該返回 120
 }

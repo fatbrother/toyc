@@ -1,3 +1,5 @@
+int printf(char *format, ...);
+
 int main() {
     int arr[5];
     int i;
@@ -11,5 +13,6 @@ int main() {
         sum = sum + arr[i];
     }
 
-    return sum;  // 應返回 20 (0+2+4+6+8)
+    printf("%d\n", sum);
+    return 0;  // 應返回 20 (0+2+4+6+8)
 }

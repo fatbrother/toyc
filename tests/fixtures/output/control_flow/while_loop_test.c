@@ -1,4 +1,6 @@
 // while 迴圈測試
+int printf(char *format, ...);
+
 int main() {
     int count = 0;
     int i = 1;
@@ -6,5 +8,6 @@ int main() {
         count = count + i;
         i++;
     }
-    return count;  // 應該返回 10 (1+2+3+4)
+    printf("%d\n", count);
+    return 0;  // 應該返回 10 (1+2+3+4)
 }

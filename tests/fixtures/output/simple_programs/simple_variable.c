@@ -1,6 +1,9 @@
 // 簡單變數操作
+int printf(char *format, ...);
+
 int main() {
     int x = 10;
     int y = 5;
-    return x;
+    printf("%d\n", x);
+    return 0;
 }

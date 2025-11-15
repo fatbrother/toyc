@@ -1,4 +1,6 @@
 // do-while 循環輸出測試
+int printf(char *format, ...);
+
 int main() {
     int sum = 0;
     int i = 0;
@@ -8,5 +10,6 @@ int main() {
         i = i + 1;
     } while (i < 5);
 
-    return sum;  // 預期輸出: 10 (0+1+2+3+4)
+    printf("%d\n", sum);
+    return 0;  // 預期輸出: 10 (0+1+2+3+4)
 }

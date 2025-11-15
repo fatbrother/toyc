@@ -1,4 +1,6 @@
 // 巢狀循環中的 break 和 continue 測試
+int printf(char *format, ...);
+
 int main() {
     int i;
     int j;
@@ -17,5 +19,6 @@ int main() {
         }
     }
 
-    return sum;  // 預期輸出: 90 (5 次循環 * (3+4+5+6) = 5 * 18 = 90)
+    printf("%d\n", sum);
+    return 0;  // 預期輸出: 90 (5 次循環 * (3+4+5+6) = 5 * 18 = 90)
 }

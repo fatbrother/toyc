@@ -1,4 +1,6 @@
 // 巢狀三元運算子測試
+int printf(char *format, ...);
+
 int main() {
     int a = 10;
     int b = 5;
@@ -7,5 +9,6 @@ int main() {
     // 找出最大值
     int largest = (a > b) ? ((a > c) ? a : c) : ((b > c) ? b : c);
 
-    return largest;  // 預期輸出: 15
+    printf("%d\n", largest);
+    return 0;  // 預期輸出: 15
 }
