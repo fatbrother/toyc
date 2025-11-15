@@ -61,9 +61,9 @@ toyc::utility::ErrorHandler *error_handler = nullptr;
 
 %type	<expression> expression unary_expression assignment_expression relational_expression equality_expression shift_expression additive_expression
 %type	<expression> multiplicative_expression primary_expression numeric postfix_expression conditional_expression logical_or_expression
-%type	<expression> logical_and_expression inclusive_or_expression exclusive_or_expression and_expression initializer
+%type	<expression> logical_and_expression inclusive_or_expression exclusive_or_expression and_expression initializer cast_expression
 %type   <initializer_list> initializer_list
-%type   <type_specifier> type_specifier struct_specifier
+%type   <type_specifier> type_specifier struct_specifier type_name
 %type   <struct_declaration> struct_declaration struct_declaration_list
 %type	<bop> relational_expression_op
 %type   <declarator> init_declarator init_declarator_list struct_declarator_list declarator
@@ -395,6 +395,9 @@ expression
 	: assignment_expression {
 		$$ = $1;
 	  }
+	| expression ',' assignment_expression {
+		$$ = new toyc::ast::NCommaExpression($1, $3);
+	  }
 	;
 
 assignment_expression
@@ -536,17 +539,33 @@ additive_expression
 	;
 
 multiplicative_expression
+	: cast_expression {
+		$$ = $1;
+	  }
+	| multiplicative_expression '*' cast_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MUL, $3);
+	  }
+	| multiplicative_expression '/' cast_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::DIV, $3);
+	  }
+	| multiplicative_expression '%' cast_expression {
+		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MOD, $3);
+	  }
+	;
+
+cast_expression
 	: unary_expression {
 		$$ = $1;
 	  }
-	| multiplicative_expression '*' unary_expression {
-		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MUL, $3);
+	| '(' type_specifier pointer ')' cast_expression {
+		auto typeDesc = std::unique_ptr<toyc::ast::TypeDescriptor>($2);
+		for (int i = 0; i < $3; i++) {
+			typeDesc = toyc::ast::makePointerDesc(std::move(typeDesc));
+		}
+		$$ = new toyc::ast::NCastExpression(typeDesc.release(), $5);
 	  }
-	| multiplicative_expression '/' unary_expression {
-		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::DIV, $3);
-	  }
-	| multiplicative_expression '%' unary_expression {
-		$$ = new toyc::ast::NBinaryOperator($1, toyc::ast::BineryOperator::MOD, $3);
+	| '(' type_specifier ')' cast_expression {
+		$$ = new toyc::ast::NCastExpression($2, $4);
 	  }
 	;
 
@@ -560,23 +579,29 @@ unary_expression
 	| DEC_OP unary_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::L_DEC, $2);
 	  }
-	| '&' unary_expression {
+	| '&' cast_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::ADDR, $2);
 	  }
-	| '*' unary_expression {
+	| '*' cast_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::DEREF, $2);
 	  }
-	| '+' unary_expression {
+	| '+' cast_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::PLUS, $2);
 	  }
-	| '-' unary_expression {
+	| '-' cast_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::MINUS, $2);
 	  }
-	| '~' unary_expression {
+	| '~' cast_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::BIT_NOT, $2);
 	  }
-	| '!' unary_expression {
+	| '!' cast_expression {
 		$$ = new toyc::ast::NUnaryExpression(toyc::ast::UnaryOperator::LOG_NOT, $2);
+	  }
+	| SIZEOF unary_expression {
+		$$ = new toyc::ast::NSizeofExpression($2);
+	  }
+	| SIZEOF '(' type_name ')' {
+		$$ = new toyc::ast::NSizeofExpression($3);
 	  }
 	;
 
@@ -713,6 +738,36 @@ struct_specifier
 	| STRUCT IDENTIFIER {
 		$$ = toyc::ast::makeStructDesc(*$2, nullptr).release();
 		delete $2;
+	}
+	;
+
+type_name
+	: type_specifier {
+		$$ = $1;
+	}
+	| type_specifier pointer {
+		auto typeDesc = std::unique_ptr<toyc::ast::TypeDescriptor>($1);
+		for (int i = 0; i < $2; i++) {
+			typeDesc = toyc::ast::makePointerDesc(std::move(typeDesc));
+		}
+		$$ = typeDesc.release();
+	}
+	| type_specifier '[' I_CONSTANT ']' {
+		auto typeDesc = std::unique_ptr<toyc::ast::TypeDescriptor>($1);
+		std::vector<int> dims = {std::stoi(*$3)};
+		typeDesc = toyc::ast::makeArrayDesc(std::move(typeDesc), std::move(dims));
+		$$ = typeDesc.release();
+		delete $3;
+	}
+	| type_specifier pointer '[' I_CONSTANT ']' {
+		auto typeDesc = std::unique_ptr<toyc::ast::TypeDescriptor>($1);
+		for (int i = 0; i < $2; i++) {
+			typeDesc = toyc::ast::makePointerDesc(std::move(typeDesc));
+		}
+		std::vector<int> dims = {std::stoi(*$4)};
+		typeDesc = toyc::ast::makeArrayDesc(std::move(typeDesc), std::move(dims));
+		$$ = typeDesc.release();
+		delete $4;
 	}
 	;
 

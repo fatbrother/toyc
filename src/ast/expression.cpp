@@ -91,11 +91,10 @@ ExprCodegenResult NBinaryOperator::codegen(ASTContext &context) {
             << lhsResult << rhsResult;
     }
 
+    targetType = (lhsType->getVarType() > rhsType->getVarType()) ? lhsType->getVarType() : rhsType->getVarType();
     if (op == EQ || op == NE || op == LE || op == GE || op == LT || op == GT) {
         resultType = context.typeFactory->getBasicType(VarType::VAR_TYPE_BOOL);
-        targetType = (lhsType->getVarType() > rhsType->getVarType()) ? lhsType->getVarType() : rhsType->getVarType();
     } else {
-        targetType = (true == isFloatingPointType(lhsType->getVarType())) ? VAR_TYPE_DOUBLE : VAR_TYPE_INT;
         resultType = context.typeFactory->getBasicType(targetType);
     }
 
@@ -139,7 +138,10 @@ ExprCodegenResult NBinaryOperator::codegen(ASTContext &context) {
                 result = context.builder.CreateMul(lhsValue, rhsValue, "mul");
             break;
         case DIV:
-            result = context.builder.CreateSDiv(lhsValue, rhsValue, "div");
+            if (true == isFloatingPointType(targetType))
+                result = context.builder.CreateFDiv(lhsValue, rhsValue, "div");
+            else
+                result = context.builder.CreateSDiv(lhsValue, rhsValue, "div");
             break;
         case MOD:
             result = context.builder.CreateSRem(lhsValue, rhsValue, "mod");
@@ -208,12 +210,13 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
         return ExprCodegenResult("Failed to generate code for unary expression operand") << exprResult;
     }
 
-    if (op == L_INC || op == R_INC || op == L_DEC || op == R_DEC) {
+    if (op == L_INC || op == R_INC || op == L_DEC || op == R_DEC || op == ADDR || op == DEREF) {
         CodegenResult allocResult = expr->allocgen(context);
-        allocaInst = static_cast<llvm::AllocaInst *>(allocResult.getAllocaInst());
         if (false == allocResult.isSuccess()) {
             return ExprCodegenResult("Failed to get lvalue for unary increment/decrement") << allocResult;
         }
+
+        allocaInst = static_cast<llvm::AllocaInst *>(allocResult.getAllocaInst());
     }
 
     llvm::Value *tmp = nullptr;
@@ -238,7 +241,12 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
             value = allocaInst;
             break;
         case DEREF: {
-                CodegenResult derefTypeResult = type->getLLVMType(context);
+                NTypePtr pointeeType = type->getElementType(context);
+                if (nullptr == pointeeType) {
+                    return ExprCodegenResult("Cannot dereference non-pointer type");
+                }
+
+                CodegenResult derefTypeResult = pointeeType->getLLVMType(context);
                 if (false == derefTypeResult.isSuccess()) {
                     return ExprCodegenResult("Failed to get LLVM type for dereference") << derefTypeResult;
                 }
@@ -410,21 +418,27 @@ ExprCodegenResult NFunctionCall::codegen(ASTContext &context) {
     NParameter *paramIt = nullptr;
     NArguments* argNode = nullptr;
     for (paramIt = function->getParams(), argNode = argNodes; paramIt != nullptr && argNode != nullptr; paramIt = paramIt->next, argNode = argNode->next) {
+
         CodegenResult argResult = argNode->codegen(context);
         llvm::Value *argValue = argResult.getValue();
         NTypePtr argType = argResult.getType();
         if (false == argResult.isSuccess()) {
             return ExprCodegenResult("Argument code generation failed for function call: " + name) << argResult;
         }
-        CodegenResult castResult = typeCast(
-            argValue,
-            argType,
-            context.typeFactory->realize(paramIt->getTypeDescriptor()),
-            context);
-        if (false == castResult.isSuccess()) {
-            return ExprCodegenResult("Type cast failed for argument in function call: " + name) << castResult;
+
+        if (false == paramIt->isVariadic) {
+            CodegenResult castResult = typeCast(
+                argValue,
+                argType,
+                context.typeFactory->realize(paramIt->getTypeDescriptor()),
+                context);
+            if (false == castResult.isSuccess()) {
+                return ExprCodegenResult("Type cast failed for argument in function call: " + name) << castResult;
+            }
+            argValue = castResult.getValue();
         }
-        args.push_back(castResult.getValue());
+
+        args.push_back(argValue);
     }
 
     res = context.builder.CreateCall(function->getFunction(), args);
@@ -594,5 +608,107 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
 
 ExprCodegenResult NInitializerList::codegen(ASTContext &context) {
     return ExprCodegenResult("InitializerList cannot be used directly in expressions");
+}
+
+ExprCodegenResult NCastExpression::codegen(ASTContext &context) {
+    // Generate code for the expression to be casted
+    ExprCodegenResult exprResult = expr->codegen(context);
+    if (!exprResult.isSuccess()) {
+        return ExprCodegenResult("Failed to generate code for cast expression") << exprResult;
+    }
+
+    // Get the target type
+    NTypePtr targetType = context.typeFactory->realize(targetTypeDesc);
+    if (nullptr == targetType) {
+        return ExprCodegenResult("Target type is null in cast expression");
+    }
+
+    CodegenResult targetTypeLLVMResult = targetType->getLLVMType(context);
+    if (!targetTypeLLVMResult.isSuccess()) {
+        return ExprCodegenResult("Failed to get LLVM type for cast target") << targetTypeLLVMResult;
+    }
+
+    // Get source and target types
+    NTypePtr sourceType = exprResult.getType();
+    llvm::Value *sourceValue = exprResult.getValue();
+    llvm::Type *targetLLVMType = targetTypeLLVMResult.getLLVMType();
+
+    // Perform the type cast
+    CodegenResult castResult = typeCast(sourceValue, sourceType, targetType, context);
+    if (!castResult.isSuccess()) {
+        return ExprCodegenResult("Type cast failed in cast expression") << castResult;
+    }
+
+    return ExprCodegenResult(castResult.getValue(), targetType);
+}
+
+ExprCodegenResult NSizeofExpression::codegen(ASTContext &context) {
+    llvm::Type *llvmType = nullptr;
+
+    if (isSizeofType) {
+        // sizeof(type)
+        NTypePtr targetType = context.typeFactory->realize(targetTypeDesc);
+        if (nullptr == targetType) {
+            return ExprCodegenResult("Target type is null in sizeof expression");
+        }
+
+        CodegenResult typeResult = targetType->getLLVMType(context);
+        if (!typeResult.isSuccess()) {
+            return ExprCodegenResult("Failed to get LLVM type for sizeof operand") << typeResult;
+        }
+        llvmType = typeResult.getLLVMType();
+    } else {
+        // sizeof expression
+        AllocCodegenResult allocResult = expr->allocgen(context);
+        if (allocResult.isSuccess() && allocResult.getType()) {
+            // Use the type from allocgen (preserves array type)
+            CodegenResult typeResult = allocResult.getType()->getLLVMType(context);
+            if (!typeResult.isSuccess()) {
+                return ExprCodegenResult("Failed to get LLVM type from expression") << typeResult;
+            }
+            llvmType = typeResult.getLLVMType();
+        } else {
+            // Fallback to codegen for expressions that don't have lvalue
+            ExprCodegenResult exprResult = expr->codegen(context);
+            if (!exprResult.isSuccess()) {
+                return ExprCodegenResult("Failed to generate code for sizeof expression") << exprResult;
+            }
+
+            TypeCodegenResult typeResult = exprResult.getType()->getLLVMType(context);
+            if (!typeResult.isSuccess()) {
+                return ExprCodegenResult("Failed to get LLVM type from expression") << typeResult;
+            }
+            llvmType = typeResult.getLLVMType();
+        }
+    }
+
+    // Get the size of the type
+    llvm::DataLayout dataLayout(&(context.module));
+    uint64_t sizeInBytes = dataLayout.getTypeAllocSize(llvmType);
+
+    // Return the size as a constant integer
+    llvm::Value *sizeValue = llvm::ConstantInt::get(
+        llvm::Type::getInt32Ty(context.llvmContext),
+        sizeInBytes
+    );
+
+    return ExprCodegenResult(sizeValue, context.typeFactory->getIntType());
+}
+
+ExprCodegenResult NCommaExpression::codegen(ASTContext &context) {
+    // Evaluate left expression (for side effects)
+    ExprCodegenResult leftResult = left->codegen(context);
+    if (!leftResult.isSuccess()) {
+        return ExprCodegenResult("Failed to generate code for left operand of comma expression") << leftResult;
+    }
+
+    // Evaluate and return right expression
+    ExprCodegenResult rightResult = right->codegen(context);
+    if (!rightResult.isSuccess()) {
+        return ExprCodegenResult("Failed to generate code for right operand of comma expression") << rightResult;
+    }
+
+    // Comma operator evaluates left, then right, and returns right's value
+    return rightResult;
 }
 

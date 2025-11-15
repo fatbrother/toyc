@@ -61,7 +61,7 @@ ExprCodegenResult typeCast(llvm::Value *value, const NTypePtr fromType,
     VarType to = toType->getVarType();
 
     if (from == to) {
-        return ExprCodegenResult(ExprValue(value, toType));
+        return ExprCodegenResult(value, toType);
     }
 
     if (from == VAR_TYPE_BOOL) {
@@ -131,7 +131,7 @@ ExprCodegenResult typeCast(llvm::Value *value, const NTypePtr fromType,
             return ExprCodegenResult("Unsupported type cast from " + varTypeToString(from) + " to " + varTypeToString(to));
     }
 
-    return ExprCodegenResult(ExprValue(result, toType));
+    return ExprCodegenResult(result, toType);
 }
 
 ExprCodegenResult typeCast(llvm::Value *value, const NTypePtr fromType,

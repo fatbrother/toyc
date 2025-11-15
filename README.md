@@ -86,6 +86,9 @@ The compiler supports a comprehensive set of expressions including:
 - Basic assignment: `=`
 - Compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
 - Shift operators: `<<`, `>>` and their compound assignments `<<=`, `>>=`
+- `sizeof` operator
+- Cast expressions - `(type) expression`
+- Comma operator in expressions
 
 ### Literals and Constants
 - Integer constants (decimal, octal, hexadecimal)
@@ -102,11 +105,34 @@ Function calls with argument lists are supported
 The compiler supports structure definitions and member access using the dot (`.`) and arrow (`->`) operators.
 
 ## Future Work
-This is a educational/toy C compiler that implements a significant subset of C functionality, but it's not a complete C implementation. Notable limitations include the absence of:
-- Arrays and array indexing
-- Global variables and static storage duration
-- Full support for type qualifiers (e.g., `const`, `volatile`)
-- More operators (e.g., bitwise operators, conditional operator)
+This is an educational/toy C compiler that implements a significant subset of C functionality. The compiler successfully handles most common C programming patterns including functions, control flow, expressions, arrays, pointers, and structures. However, it does not implement the complete ANSI C specification.
+
+**Storage Class Specifiers:**
+- `typedef` - Type aliasing
+- `extern` - External linkage declarations
+- `static` - Static storage duration (tokenized but not in grammar)
+- `auto` - Automatic storage duration (default)
+- `register` - Register storage hint
+
+**Type Qualifiers:**
+- `const` - Const-qualified types (tokenized but not in grammar)
+- `volatile` - Volatile-qualified types (tokenized but not in grammar)
+
+**Type Specifiers:**
+- `signed`/`unsigned` - Type modifiers for integer types
+- `union` - Union types (tokenized but not in grammar)
+- `enum` - Enumeration types (tokenized but not in grammar)
+- Type names and abstract declarators
+
+**Declarations:**
+- Abstract declarators (for function parameters and type names)
+- Bit-fields in structures - `int field : 3;`
+- K&R style function definitions (old-style with identifier lists)
+- Complex pointer-to-function and array-of-pointer declarations
+
+**Other:**
+- Constant expressions as a separate grammar construct
+- `TYPE_NAME` token usage (typedef names)
 
 ## References
 

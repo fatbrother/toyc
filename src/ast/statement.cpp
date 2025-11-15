@@ -111,8 +111,6 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
             continue;
         }
 
-        allocaInst = context.builder.CreateAlloca(typeResult.getLLVMType(), nullptr, currentDeclarator->getName());
-
         // copy type and pointer level from declaration
         NTypePtr newType = nullptr;
         if (currentDeclarator->pointerLevel > 0) {
@@ -120,6 +118,14 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
         } else {
             newType = type;
         }
+
+        // Get the LLVM type for the variable (including pointer levels)
+        TypeCodegenResult varTypeResult = newType->getLLVMType(context);
+        if (false == varTypeResult.isSuccess()) {
+            return StmtCodegenResult("Failed to get LLVM type for variable") << varTypeResult;
+        }
+
+        allocaInst = context.builder.CreateAlloca(varTypeResult.getLLVMType(), nullptr, currentDeclarator->getName());
         context.variableTable->insert(currentDeclarator->getName(), std::make_pair(allocaInst, newType));
 
         if (true == currentDeclarator->isNonInitialized()) {
@@ -136,7 +142,7 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
             if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
                 return StmtCodegenResult("Type cast failed for initializer of variable: " + currentDeclarator->getName()) << castResult;
             }
-            context.builder.CreateStore(value, allocaInst);
+            context.builder.CreateStore(castResult.getValue(), allocaInst);
         }
     }
 
@@ -176,7 +182,7 @@ StmtCodegenResult NBlock::codegen(ASTContext &context) {
 
         StmtCodegenResult stmtResult = stmt->codegen(context);
         if (false == stmtResult.isSuccess()) {
-            return stmtResult << StmtCodegenResult("Failed to generate code for block statement");
+            return StmtCodegenResult("Failed to generate code for block statement") << stmtResult;
         }
     }
 
@@ -194,7 +200,7 @@ StmtCodegenResult NReturnStatement::codegen(ASTContext &context) {
         ExprCodegenResult exprResult = expression->codegen(context);
         llvm::Value *value = exprResult.getValue();
         NTypePtr type = exprResult.getType();
-        if (false == exprResult.isSuccess() || nullptr == value) {
+        if (false == exprResult.isSuccess()) {
             return StmtCodegenResult("Failed to generate code for return expression") << exprResult;
         }
         ExprCodegenResult castResult = typeCast(
@@ -202,10 +208,10 @@ StmtCodegenResult NReturnStatement::codegen(ASTContext &context) {
             type,
             context.currentFunction->getReturnType(),
             context);
-        if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
+        if (false == castResult.isSuccess()) {
             return StmtCodegenResult("Type cast failed for return statement") << castResult;
         }
-        context.builder.CreateRet(value);
+        context.builder.CreateRet(castResult.getValue());
     } else {
         context.builder.CreateRetVoid();
     }

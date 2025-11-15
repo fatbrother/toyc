@@ -255,4 +255,60 @@ private:
     std::vector<NExpression*> elements;
 };
 
+// Cast expression: (type) expression
+class NCastExpression : public NExpression {
+public:
+    NCastExpression(TypeDescriptor *targetTypeDesc, NExpression *expr)
+        : targetTypeDesc(targetTypeDesc), expr(expr) {}
+    ~NCastExpression() {
+        SAFE_DELETE(targetTypeDesc);
+        SAFE_DELETE(expr);
+    }
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "CastExpression"; }
+
+private:
+    TypeDescriptor *targetTypeDesc;
+    NExpression *expr;
+};
+
+// Sizeof operator: sizeof(type) or sizeof expression
+class NSizeofExpression : public NExpression {
+public:
+    // sizeof(type)
+    NSizeofExpression(TypeDescriptor *targetTypeDesc)
+        : targetTypeDesc(targetTypeDesc), expr(nullptr), isSizeofType(true) {}
+    // sizeof expression
+    NSizeofExpression(NExpression *expr)
+        : targetTypeDesc(nullptr), expr(expr), isSizeofType(false) {}
+    ~NSizeofExpression() {
+        SAFE_DELETE(targetTypeDesc);
+        SAFE_DELETE(expr);
+    }
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "SizeofExpression"; }
+
+private:
+    TypeDescriptor *targetTypeDesc;
+    NExpression *expr;
+    bool isSizeofType;
+};
+
+// Comma operator: expr1, expr2
+class NCommaExpression : public NExpression {
+public:
+    NCommaExpression(NExpression *left, NExpression *right)
+        : left(left), right(right) {}
+    ~NCommaExpression() {
+        SAFE_DELETE(left);
+        SAFE_DELETE(right);
+    }
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "CommaExpression"; }
+
+private:
+    NExpression *left;
+    NExpression *right;
+};
+
 } // namespace toyc::ast
