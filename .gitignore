@@ -2,6 +2,10 @@
 *.o
 *.out
 toyc
+test_array
+test.c
+test.ll
+test
 
 # Ignore build directories
 build/

@@ -51,21 +51,73 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
             return StmtCodegenResult("Variable declaration codegen failed for variable: " + currentDeclarator->getName()) << allocResult;
         }
 
-        // TODO: This should handle array initializations as well
-        // ExprCodegenResult codegenResult = declarator->codegen(context);
-        // llvm::Value *value = codegenResult.getValue();
-        // NTypePtr valType = codegenResult.getType();
-        // if ((false == codegenResult.isSuccess()) || (nullptr == value)) {
-        //     return StmtCodegenResult("Initializer codegen failed for variable: " + declarator->getName()) << codegenResult;
-        // } else {
-        //     ExprCodegenResult castResult = typeCast(value, valType, type, context);
-        //     if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
-        //         return StmtCodegenResult("Type cast failed for initializer of variable: " + declarator->getName()) << castResult;
-        //     }
-        //     context.builder.CreateStore(castResult.getValue(), allocaInst);
-        // }
+        llvm::Value* allocValue = allocResult.getAllocaInst();
+        allocaInst = llvm::dyn_cast<llvm::AllocaInst>(allocValue);
+        NTypePtr varType = allocResult.getType();
 
-        // return StmtCodegenResult();
+        // Handle initialization if present
+        if (currentDeclarator->isInitialized()) {
+            NExpression* initExpr = currentDeclarator->expr;
+            
+            // Check if it's an array initialization (initializer list)
+            if (initExpr->getType() == "InitializerList") {
+                NInitializerList* initList = static_cast<NInitializerList*>(initExpr);
+                const auto& elements = initList->getElements();
+                
+                // Get the base element type for the array
+                NTypePtr elementType = varType->getElementType(context);
+                if (nullptr == elementType) {
+                    return StmtCodegenResult("Failed to get element type for array: " + currentDeclarator->getName());
+                }
+                
+                // Store each initializer value into the array
+                for (size_t i = 0; i < elements.size(); ++i) {
+                    ExprCodegenResult elemResult = elements[i]->codegen(context);
+                    if (false == elemResult.isSuccess()) {
+                        return StmtCodegenResult("Failed to generate code for array initializer element " + 
+                                                std::to_string(i) + " of variable: " + currentDeclarator->getName()) << elemResult;
+                    }
+                    
+                    llvm::Value* elemValue = elemResult.getValue();
+                    NTypePtr elemType = elemResult.getType();
+                    
+                    // Cast the element to the array's element type if needed
+                    ExprCodegenResult castResult = typeCast(elemValue, elemType, elementType, context);
+                    if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
+                        return StmtCodegenResult("Type cast failed for array initializer element " + 
+                                                std::to_string(i) + " of variable: " + currentDeclarator->getName()) << castResult;
+                    }
+                    
+                    // Calculate the GEP for the array element
+                    llvm::Value* indices[] = {
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), 0),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), i)
+                    };
+                    llvm::Value* elemPtr = context.builder.CreateGEP(
+                        allocaInst->getAllocatedType(),
+                        allocaInst,
+                        indices,
+                        currentDeclarator->getName() + "_elem_" + std::to_string(i));
+                    
+                    // Store the value
+                    context.builder.CreateStore(castResult.getValue(), elemPtr);
+                }
+            } else {
+                // Handle scalar initialization
+                ExprCodegenResult codegenResult = currentDeclarator->codegen(context);
+                llvm::Value *value = codegenResult.getValue();
+                NTypePtr valType = codegenResult.getType();
+                if ((false == codegenResult.isSuccess()) || (nullptr == value)) {
+                    return StmtCodegenResult("Initializer codegen failed for variable: " + currentDeclarator->getName()) << codegenResult;
+                }
+                
+                ExprCodegenResult castResult = typeCast(value, valType, varType, context);
+                if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
+                    return StmtCodegenResult("Type cast failed for initializer of variable: " + currentDeclarator->getName()) << castResult;
+                }
+                context.builder.CreateStore(castResult.getValue(), allocaInst);
+            }
+        }
     }
 
     return StmtCodegenResult();
