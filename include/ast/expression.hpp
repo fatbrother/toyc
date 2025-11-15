@@ -13,6 +13,7 @@ public:
         return AllocCodegenResult("Allocation not supported for " + getType());
     }
     virtual std::string getType() const override { return "Expression"; }
+    virtual bool isConstant() const { return false; }
 };
 
 class NBinaryOperator : public NExpression {
@@ -82,7 +83,6 @@ public:
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "Identifier"; }
-
 private:
     std::string name;
 };
@@ -92,6 +92,8 @@ public:
     NInteger(int value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Integer"; }
+    int getValue() const { return value; }
+    virtual bool isConstant() const override { return true; }
 
 private:
     int value;
@@ -102,6 +104,7 @@ public:
     NFloat(double value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Float"; }
+    virtual bool isConstant() const override { return true; }
 
 private:
     double value;
@@ -112,6 +115,7 @@ public:
     NString(const std::string &value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "String"; }
+    virtual bool isConstant() const override { return true; }
 
 private:
     std::string value;
@@ -124,6 +128,9 @@ public:
     ~NDeclarator() {
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
+        for (auto dimExpr : arrayDimensionExprs) {
+            SAFE_DELETE(dimExpr);
+        }
     }
     virtual ExprCodegenResult codegen(ASTContext &context) override {
         if (nullptr == expr) {
@@ -133,25 +140,29 @@ public:
     }
     virtual std::string getType() const override { return "Declaration"; }
     std::string getName() const { return name; }
-    bool isNonInitialized() const { return expr == nullptr; }
+    bool isInitialized() const { return nullptr != expr; }
 
-    void addArrayDimension(int size) {
-        arrayDimensions.push_back(size);
+    void addArrayDimension(NExpression* sizeExpr) {
+        arrayDimensionExprs.push_back(sizeExpr);
+        if (nullptr == sizeExpr || false == sizeExpr->isConstant()) {
+            isVLA = true;
+        }
     }
 
     bool isArray() const {
-        return !arrayDimensions.empty();
+        return !arrayDimensionExprs.empty();
     }
 
-    const std::vector<int>& getArrayDimensions() const {
-        return arrayDimensions;
+    const std::vector<NExpression*>& getArrayDimensionExprs() const {
+        return arrayDimensionExprs;
     }
 
 public:
     int pointerLevel = 0;
+    bool isVLA = false;
     NDeclarator *next = nullptr;
     NExpression *expr = nullptr;
-    std::vector<int> arrayDimensions;
+    std::vector<NExpression*> arrayDimensionExprs;
 
 private:
     std::string name;

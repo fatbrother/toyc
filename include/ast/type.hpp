@@ -84,9 +84,10 @@ struct PointerTypeDescriptor : public TypeDescriptor {
 struct ArrayTypeDescriptor : public TypeDescriptor {
     TypeDescriptorPtr elementDesc;
     std::vector<int> dimensions;
+    bool isVLA = false;
 
-    ArrayTypeDescriptor(TypeDescriptorPtr element, std::vector<int> dims)
-        : elementDesc(std::move(element)), dimensions(std::move(dims)) {}
+    ArrayTypeDescriptor(TypeDescriptorPtr element, std::vector<int> dims, bool isVLA = false)
+        : elementDesc(std::move(element)), dimensions(std::move(dims)), isVLA(isVLA) {}
 
     Kind getKind() const override { return Array; }
 };
@@ -212,11 +213,9 @@ public:
         return name;
     }
 
-    const std::vector<int>& getArrayDimensions() const;
-    int getTotalArraySize() const;
-
 protected:
-    NArrayType(NTypePtr elementType, const std::vector<int> &dimensions);
+    NArrayType(NTypePtr elementType, const std::vector<int> &dimensions)
+        : NType(VAR_TYPE_ARRAY), elementType(elementType), arrayDimensions(dimensions) {}
 
     virtual llvm::Type* generateLLVMType(ASTContext &context) override;
 

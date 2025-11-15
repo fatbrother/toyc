@@ -33,7 +33,10 @@ public:
     virtual std::string getType() const override { return "DeclarationStatement"; }
 
 private:
-    TypeDescriptor *typeDesc;  // Parser 階段的型別描述符
+    AllocCodegenResult createArrayAllocation(ASTContext &context, NTypePtr type, NDeclarator* declarator);
+    AllocCodegenResult createSingleAllocation(ASTContext &context, NTypePtr type, NDeclarator* declarator);
+
+    TypeDescriptor *typeDesc;
     NDeclarator *declarator;
 };
 

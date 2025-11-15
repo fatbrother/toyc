@@ -308,36 +308,33 @@ declarator
 		$$ = new toyc::ast::NDeclarator(*$1);
 		delete $1;
 	}
-	| pointer IDENTIFIER '[' I_CONSTANT ']' {
+	| pointer IDENTIFIER '[' assignment_expression ']' {
 		$$ = new toyc::ast::NDeclarator(*$2, $1);
-		$$->addArrayDimension(std::stoi(*$4));
+		$$->addArrayDimension($4);
 		delete $2;
-		delete $4;
 	}
-	| IDENTIFIER '[' I_CONSTANT ']' {
+	| IDENTIFIER '[' assignment_expression ']' {
 		$$ = new toyc::ast::NDeclarator(*$1);
-		$$->addArrayDimension(std::stoi(*$3));
+		$$->addArrayDimension($3);
 		delete $1;
-		delete $3;
 	}
 	| pointer IDENTIFIER '[' ']' {
 		$$ = new toyc::ast::NDeclarator(*$2, $1);
-		$$->addArrayDimension(0);
+		$$->addArrayDimension(nullptr);
 		delete $2;
 	}
 	| IDENTIFIER '[' ']' {
 		$$ = new toyc::ast::NDeclarator(*$1);
-		$$->addArrayDimension(0);
+		$$->addArrayDimension(nullptr);
 		delete $1;
 	}
-	| declarator '[' I_CONSTANT ']' {
+	| declarator '[' assignment_expression ']' {
 		$$ = $1;
-		$$->addArrayDimension(std::stoi(*$3));
-		delete $3;
+		$$->addArrayDimension($3);
 	}
 	| declarator '[' ']' {
 		$$ = $1;
-		$$->addArrayDimension(0);
+		$$->addArrayDimension(nullptr);
 	}
 	;
 

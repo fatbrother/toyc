@@ -51,9 +51,6 @@ NTypePtr NType::getAddrType(ASTContext& context) {
     return context.typeFactory->getPointerType(shared_from_this());
 }
 
-NArrayType::NArrayType(NTypePtr elementType, const std::vector<int> &dimensions)
-    : NType(VAR_TYPE_ARRAY), elementType(elementType), arrayDimensions(dimensions) {}
-
 llvm::Type* NArrayType::generateLLVMType(ASTContext &context) {
     TypeCodegenResult elemResult = elementType->getLLVMType(context);
     if (!elemResult.isSuccess()) {
@@ -74,18 +71,6 @@ NTypePtr NArrayType::getElementType(ASTContext& context) const {
         std::vector<int> innerDimensions(arrayDimensions.begin() + 1, arrayDimensions.end());
         return context.typeFactory->getArrayType(elementType, innerDimensions);
     }
-}
-
-const std::vector<int>& NArrayType::getArrayDimensions() const {
-    return arrayDimensions;
-}
-
-int NArrayType::getTotalArraySize() const {
-    int total = 1;
-    for (int dim : arrayDimensions) {
-        total *= dim;
-    }
-    return total;
 }
 
 std::string toyc::ast::varTypeToString(VarType type) {
@@ -348,6 +333,10 @@ NTypePtr TypeFactory::realize(const TypeDescriptor* descriptor) {
             NTypePtr elementType = realize(arrayDesc->elementDesc.get());
             if (!elementType) {
                 return nullptr;
+            }
+
+            if (arrayDesc->isVLA) {
+                return getPointerType(elementType, arrayDesc->dimensions.size());
             }
             return getArrayType(elementType, arrayDesc->dimensions);
         }

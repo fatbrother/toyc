@@ -215,15 +215,6 @@ TEST_F(TypeSystemTest, ArrayLLVMGeneration) {
     EXPECT_TRUE(result.getLLVMType()->isArrayTy());
 }
 
-TEST_F(TypeSystemTest, ArrayTotalSize) {
-    NTypePtr intType = context.typeFactory->getBasicType(VAR_TYPE_INT);
-    std::vector<int> dims = {10, 20, 30};
-    NTypePtr arrayType = context.typeFactory->getArrayType(intType, dims);
-
-    auto arrayTypeCast = std::static_pointer_cast<NArrayType>(arrayType);
-    EXPECT_EQ(arrayTypeCast->getTotalArraySize(), 10 * 20 * 30);
-}
-
 // ==================== Struct Type Tests ====================
 
 TEST_F(TypeSystemTest, StructTypeCreation) {
