@@ -3,6 +3,12 @@
 *.out
 toyc
 
+# Ignore test executables and output files  
+test_array*
+test
+test.c
+test.ll
+
 # Ignore build directories
 build/
 
