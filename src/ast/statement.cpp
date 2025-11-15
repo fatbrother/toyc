@@ -55,7 +55,7 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
         allocaInst = llvm::dyn_cast<llvm::AllocaInst>(allocValue);
         NTypePtr varType = allocResult.getType();
 
-        // Handle initialization if present
+        // Handle variable initialization if present (both scalar and array)
         if (currentDeclarator->isInitialized()) {
             NExpression* initExpr = currentDeclarator->expr;
             
