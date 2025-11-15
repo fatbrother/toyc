@@ -14,6 +14,7 @@ public:
         return AllocCodegenResult("Allocation not supported for " + getType());
     }
     virtual std::string getType() const override { return "Expression"; }
+    virtual bool isConstant() const { return false; }
 };
 
 class NBinaryOperator : public NExpression {
@@ -66,7 +67,6 @@ public:
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "Identifier"; }
-
 private:
     std::string name;
 };
@@ -77,6 +77,7 @@ public:
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Integer"; }
     int getValue() const { return value; }
+    virtual bool isConstant() const override { return true; }
 
 private:
     int value;
@@ -87,6 +88,7 @@ public:
     explicit NFloat(double value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Float"; }
+    virtual bool isConstant() const override { return true; }
 
 private:
     double value;
@@ -97,6 +99,7 @@ public:
     explicit NString(const std::string &value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "String"; }
+    virtual bool isConstant() const override { return true; }
 
 private:
     std::string value;
@@ -114,9 +117,15 @@ public:
     virtual std::string getType() const override { return "Declaration"; }
     std::string getName() const { return name; }
     bool isNonInitialized() const { return expr == nullptr; }
+    bool isInitialized() const { return expr != nullptr; }
     CodegenResult<llvm::Value *> getArraySizeValue(ASTContext &context);
 
-    void addArrayDimension(NExpression *size) { arrayDimensions.emplace_back(size); }
+    void addArrayDimension(NExpression *size) {
+        if (nullptr == size || false == size->isConstant()) {
+            isVLA = true;
+        }
+        arrayDimensions.emplace_back(size);
+    }
 
     int getArrayDimensionCount() const { return static_cast<int>(arrayDimensions.size()); }
 

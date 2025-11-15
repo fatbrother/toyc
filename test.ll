@@ -79,3 +79,4 @@ for_body:                                         ; preds = %for_condition
   store i32 %mul, ptr %ptridx, align 4
   br label %for_increment
 }
+
