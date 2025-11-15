@@ -7,7 +7,7 @@ toyc
 build/
 
 # Ignore test output cache
-tests/gcc_output_cache/*.expected
+tests/gcc_output_cache/
 tests/output_temp/
 
 .vscode/
