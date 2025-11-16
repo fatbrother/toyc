@@ -33,7 +33,13 @@ public:
     virtual std::string getType() const override { return "DeclarationStatement"; }
 
 private:
-    TypeDescriptor *typeDesc;  // Parser 階段的型別描述符
+    StmtCodegenResult initializeArrayElements(
+        llvm::AllocaInst* allocaInst,
+        llvm::Type* arrayType,
+        NInitializerList* initList,
+        ASTContext& context);
+
+    TypeDescriptor *typeDesc;
     NDeclarator *declarator;
 };
 

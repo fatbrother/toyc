@@ -1,25 +1,23 @@
 #include "ast/expression.hpp"
 #include "ast/external_definition.hpp"
-#include "utility/type_cast.hpp"
 
 #include <iostream>
 #include <map>
 
 using namespace toyc::ast;
-using namespace toyc::utility;
 
 ExprCodegenResult NLogicalOperator::codegen(ASTContext &context) {
     // Evaluate left operand
     ExprCodegenResult lhsResult = lhs->codegen(context);
     llvm::Value *lhsValue = lhsResult.getValue();
-    NTypePtr lhsType = lhsResult.getType();
+    llvm::Type* lhsType = lhsResult.getType();
 
     if (false == lhsResult.isSuccess()) {
         return ExprCodegenResult("Failed to generate code for left operand in logical operation") << lhsResult;
     }
 
     // Cast lhs to bool
-    CodegenResult castLhsResult = typeCast(lhsValue, lhsType, VAR_TYPE_BOOL, context);
+    CodegenResult castLhsResult = typeCast(lhsValue, lhsType, context.typeManager->getBoolType(), context);
     if (false == castLhsResult.isSuccess()) {
         return ExprCodegenResult("Type cast failed for left-hand side in logical operation") << castLhsResult;
     }
@@ -50,14 +48,14 @@ ExprCodegenResult NLogicalOperator::codegen(ASTContext &context) {
     context.builder.SetInsertPoint(rhsBlock);
     CodegenResult rhsResult = rhs->codegen(context);
     llvm::Value *rhsValue = rhsResult.getValue();
-    NTypePtr rhsType = rhsResult.getType();
+    llvm::Type* rhsType = rhsResult.getType();
 
     if (false == rhsResult.isSuccess()) {
         return ExprCodegenResult("Failed to generate code for right operand in logical operation") << rhsResult;
     }
 
     // Cast rhs to bool
-    CodegenResult castRhsResult = typeCast(rhsValue, rhsType, VAR_TYPE_BOOL, context);
+    CodegenResult castRhsResult = typeCast(rhsValue, rhsType, context.typeManager->getBoolType(), context);
     if (false == castRhsResult.isSuccess()) {
         return ExprCodegenResult("Type cast failed for right-hand side in logical operation") << castRhsResult;
     }
@@ -72,30 +70,30 @@ ExprCodegenResult NLogicalOperator::codegen(ASTContext &context) {
     phiNode->addIncoming(lhsValue, lhsEndBlock);
     phiNode->addIncoming(rhsValue, rhsEndBlock);
 
-    return ExprCodegenResult(phiNode, context.typeFactory->getBasicType(VarType::VAR_TYPE_BOOL));
+    return ExprCodegenResult(phiNode, context.typeManager->getBoolType());
 }
 
 ExprCodegenResult NBinaryOperator::codegen(ASTContext &context) {
     CodegenResult rhsResult = rhs->codegen(context);
     ExprCodegenResult lhsResult = lhs->codegen(context);
-    llvm::Value *result = nullptr;
-    NTypePtr resultType = nullptr;
-    VarType targetType = VAR_TYPE_INT;
-    llvm::Value *lhsValue = lhsResult.getValue();
-    NTypePtr lhsType = lhsResult.getType();
-    llvm::Value *rhsValue = rhsResult.getValue();
-    NTypePtr rhsType = rhsResult.getType();
-
     if (false == lhsResult.isSuccess() || false == rhsResult.isSuccess()) {
         return ExprCodegenResult("Failed to generate code for binary operator operands")
             << lhsResult << rhsResult;
     }
 
-    targetType = (lhsType->getVarType() > rhsType->getVarType()) ? lhsType->getVarType() : rhsType->getVarType();
+    llvm::Value *result = nullptr;
+    llvm::Type* resultType = nullptr;
+    llvm::Type* targetType = nullptr;
+    llvm::Value *lhsValue = lhsResult.getValue();
+    llvm::Type* lhsType = lhsResult.getType();
+    llvm::Value *rhsValue = rhsResult.getValue();
+    llvm::Type* rhsType = rhsResult.getType();
+
+    targetType = context.typeManager->getCommonType(lhsType, rhsType);
     if (op == EQ || op == NE || op == LE || op == GE || op == LT || op == GT) {
-        resultType = context.typeFactory->getBasicType(VarType::VAR_TYPE_BOOL);
+        resultType = context.typeManager->getBoolType();
     } else {
-        resultType = context.typeFactory->getBasicType(targetType);
+        resultType = targetType;
     }
 
     CodegenResult castLhsResult = typeCast(
@@ -120,25 +118,25 @@ ExprCodegenResult NBinaryOperator::codegen(ASTContext &context) {
 
     switch (op) {
         case ADD:
-            if (true == isFloatingPointType(targetType))
+            if (isFloatingPointType(targetType))
                 result = context.builder.CreateFAdd(lhsValue, rhsValue, "add");
             else
                 result = context.builder.CreateAdd(lhsValue, rhsValue, "add");
             break;
         case SUB:
-            if (true == isFloatingPointType(targetType))
+            if (isFloatingPointType(targetType))
                 result = context.builder.CreateFSub(lhsValue, rhsValue, "sub");
             else
                 result = context.builder.CreateSub(lhsValue, rhsValue, "sub");
             break;
         case MUL:
-            if (true == isFloatingPointType(targetType))
+            if (isFloatingPointType(targetType))
                 result = context.builder.CreateFMul(lhsValue, rhsValue, "mul");
             else
                 result = context.builder.CreateMul(lhsValue, rhsValue, "mul");
             break;
         case DIV:
-            if (true == isFloatingPointType(targetType))
+            if (isFloatingPointType(targetType))
                 result = context.builder.CreateFDiv(lhsValue, rhsValue, "div");
             else
                 result = context.builder.CreateSDiv(lhsValue, rhsValue, "div");
@@ -153,32 +151,32 @@ ExprCodegenResult NBinaryOperator::codegen(ASTContext &context) {
             result = context.builder.CreateLShr(lhsValue, rhsValue, "right");
             break;
         case EQ:
-            result = (true == isFloatingPointType(targetType)) ?
+            result = isFloatingPointType(targetType) ?
                      context.builder.CreateFCmpOEQ(lhsValue, rhsValue, "eq") :
                      context.builder.CreateICmpEQ(lhsValue, rhsValue, "eq");
             break;
         case NE:
-            result = (true == isFloatingPointType(targetType)) ?
+            result = isFloatingPointType(targetType) ?
                      context.builder.CreateFCmpONE(lhsValue, rhsValue, "ne") :
                      context.builder.CreateICmpNE(lhsValue, rhsValue, "ne");
             break;
         case LE:
-            result = (true == isFloatingPointType(targetType)) ?
+            result = isFloatingPointType(targetType) ?
                      context.builder.CreateFCmpOLE(lhsValue, rhsValue, "le") :
                      context.builder.CreateICmpSLE(lhsValue, rhsValue, "le");
             break;
         case GE:
-            result = (true == isFloatingPointType(targetType)) ?
+            result = isFloatingPointType(targetType) ?
                      context.builder.CreateFCmpOGE(lhsValue, rhsValue, "ge") :
                      context.builder.CreateICmpSGE(lhsValue, rhsValue, "ge");
             break;
         case LT:
-            result = (true == isFloatingPointType(targetType)) ?
+            result = isFloatingPointType(targetType) ?
                      context.builder.CreateFCmpOLT(lhsValue, rhsValue, "lt") :
                      context.builder.CreateICmpSLT(lhsValue, rhsValue, "lt");
             break;
         case GT:
-            result = (true == isFloatingPointType(targetType)) ?
+            result = isFloatingPointType(targetType) ?
                      context.builder.CreateFCmpOGT(lhsValue, rhsValue, "gt") :
                      context.builder.CreateICmpSGT(lhsValue, rhsValue, "gt");
             break;
@@ -201,10 +199,10 @@ ExprCodegenResult NBinaryOperator::codegen(ASTContext &context) {
 ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
     CodegenResult exprResult = expr->codegen(context);
     llvm::AllocaInst *allocaInst = nullptr;
-    llvm::Value *one = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), 1);
+    llvm::Value *one = context.builder.getInt32(1);
     llvm::Value *value = exprResult.getValue();
-    NTypePtr type = exprResult.getType();
-    NTypePtr resultType = nullptr;
+    llvm::Type* type = exprResult.getType();
+    llvm::Type* resultType = nullptr;
 
     if (false == exprResult.isSuccess()) {
         return ExprCodegenResult("Failed to generate code for unary expression operand") << exprResult;
@@ -241,16 +239,12 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
             value = allocaInst;
             break;
         case DEREF: {
-                NTypePtr pointeeType = type->getElementType(context);
+                llvm::Type* pointeeType = context.typeManager->getPointeeType(type);
                 if (nullptr == pointeeType) {
                     return ExprCodegenResult("Cannot dereference non-pointer type");
                 }
 
-                CodegenResult derefTypeResult = pointeeType->getLLVMType(context);
-                if (false == derefTypeResult.isSuccess()) {
-                    return ExprCodegenResult("Failed to get LLVM type for dereference") << derefTypeResult;
-                }
-                value = context.builder.CreateLoad(derefTypeResult.getLLVMType(), value, "deref");
+                value = context.builder.CreateLoad(pointeeType, value, "deref");
             }
             break;
         case PLUS:
@@ -259,14 +253,14 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
             value = context.builder.CreateNeg(value, "neg");
             break;
         case BIT_NOT:
-            value = context.builder.CreateXor(value, llvm::ConstantInt::get(value->getType(), -1), "bit_not");
+            value = context.builder.CreateXor(value, context.builder.getInt32(-1), "bit_not");
             break;
         case LOG_NOT: {
-                CodegenResult castResult = typeCast(value, type, VAR_TYPE_BOOL, context);
+                CodegenResult castResult = typeCast(value, type, context.typeManager->getBoolType(), context);
                 if (false == castResult.isSuccess()) {
                     return ExprCodegenResult("Failed to cast value to bool for logical not") << castResult;
                 }
-                value = context.builder.CreateICmpEQ(value, llvm::ConstantInt::get(value->getType(), 0), "log_not");
+                value = context.builder.CreateICmpEQ(value, context.builder.getFalse(), "log_not");
             }
             break;
         default:
@@ -274,11 +268,11 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
     }
 
     if (op == ADDR) {
-        resultType = type->getAddrType(context);
+        resultType = context.typeManager->getPointerType(type);
     } else if (op == DEREF) {
-        resultType = type->getElementType(context);
+        resultType = context.typeManager->getPointeeType(type);
     } else if (op == LOG_NOT) {
-        resultType = context.typeFactory->getBasicType(VarType::VAR_TYPE_BOOL);
+        resultType = context.typeManager->getBoolType();
     } else {
         resultType = type;
     }
@@ -306,7 +300,7 @@ ExprCodegenResult NConditionalExpression::codegen(ASTContext &context) {
     context.builder.SetInsertPoint(trueBlock);
     CodegenResult trueResult = trueExpr->codegen(context);
     llvm::Value *trueValue = trueResult.getValue();
-    NTypePtr trueType = trueResult.getType();
+    llvm::Type* trueType = trueResult.getType();
     if (false == trueResult.isSuccess()) {
         return ExprCodegenResult("True expression code generation failed") << trueResult;
     }
@@ -318,7 +312,7 @@ ExprCodegenResult NConditionalExpression::codegen(ASTContext &context) {
     context.builder.SetInsertPoint(falseBlock);
     CodegenResult falseResult = falseExpr->codegen(context);
     llvm::Value *falseValue = falseResult.getValue();
-    NTypePtr falseType = falseResult.getType();
+    llvm::Type* falseType = falseResult.getType();
     if (false == falseResult.isSuccess()) {
         return ExprCodegenResult("False expression code generation failed") << falseResult;
     }
@@ -345,7 +339,7 @@ ExprCodegenResult NIdentifier::codegen(ASTContext &context) {
         return ExprCodegenResult("Variable not found: " + name);
     }
 
-    if (nullptr != type && true == type->isArray()) {
+    if (nullptr != type && true == type->isArrayTy()) {
         std::vector<llvm::Value*> indices(2);
         indices[0] = llvm::ConstantInt::get(context.llvmContext, llvm::APInt(32, 0));
         indices[1] = llvm::ConstantInt::get(context.llvmContext, llvm::APInt(32, 0));
@@ -357,7 +351,8 @@ ExprCodegenResult NIdentifier::codegen(ASTContext &context) {
             name + "_decay"
         );
 
-        return ExprCodegenResult(value, context.typeFactory->getPointerType(type->getElementType(context)));
+        llvm::Type* elementType = context.typeManager->getArrayElementType(type);
+        return ExprCodegenResult(value, context.typeManager->getPointerType(elementType));
     }
 
     value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
@@ -382,10 +377,10 @@ AllocCodegenResult NIdentifier::allocgen(ASTContext &context) {
 ExprCodegenResult NAssignment::codegen(ASTContext &context) {
     AllocCodegenResult lhsResult = lhs->allocgen(context);
     llvm::AllocaInst *lhsAlloca = static_cast<llvm::AllocaInst *>(lhsResult.getAllocaInst());
-    NTypePtr lhsType = lhsResult.getType();
+    llvm::Type* lhsType = lhsResult.getType();
     CodegenResult rhsResult = rhs->codegen(context);
     llvm::Value *rhsValue = rhsResult.getValue();
-    NTypePtr rhsType = rhsResult.getType();
+    llvm::Type* rhsType = rhsResult.getType();
     if (false == rhsResult.isSuccess() || false == lhsResult.isSuccess()) {
         return ExprCodegenResult("Assignment failed due to null values") << lhsResult << rhsResult;
     }
@@ -415,27 +410,31 @@ ExprCodegenResult NFunctionCall::codegen(ASTContext &context) {
         return ExprCodegenResult("Function not found: " + name);
     }
 
-    NParameter *paramIt = nullptr;
-    NArguments* argNode = nullptr;
-    for (paramIt = function->getParams(), argNode = argNodes; paramIt != nullptr && argNode != nullptr; paramIt = paramIt->next, argNode = argNode->next) {
+    NParameter *paramIt = function->getParams();
+    NArguments *argNode = argNodes;
 
+    for (; argNode != nullptr; argNode = argNode->next) {
         CodegenResult argResult = argNode->codegen(context);
         llvm::Value *argValue = argResult.getValue();
-        NTypePtr argType = argResult.getType();
+        llvm::Type* argType = argResult.getType();
         if (false == argResult.isSuccess()) {
             return ExprCodegenResult("Argument code generation failed for function call: " + name) << argResult;
         }
 
-        if (false == paramIt->isVariadic) {
+        if (paramIt != nullptr && false == paramIt->isVariadic) {
             CodegenResult castResult = typeCast(
                 argValue,
                 argType,
-                context.typeFactory->realize(paramIt->getTypeDescriptor()),
+                context.typeManager->realize(paramIt->getTypeDescriptor(), context),
                 context);
             if (false == castResult.isSuccess()) {
                 return ExprCodegenResult("Type cast failed for argument in function call: " + name) << castResult;
             }
             argValue = castResult.getValue();
+        }
+
+        if (paramIt != nullptr) {
+            paramIt = paramIt->next;
         }
 
         args.push_back(argValue);
@@ -453,13 +452,9 @@ ExprCodegenResult NMemberAccess::codegen(ASTContext &context) {
     }
 
     llvm::Value *memberPtr = allocResult.getAllocaInst();
-    NTypePtr memberType = allocResult.getType();
-    CodegenResult memberTypeResult = memberType->getLLVMType(context);
-    if (false == memberTypeResult.isSuccess()) {
-        return ExprCodegenResult("Failed to get LLVM type for member: " + memberName) << memberTypeResult;
-    }
+    llvm::Type* memberType = allocResult.getType();
     llvm::Value *memberValue = context.builder.CreateLoad(
-        memberTypeResult.getLLVMType(),
+        memberType,
         memberPtr,
         "member_value");
 
@@ -469,73 +464,76 @@ ExprCodegenResult NMemberAccess::codegen(ASTContext &context) {
 AllocCodegenResult NMemberAccess::allocgen(ASTContext &context) {
     AllocCodegenResult baseResult = base->allocgen(context);
     llvm::Value *baseValue = baseResult.getAllocaInst();
-    NTypePtr baseType = baseResult.getType();
+    llvm::Type* baseType = baseResult.getType();
     llvm::Type *childLLVMType = nullptr;
 
     if (false == baseResult.isSuccess()) {
         return AllocCodegenResult("Base expression code generation failed for member access: " + memberName) << baseResult;
     }
 
-    if (true == baseType->isPointer() && true == isPointerAccess) {
-        TypeCodegenResult derefTypeResult = baseType->getLLVMType(context);
-        if (false == derefTypeResult.isSuccess() || nullptr == derefTypeResult.getLLVMType()) {
-            return AllocCodegenResult("Failed to get LLVM type for dereferencing in member access") << derefTypeResult;
+    if (true == baseType->isPointerTy() && true == isPointerAccess) {
+        llvm::Type* derefType = context.typeManager->getPointeeType(baseType);
+        if (nullptr == derefType) {
+            return AllocCodegenResult("Failed to get pointee type for dereferencing in member access");
         }
         baseValue = context.builder.CreateLoad(
-            derefTypeResult.getLLVMType(),
+            derefType,
             baseValue,
             "deref_base");
-        baseType = baseType->getElementType(context);
+        baseType = derefType;
     }
 
-    if (false == baseType->isStruct()) {
+    if (false == baseType->isStructTy()) {
         return AllocCodegenResult("Base type is not a struct for member access: " + memberName);
     }
 
-    auto [isFound, typeDef] = context.typeTable->lookup(baseType->getName());
-    if (false == isFound || nullptr == typeDef) {
-        return AllocCodegenResult("Struct type not found: " + baseType->getName());
+    auto* structType = llvm::cast<llvm::StructType>(baseType);
+    const auto metadata = context.typeManager->getStructMetadata(structType);
+
+    if (!metadata) {
+        return AllocCodegenResult("Struct metadata not found: " + context.typeManager->getTypeName(baseType));
     }
-    auto structDef = std::static_pointer_cast<NStructType>(typeDef);
-    int memberIndex = structDef->getMemberIndex(memberName);
-    if (memberIndex < 0) {
+
+    auto it = metadata->memberIndexMap.find(memberName);
+    if (it == metadata->memberIndexMap.end()) {
         return AllocCodegenResult("Member not found in struct: " + memberName);
     }
 
+    int memberIndex = it->second;
+    llvm::Type* memberType = metadata->memberTypes[memberIndex];
+
     std::vector<llvm::Value *> indices;
-    indices.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), 0));
-    indices.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), memberIndex));
+    indices.push_back(context.builder.getInt32(0));
+    indices.push_back(context.builder.getInt32(memberIndex));
 
     llvm::Value *memberPtr = context.builder.CreateGEP(
-        structDef->getLLVMType(context).getLLVMType(),
+        baseType,
         baseValue,
         indices,
         "member_ptr");
-
-    NTypePtr memberType = structDef->getMemberType(memberName, context);
 
     return AllocCodegenResult(memberPtr, memberType);
 }
 
 ExprCodegenResult NInteger::codegen(ASTContext &context) {
     return ExprCodegenResult(
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), value),
-        context.typeFactory->getBasicType(VarType::VAR_TYPE_INT)
+        context.builder.getInt32(value),
+        context.typeManager->getIntType()
     );
 }
 
 ExprCodegenResult NFloat::codegen(ASTContext &context) {
     return ExprCodegenResult(
         llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.llvmContext), value),
-        context.typeFactory->getBasicType(VarType::VAR_TYPE_DOUBLE)
+        context.typeManager->getDoubleType()
     );
 }
 
 ExprCodegenResult NString::codegen(ASTContext &context) {
     return ExprCodegenResult(
         context.builder.CreateGlobalStringPtr(value, "string_literal"),
-        context.typeFactory->getPointerType(
-            context.typeFactory->getCharType())
+        context.typeManager->getPointerType(
+            context.typeManager->getCharType())
     );
 }
 
@@ -546,7 +544,7 @@ ExprCodegenResult NArraySubscript::codegen(ASTContext &context) {
     }
 
     llvm::Value *value = context.builder.CreateLoad(
-        ptrResult.getType()->getLLVMType(context).getLLVMType(),
+        ptrResult.getType(),
         ptrResult.getAllocaInst(),
         "arrayelem"
     );
@@ -560,50 +558,54 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
         return AllocCodegenResult("Failed to generate code for array index expression") << indexResult;
     }
 
-    CodegenResult arrayCodegenResult = array->codegen(context);
-    if (arrayCodegenResult.isSuccess() && arrayCodegenResult.getType() && arrayCodegenResult.getType()->isPointer()) {
-        CodegenResult elemLLVMTypeResult = arrayCodegenResult.getType()->getElementType(context)->getLLVMType(context);
-        if (false == elemLLVMTypeResult.isSuccess()) {
-            return AllocCodegenResult("Failed to get element type for pointer subscript") << elemLLVMTypeResult;
-        }
-
-        llvm::Value *elementPtr = context.builder.CreateGEP(
-            elemLLVMTypeResult.getLLVMType(),
-            arrayCodegenResult.getValue(),
-            indexResult.getValue(),
-            "arrayidx"
-        );
-
-        return AllocCodegenResult(elementPtr, arrayCodegenResult.getType()->getElementType(context));
-    }
-
     CodegenResult arrayResult = array->allocgen(context);
     if (false == arrayResult.isSuccess()) {
         return AllocCodegenResult("Failed to generate lvalue for array in subscript operation") << arrayResult;
     }
 
     llvm::Value *basePtr = arrayResult.getAllocaInst();
-    NTypePtr elemType = arrayResult.getType()->getElementType(context);
-    if (nullptr == elemType) {
-        return AllocCodegenResult("Array type does not have an element type in subscript operation");
+    llvm::Type* arrayType = arrayResult.getType();
+    llvm::Type* elemType = nullptr;
+
+    if (true == arrayType->isArrayTy()) {
+        elemType = context.typeManager->getArrayElementType(arrayType);
+        if (nullptr == elemType) {
+            return AllocCodegenResult("Array type does not have an element type in subscript operation");
+        }
+
+        std::vector<llvm::Value*> indices(2);
+        indices[0] = context.builder.getInt32(0);
+        indices[1] = indexResult.getValue();
+
+        llvm::Value *elementPtr = context.builder.CreateGEP(
+            arrayType,
+            basePtr,
+            indices,
+            "arrayidx"
+        );
+
+        return AllocCodegenResult(elementPtr, elemType);
+    } else if (arrayType->isPointerTy()) {
+        llvm::Value *ptrValue = context.builder.CreateLoad(
+            arrayType,
+            basePtr,
+            "load_ptr"
+        );
+
+        llvm::Type* elementType = context.typeManager->getPointeeType(arrayType);
+        llvm::Value *elementPtr = context.builder.CreateGEP(
+            elementType,
+            ptrValue,
+            indexResult.getValue(),
+            "ptr_arrayidx"
+        );
+
+        return AllocCodegenResult(elementPtr, elementType);
     }
-    std::vector<llvm::Value*> indices(2);
-    indices[0] = llvm::ConstantInt::get(context.llvmContext, llvm::APInt(32, 0));
-    indices[1] = indexResult.getValue();
 
-    CodegenResult typeResult = elemType->getLLVMType(context);
-    if (false == typeResult.isSuccess()) {
-        return AllocCodegenResult("Failed to get LLVM type for array element in subscript operation") << typeResult;
-    }
-
-    llvm::Value *elementPtr = context.builder.CreateGEP(
-        arrayResult.getType()->getLLVMType(context).getLLVMType(),
-        basePtr,
-        indices,
-        "arrayidx"
-    );
-
-    return AllocCodegenResult(elementPtr, elemType);
+    // Not an array or pointer type
+    std::string typeName = context.typeManager->getTypeName(arrayType);
+    return AllocCodegenResult("Base is not an array type in subscript operation, got: " + typeName);
 }
 
 ExprCodegenResult NInitializerList::codegen(ASTContext &context) {
@@ -618,20 +620,14 @@ ExprCodegenResult NCastExpression::codegen(ASTContext &context) {
     }
 
     // Get the target type
-    NTypePtr targetType = context.typeFactory->realize(targetTypeDesc);
+    llvm::Type* targetType = context.typeManager->realize(targetTypeDesc, context);
     if (nullptr == targetType) {
         return ExprCodegenResult("Target type is null in cast expression");
     }
 
-    CodegenResult targetTypeLLVMResult = targetType->getLLVMType(context);
-    if (!targetTypeLLVMResult.isSuccess()) {
-        return ExprCodegenResult("Failed to get LLVM type for cast target") << targetTypeLLVMResult;
-    }
-
     // Get source and target types
-    NTypePtr sourceType = exprResult.getType();
+    llvm::Type* sourceType = exprResult.getType();
     llvm::Value *sourceValue = exprResult.getValue();
-    llvm::Type *targetLLVMType = targetTypeLLVMResult.getLLVMType();
 
     // Perform the type cast
     CodegenResult castResult = typeCast(sourceValue, sourceType, targetType, context);
@@ -643,30 +639,20 @@ ExprCodegenResult NCastExpression::codegen(ASTContext &context) {
 }
 
 ExprCodegenResult NSizeofExpression::codegen(ASTContext &context) {
-    llvm::Type *llvmType = nullptr;
+    llvm::Type *type = nullptr;
 
-    if (isSizeofType) {
+    if (true == isSizeofType) {
         // sizeof(type)
-        NTypePtr targetType = context.typeFactory->realize(targetTypeDesc);
-        if (nullptr == targetType) {
+        type = context.typeManager->realize(targetTypeDesc, context);
+        if (nullptr == type) {
             return ExprCodegenResult("Target type is null in sizeof expression");
         }
-
-        CodegenResult typeResult = targetType->getLLVMType(context);
-        if (!typeResult.isSuccess()) {
-            return ExprCodegenResult("Failed to get LLVM type for sizeof operand") << typeResult;
-        }
-        llvmType = typeResult.getLLVMType();
     } else {
         // sizeof expression
         AllocCodegenResult allocResult = expr->allocgen(context);
         if (allocResult.isSuccess() && allocResult.getType()) {
             // Use the type from allocgen (preserves array type)
-            CodegenResult typeResult = allocResult.getType()->getLLVMType(context);
-            if (!typeResult.isSuccess()) {
-                return ExprCodegenResult("Failed to get LLVM type from expression") << typeResult;
-            }
-            llvmType = typeResult.getLLVMType();
+            type = allocResult.getType();
         } else {
             // Fallback to codegen for expressions that don't have lvalue
             ExprCodegenResult exprResult = expr->codegen(context);
@@ -674,17 +660,13 @@ ExprCodegenResult NSizeofExpression::codegen(ASTContext &context) {
                 return ExprCodegenResult("Failed to generate code for sizeof expression") << exprResult;
             }
 
-            TypeCodegenResult typeResult = exprResult.getType()->getLLVMType(context);
-            if (!typeResult.isSuccess()) {
-                return ExprCodegenResult("Failed to get LLVM type from expression") << typeResult;
-            }
-            llvmType = typeResult.getLLVMType();
+            type = exprResult.getType();
         }
     }
 
     // Get the size of the type
     llvm::DataLayout dataLayout(&(context.module));
-    uint64_t sizeInBytes = dataLayout.getTypeAllocSize(llvmType);
+    uint64_t sizeInBytes = dataLayout.getTypeAllocSize(type);
 
     // Return the size as a constant integer
     llvm::Value *sizeValue = llvm::ConstantInt::get(
@@ -692,7 +674,7 @@ ExprCodegenResult NSizeofExpression::codegen(ASTContext &context) {
         sizeInBytes
     );
 
-    return ExprCodegenResult(sizeValue, context.typeFactory->getIntType());
+    return ExprCodegenResult(sizeValue, context.typeManager->getIntType());
 }
 
 ExprCodegenResult NCommaExpression::codegen(ASTContext &context) {

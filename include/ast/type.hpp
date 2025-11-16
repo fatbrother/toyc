@@ -4,22 +4,20 @@
 #include <vector>
 #include <memory>
 #include <map>
-#include <functional>
 
 // Forward declarations for LLVM types
 namespace llvm {
     class Type;
     class StructType;
+    class PointerType;
+    class ArrayType;
+    class LLVMContext;
+    class Module;
 }
 
 namespace toyc::ast {
 
 class ASTContext;
-class TypeValue;
-template<typename T> class CodegenResult;
-using TypeCodegenResult = CodegenResult<TypeValue>;
-class NType;
-using NTypePtr = std::shared_ptr<NType>;
 
 enum VarType {
     VAR_TYPE_VOID = 0,
@@ -37,16 +35,15 @@ enum VarType {
 };
 
 // Helper functions
-std::string varTypeToString(VarType type);
-bool isFloatingPointType(VarType type);
-bool isIntegerType(VarType type);
+bool isFloatingPointType(llvm::Type* type);
+bool isIntegerType(llvm::Type* type);
 
 // ==================== Forward Declarations ====================
-class TypeFactory;
+class TypeManager;
 class NDeclarator;
 class NStructDeclaration;
 
-// ==================== TypeDescriptor (用於 Parser 階段) ====================
+// ==================== TypeDescriptor ====================
 
 struct TypeDescriptor {
     enum Kind {
@@ -89,6 +86,17 @@ struct ArrayTypeDescriptor : public TypeDescriptor {
         : elementDesc(std::move(element)), dimensions(std::move(dims)) {}
 
     Kind getKind() const override { return Array; }
+};
+
+class NStructDeclaration {
+public:
+    NStructDeclaration(TypeDescriptor* type, NDeclarator* declarator)
+        : type(type), declarator(declarator) {}
+    ~NStructDeclaration();
+
+    TypeDescriptor *type;
+    NDeclarator *declarator = nullptr;
+    NStructDeclaration *next = nullptr;
 };
 
 struct StructTypeDescriptor : public TypeDescriptor {
@@ -151,182 +159,93 @@ inline TypeDescriptorPtr makeStructDesc(const std::string& name, NStructDeclarat
     return std::make_unique<StructTypeDescriptor>(name, members);
 }
 
-// ==================== NType Classes ====================
+// ==================== Array Metadata ====================
 
-class NType : public std::enable_shared_from_this<NType> {
-public:
-    virtual ~NType() = default;
+struct ArrayMetadata {
+    std::vector<int> dimensions;
+    llvm::Type* elementType;
 
-    virtual std::string getType() const { return "Type"; }
-    virtual TypeCodegenResult getLLVMType(ASTContext &context);
-
-    virtual bool isArray() const { return type == VAR_TYPE_ARRAY; }
-    virtual bool isPointer() const { return type == VAR_TYPE_PTR; }
-    virtual bool isStruct() const { return type == VAR_TYPE_STRUCT; }
-    virtual NTypePtr getElementType(ASTContext& context) const { return nullptr; }
-    virtual NTypePtr getAddrType(ASTContext& context);
-    virtual VarType getVarType() const { return type; }
-    virtual std::string getName() const { return varTypeToString(type); }
-
-protected:
-    NType(VarType type) : type(type), cachedLLVMType(nullptr) {}
-    virtual llvm::Type* generateLLVMType(ASTContext &context);
-
-private:
-    VarType type;
-    mutable llvm::Type* cachedLLVMType;
-
-    friend class TypeFactory;
-};
-
-class NPointerType : public NType {
-public:
-    virtual std::string getType() const override { return "PointerType"; }
-    virtual NTypePtr getElementType(ASTContext& context) const override;
-    virtual NTypePtr getAddrType(ASTContext& context) override;
-    virtual std::string getName() const override {
-        return pointeeType->getName() + std::string(level, '*');
-    }
-
-protected:
-    NPointerType(NTypePtr pointeeType, int level = 1);
-
-    virtual llvm::Type* generateLLVMType(ASTContext &context) override;
-
-private:
-    NTypePtr pointeeType;
-    int level;
-
-    friend class TypeFactory;
-};
-
-class NArrayType : public NType {
-public:
-    virtual std::string getType() const override { return "ArrayType"; }
-    virtual NTypePtr getElementType(ASTContext& context) const override;
-    virtual std::string getName() const override {
-        std::string name = elementType->getName();
-        for (int dim : arrayDimensions) {
-            name += "[" + std::to_string(dim) + "]";
+    int getTotalSize() const {
+        int total = 1;
+        for (int dim : dimensions) {
+            total *= dim;
         }
-        return name;
+        return total;
+    }
+};
+
+// ==================== Struct Metadata ====================
+
+struct StructMetadata {
+    std::string name;
+    std::map<std::string, int> memberIndexMap;
+    std::vector<llvm::Type*> memberTypes;
+    NStructDeclaration* members = nullptr;
+
+    ~StructMetadata();
+
+    int getMemberIndex(const std::string& memberName) const {
+        auto it = memberIndexMap.find(memberName);
+        return (it != memberIndexMap.end()) ? it->second : -1;
     }
 
-    const std::vector<int>& getArrayDimensions() const;
-    int getTotalArraySize() const;
-
-protected:
-    NArrayType(NTypePtr elementType, const std::vector<int> &dimensions);
-
-    virtual llvm::Type* generateLLVMType(ASTContext &context) override;
-
-private:
-    NTypePtr elementType;
-    std::vector<int> arrayDimensions;
-
-    friend class TypeFactory;
+    llvm::Type* getMemberType(int index) const {
+        if (index >= 0 && static_cast<size_t>(index) < memberTypes.size()) {
+            return memberTypes[index];
+        }
+        return nullptr;
+    }
 };
 
-class NDeclarator;
-class NStructDeclaration {
+// ==================== TypeManager ====================
+
+class TypeManager {
 public:
-    NStructDeclaration(TypeDescriptor* type, NDeclarator* declarator)
-        : type(type), declarator(declarator) {}
-    ~NStructDeclaration();
-
-    TypeDescriptor *type;
-    NDeclarator *declarator = nullptr;
-    NStructDeclaration *next = nullptr;
-};
-
-class NStructType : public NType {
-public:
-    virtual ~NStructType();
-
-    virtual std::string getType() const override { return "StructType"; }
-    virtual std::string getName() const override { return name; }
-
-    int getMemberIndex(const std::string &memberName) const;
-    NTypePtr getMemberType(const std::string &memberName, ASTContext& context) const;
-    NStructDeclaration* getMembers() const { return members; }
-
-protected:
-    NStructType(const std::string &name, NStructDeclaration *members);
-
-    virtual llvm::Type* generateLLVMType(ASTContext &context) override;
-
-private:
-    std::string name;
-    NStructDeclaration *members = nullptr;
-
-    friend class TypeFactory;
-};
-
-// ==================== TypeFactory (集中管理所有 Type 創建) ====================
-
-class TypeFactory {
-public:
-    TypeFactory();
-    ~TypeFactory() = default;
-    TypeFactory(const TypeFactory&) = delete;
-    TypeFactory& operator=(const TypeFactory&) = delete;
+    TypeManager(llvm::LLVMContext& ctx, llvm::Module& mod);
+    ~TypeManager() = default;
+    TypeManager(const TypeManager&) = delete;
+    TypeManager& operator=(const TypeManager&) = delete;
 
     // ==================== Basic Types ====================
-    NTypePtr getVoidType() { return voidType; }
-    NTypePtr getBoolType() { return boolType; }
-    NTypePtr getCharType() { return charType; }
-    NTypePtr getShortType() { return shortType; }
-    NTypePtr getIntType() { return intType; }
-    NTypePtr getLongType() { return longType; }
-    NTypePtr getFloatType() { return floatType; }
-    NTypePtr getDoubleType() { return doubleType; }
-    NTypePtr getBasicType(VarType type);
+    llvm::Type* getVoidType();
+    llvm::Type* getBoolType();
+    llvm::Type* getCharType();
+    llvm::Type* getShortType();
+    llvm::Type* getIntType();
+    llvm::Type* getLongType();
+    llvm::Type* getFloatType();
+    llvm::Type* getDoubleType();
+    llvm::Type* getBasicType(VarType type);
 
     // =================== Pointer ====================
-    NTypePtr getPointerType(NTypePtr pointeeType);
-    NTypePtr getPointerType(NTypePtr pointeeType, int level);
+    llvm::PointerType* getPointerType(llvm::Type* pointeeType);
+    llvm::PointerType* getPointerType(llvm::Type* pointeeType, int level);
+    llvm::Type* getPointeeType(llvm::Type* pointerType);
 
     // ==================== Array =====================
-    NTypePtr getArrayType(NTypePtr elementType, const std::vector<int>& dimensions);
+    llvm::ArrayType* getArrayType(llvm::Type* elementType, const std::vector<int>& dimensions);
+    llvm::Type* getArrayElementType(llvm::Type* arrayType);
+    const ArrayMetadata* getArrayMetadata(llvm::Type* arrayType) const;
 
     // ==================== Struct ====================
-    NTypePtr createStructType(const std::string& name, NStructDeclaration* members);
-    void registerStructType(const std::string& name, NTypePtr structType);
-    NTypePtr getStructType(const std::string& name, NStructDeclaration* members = nullptr);
-    bool hasStructType(const std::string& name) const;
+    llvm::StructType* createStructType(const std::string& name, NStructDeclaration* members, ASTContext& context);
+    llvm::StructType* getStructType(const std::string& name);
+    const std::shared_ptr<StructMetadata> getStructMetadata(llvm::StructType* structType) const;
 
     // ==================== TypeDescriptor Realization ====================
-    NTypePtr realize(const TypeDescriptor* descriptor);
+    llvm::Type* realize(const TypeDescriptor* descriptor, ASTContext& context);
 
-    // ==================== Typedef ====================
-    // void registerTypedef(const std::string& name, NTypePtr underlyingType);
-    // NTypePtr getTypedefType(const std::string& name);
+    // ==================== Helper Functions ====================
+    std::string getTypeName(llvm::Type* type) const;
+    llvm::Type* getCommonType(llvm::Type* type1, llvm::Type* type2);
 
 private:
-    NTypePtr voidType;
-    NTypePtr boolType;
-    NTypePtr charType;
-    NTypePtr shortType;
-    NTypePtr intType;
-    NTypePtr longType;
-    NTypePtr floatType;
-    NTypePtr doubleType;
+    llvm::LLVMContext& context;
+    llvm::Module& module;
 
-    std::map<size_t, NTypePtr> pointerTypeCache;
-    struct ArrayKey {
-        size_t elementTypeHash;
-        std::vector<int> dimensions;
-
-        bool operator<(const ArrayKey& other) const {
-            if (elementTypeHash != other.elementTypeHash)
-                return elementTypeHash < other.elementTypeHash;
-            return dimensions < other.dimensions;
-        }
-    };
-    std::map<ArrayKey, NTypePtr> arrayTypeCache;
-    std::map<std::string, NTypePtr> structTypeRegistry;
-
-    size_t computeTypeHash(NTypePtr type) const;
+    std::map<llvm::Type*, llvm::Type*> pointerMetadataMap;  // pointer type -> pointee type
+    std::map<llvm::Type*, ArrayMetadata> arrayMetadataMap;
+    std::map<llvm::StructType*, std::shared_ptr<StructMetadata>> structMetadataByType;
 };
 
 } // namespace toyc::ast
