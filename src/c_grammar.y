@@ -7,21 +7,21 @@
 #include "ast/statement.hpp"
 #include "ast/external_definition.hpp"
 #include "utility/error_handler.hpp"
-
-// #include <unordered_map>
+#include "semantic/parser_actions.hpp"
 
 void yyerror(const char *s);
 extern "C" int yylex(void);
 extern int yyparse();
 
-// extern std::unordered_map<std::string, int> symbol_table;
 extern int yylineno;
 extern int yycolumn;
 extern char* yytext;
 extern int yyleng;
 
-toyc::ast::NExternalDeclaration *program;
+// Global parser state
+toyc::ast::NExternalDeclaration *program = nullptr;
 toyc::utility::ErrorHandler *error_handler = nullptr;
+toyc::semantic::ParserActions *parser_actions = nullptr;
 
 %}
 
@@ -87,8 +87,7 @@ program
 
 external_declaration_list
 	: external_declaration external_declaration_list {
-		$$ = $1;
-		$$->next = $2;
+		$$ = parser_actions->handleExternalDeclarationList($1, $2);
 	}
 	| external_declaration {
 		$$ = $1;
@@ -106,38 +105,34 @@ external_declaration
 
 function_definition
 	:  type_specifier IDENTIFIER '(' parameter_list ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, *$2, $4, $6);
+		$$ = parser_actions->handleFunctionDefinition($1, *$2, $4, $6, @$.first_line, @$.first_column);
 		delete $2;
 	}
 	|  type_specifier IDENTIFIER '(' ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, $5);
+		$$ = parser_actions->handleFunctionDefinition($1, *$2, nullptr, $5, @$.first_line, @$.first_column);
 		delete $2;
 	}
 	|  type_specifier IDENTIFIER '(' parameter_list ')' ';' {
-		$$ = new toyc::ast::NFunctionDefinition($1, *$2, $4, nullptr);
+		$$ = parser_actions->handleFunctionDeclaration($1, *$2, $4, @$.first_line, @$.first_column);
 		delete $2;
 	}
 	|  type_specifier IDENTIFIER '(' VOID ')' compound_statement {
-		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, $6);
+		$$ = parser_actions->handleFunctionDefinition($1, *$2, nullptr, $6, @$.first_line, @$.first_column);
 		delete $2;
 	}
 	|  type_specifier IDENTIFIER '(' VOID ')' ';' {
-		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, nullptr);
+		$$ = parser_actions->handleFunctionDeclaration($1, *$2, nullptr, @$.first_line, @$.first_column);
 		delete $2;
 	}
 	|  type_specifier IDENTIFIER '(' ')' ';' {
-		$$ = new toyc::ast::NFunctionDefinition($1, *$2, nullptr, nullptr);
+		$$ = parser_actions->handleFunctionDeclaration($1, *$2, nullptr, @$.first_line, @$.first_column);
 		delete $2;
 	}
 	;
 
 parameter_list
 	: parameter_declaration ',' parameter_list {
-		if ($1->isVariadic) {
-			yyerror("syntax error: variadic parameter must be the last parameter");
-		}
-		$$ = $1;
-		$$->next = $3;
+		$$ = parser_actions->handleParameterList($1, $3, @$.first_line, @$.first_column);
 	}
 	| parameter_declaration {
 		$$ = $1;
@@ -146,26 +141,25 @@ parameter_list
 
 parameter_declaration
 	:  type_specifier declarator {
-		$$ = new toyc::ast::NParameter($1, $2);
+		$$ = parser_actions->handleParameter($1, $2, @$.first_line, @$.first_column);
 	}
 	| ELLIPSIS {
-		$$ = new toyc::ast::NParameter();
+		$$ = parser_actions->handleVariadicParameter();
 	}
 	;
 
 compound_statement
 	: '{' statement_list '}' {
-		$$ = new toyc::ast::NBlock($2);
+		$$ = parser_actions->handleCompoundStatement($2);
 	}
 	| '{' '}' {
-		$$ = new toyc::ast::NBlock();
+		$$ = parser_actions->handleEmptyCompoundStatement();
 	}
 	;
 
 statement_list
 	: statement statement_list {
-		$$ = $1;
-		$$->next = $2;
+		$$ = parser_actions->handleStatementList($1, $2);
 	}
 	| statement {
 		$$ = $1;
@@ -216,66 +210,66 @@ for_statement_init_declaration
 
 for_statement
 	: FOR '(' for_statement_init_declaration expression ';' expression ')' statement {
-		$$ = new toyc::ast::NForStatement($3, $4, $6, $8);
+		$$ = parser_actions->handleForStatement($3, $4, $6, $8);
 	}
 	;
 
 while_statement
 	: WHILE '(' expression ')' statement {
-		$$ = new toyc::ast::NWhileStatement($3, $5);
+		$$ = parser_actions->handleWhileStatement($3, $5);
 	}
 	;
 
 do_while_statement
 	: DO statement WHILE '(' expression ')' ';' {
-		$$ = new toyc::ast::NWhileStatement($5, $2, true);
+		$$ = parser_actions->handleDoWhileStatement($5, $2);
 	}
 	;
 
 switch_statement
 	: SWITCH '(' expression ')' compound_statement {
-		$$ = new toyc::ast::NSwitchStatement($3, $5);
+		$$ = parser_actions->handleSwitchStatement($3, $5);
 	}
 	;
 
 labeled_statement
 	: IDENTIFIER ':' statement {
-		$$ = new toyc::ast::NLabelStatement(*$1, $3);
+		$$ = parser_actions->handleLabelStatement(*$1, $3);
 		delete $1;
 	}
 	| CASE expression ':' {
-		$$ = new toyc::ast::NCaseStatement($2);
+		$$ = parser_actions->handleCaseStatement($2);
 	}
 	| DEFAULT ':' {
-		$$ = new toyc::ast::NCaseStatement(true);
+		$$ = parser_actions->handleDefaultStatement();
 	}
 	;
 
 jump_statement
 	: GOTO IDENTIFIER ';' {
-		$$ = new toyc::ast::NGotoStatement(*$2);
+		$$ = parser_actions->handleGotoStatement(*$2);
 		delete $2;
 	}
 	| RETURN expression ';' {
-		$$ = new toyc::ast::NReturnStatement($2);
+		$$ = parser_actions->handleReturnStatement($2);
 	}
 	| RETURN ';' {
-		$$ = new toyc::ast::NReturnStatement(nullptr);
+		$$ = parser_actions->handleReturnStatement();
 	}
 	| BREAK ';' {
-		$$ = new toyc::ast::NBreakStatement();
+		$$ = parser_actions->handleBreakStatement();
 	}
 	| CONTINUE ';' {
-		$$ = new toyc::ast::NContinueStatement();
+		$$ = parser_actions->handleContinueStatement();
 	}
 	;
 
 declaration_specifiers
 	:  type_specifier init_declarator_list ';' {
-		$$ = new toyc::ast::NDeclarationStatement($1, $2);
+		$$ = parser_actions->handleDeclarationStatement($1, $2);
 	}
 	| type_specifier ';' {
-		$$ = new toyc::ast::NDeclarationStatement($1, nullptr);
+		$$ = parser_actions->handleEmptyDeclaration($1);
 	}
 	;
 

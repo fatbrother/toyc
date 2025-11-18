@@ -12,6 +12,7 @@
 #include "utility/parse_file.hpp"
 #include "utility/error_handler.hpp"
 #include "utility/preprocessor.hpp"
+#include "semantic/semantic_analyzer.hpp"
 
 extern toyc::ast::NExternalDeclaration *program;
 extern toyc::utility::ErrorHandler *error_handler;
@@ -113,6 +114,20 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // Perform semantic analysis
+    toyc::semantic::SemanticAnalyzer semanticAnalyzer;
+    if (!semanticAnalyzer.analyze(program)) {
+        if (semanticAnalyzer.hasErrors()) {
+            auto* err = semanticAnalyzer.getErrorHandler();
+            err->setFileName(inputFileName);
+            err->logError();
+        } else {
+            std::cerr << "Semantic analysis failed" << std::endl;
+        }
+        return -1;
+    }
+
+    // Code generation
     toyc::ast::ASTContext astContext;
     for (auto &decl = program; decl != nullptr; decl = decl->next) {
         toyc::ast::CodegenResult result = decl->codegen(astContext);
