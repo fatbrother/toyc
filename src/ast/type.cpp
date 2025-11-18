@@ -1,158 +1,23 @@
 #include "ast/type.hpp"
-
 #include "ast/node.hpp"
 #include "ast/expression.hpp"
+
+#include <llvm/IR/Type.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Module.h>
 
 #include <iostream>
 
 using namespace toyc::ast;
 
-TypeCodegenResult NType::getLLVMType(ASTContext &context) {
-    if (cachedLLVMType != nullptr) {
-        return TypeCodegenResult(cachedLLVMType);
-    }
+// ==================== Helper Functions ====================
 
-    llvm::Type* llvmType = generateLLVMType(context);
-    if (llvmType == nullptr) {
-        return TypeCodegenResult("Failed to generate LLVM type for " + getName());
-    }
-
-    cachedLLVMType = llvmType;
-    return TypeCodegenResult(llvmType);
+bool toyc::ast::isFloatingPointType(llvm::Type* type) {
+    return type && (type->isFloatTy() || type->isDoubleTy());
 }
 
-llvm::Type* NType::generateLLVMType(ASTContext &context) {
-    switch (type) {
-        case VAR_TYPE_VOID:
-            return llvm::Type::getVoidTy(context.llvmContext);
-        case VAR_TYPE_CHAR:
-            return llvm::Type::getInt8Ty(context.llvmContext);
-        case VAR_TYPE_BOOL:
-            return llvm::Type::getInt1Ty(context.llvmContext);
-        case VAR_TYPE_SHORT:
-            return llvm::Type::getInt16Ty(context.llvmContext);
-        case VAR_TYPE_INT:
-            return llvm::Type::getInt32Ty(context.llvmContext);
-        case VAR_TYPE_LONG:
-            return llvm::Type::getInt64Ty(context.llvmContext);
-        case VAR_TYPE_FLOAT:
-            return llvm::Type::getFloatTy(context.llvmContext);
-        case VAR_TYPE_DOUBLE:
-            return llvm::Type::getDoubleTy(context.llvmContext);
-        case VAR_TYPE_DEFINED:
-            // TODO: Handle typedef names
-            return nullptr;
-        default:
-            return nullptr;
-    }
-}
-
-NTypePtr NType::getAddrType(ASTContext& context) {
-    return context.typeFactory->getPointerType(shared_from_this());
-}
-
-NArrayType::NArrayType(NTypePtr elementType, const std::vector<int> &dimensions)
-    : NType(VAR_TYPE_ARRAY), elementType(elementType), arrayDimensions(dimensions) {}
-
-llvm::Type* NArrayType::generateLLVMType(ASTContext &context) {
-    TypeCodegenResult elemResult = elementType->getLLVMType(context);
-    if (!elemResult.isSuccess()) {
-        return nullptr;
-    }
-
-    llvm::Type *arrayType = elemResult.getLLVMType();
-    for (auto it = arrayDimensions.rbegin(); it != arrayDimensions.rend(); ++it) {
-        arrayType = llvm::ArrayType::get(arrayType, *it);
-    }
-    return arrayType;
-}
-
-NTypePtr NArrayType::getElementType(ASTContext& context) const {
-    if (arrayDimensions.size() == 1) {
-        return elementType;
-    } else {
-        std::vector<int> innerDimensions(arrayDimensions.begin() + 1, arrayDimensions.end());
-        return context.typeFactory->getArrayType(elementType, innerDimensions);
-    }
-}
-
-const std::vector<int>& NArrayType::getArrayDimensions() const {
-    return arrayDimensions;
-}
-
-int NArrayType::getTotalArraySize() const {
-    int total = 1;
-    for (int dim : arrayDimensions) {
-        total *= dim;
-    }
-    return total;
-}
-
-std::string toyc::ast::varTypeToString(VarType type) {
-    switch (type) {
-        case VAR_TYPE_VOID: return "void";
-        case VAR_TYPE_CHAR: return "char";
-        case VAR_TYPE_BOOL: return "bool";
-        case VAR_TYPE_SHORT: return "short";
-        case VAR_TYPE_INT: return "int";
-        case VAR_TYPE_LONG: return "long";
-        case VAR_TYPE_FLOAT: return "float";
-        case VAR_TYPE_DOUBLE: return "double";
-        case VAR_TYPE_PTR: return "pointer";
-        case VAR_TYPE_STRUCT: return "struct";
-        case VAR_TYPE_DEFINED: return "defined";
-        case VAR_TYPE_ARRAY: return "array";
-        default: return "unknown";
-    }
-}
-
-bool toyc::ast::isFloatingPointType(VarType type) {
-    return type == VAR_TYPE_FLOAT || type == VAR_TYPE_DOUBLE;
-}
-
-bool toyc::ast::isIntegerType(VarType type) {
-    return type == VAR_TYPE_CHAR || type == VAR_TYPE_BOOL ||
-           type == VAR_TYPE_SHORT || type == VAR_TYPE_INT || type == VAR_TYPE_LONG;
-}
-
-// NPointerType implementation
-NPointerType::NPointerType(NTypePtr pointeeType, int level)
-    : NType(VAR_TYPE_PTR), pointeeType(pointeeType), level(level) {
-        if (true == pointeeType->isPointer()) {
-            auto innerPtrType = std::static_pointer_cast<NPointerType>(pointeeType);
-            this->level += innerPtrType->level;
-            this->pointeeType = innerPtrType->pointeeType;
-        }
-    }
-
-llvm::Type* NPointerType::generateLLVMType(ASTContext &context) {
-    if (pointeeType == nullptr) {
-        return nullptr;
-    }
-
-    TypeCodegenResult pointeeTypeResult = pointeeType->getLLVMType(context);
-    if (!pointeeTypeResult.isSuccess()) {
-        return nullptr;
-    }
-
-    llvm::Type *llvmType = pointeeTypeResult.getLLVMType();
-    for (int i = 0; i < level; ++i) {
-        llvmType = llvm::PointerType::get(llvmType, 0);
-    }
-
-    return llvmType;
-}
-
-NTypePtr NPointerType::getElementType(ASTContext& context) const {
-    if (level > 1) {
-        return context.typeFactory->getPointerType(pointeeType, level - 1);
-    } else {
-        return pointeeType;
-    }
-}
-
-NTypePtr NPointerType::getAddrType(ASTContext& context) {
-    return context.typeFactory->getPointerType(pointeeType, level + 1);
+bool toyc::ast::isIntegerType(llvm::Type* type) {
+    return type && type->isIntegerTy();
 }
 
 NStructDeclaration::~NStructDeclaration() {
@@ -160,70 +25,7 @@ NStructDeclaration::~NStructDeclaration() {
     SAFE_DELETE(next);
 }
 
-// NStructType implementation
-NStructType::NStructType(const std::string &name, NStructDeclaration *members)
-    : NType(VarType::VAR_TYPE_STRUCT), name(name), members(members) {}
-
-NStructType::~NStructType() {
-    SAFE_DELETE(members);
-}
-
-llvm::Type* NStructType::generateLLVMType(ASTContext &context) {
-    auto [isFound, typePtr] = context.typeTable->lookup(name);
-    if (isFound) {
-        auto existingStruct = std::static_pointer_cast<NStructType>(typePtr);
-        TypeCodegenResult result = existingStruct->getLLVMType(context);
-        if (result.isSuccess()) {
-            return result.getLLVMType();
-        }
-    }
-
-    if (members == nullptr) {
-        return llvm::StructType::create(context.llvmContext, name);
-    }
-
-    std::vector<llvm::Type *> memberLLVMTypes;
-    for (auto currentMember = members; currentMember != nullptr; currentMember = currentMember->next) {
-        NTypePtr memberType = context.typeFactory->realize(currentMember->type);
-        if (memberType == nullptr) {
-            return nullptr;
-        }
-        TypeCodegenResult typeResult = memberType->getLLVMType(context);
-        if (!typeResult.isSuccess()) {
-            return nullptr;
-        }
-        llvm::Type *memberLLVMType = typeResult.getLLVMType();
-        if (memberLLVMType == nullptr) {
-            return nullptr;
-        }
-        memberLLVMTypes.push_back(memberLLVMType);
-    }
-
-    llvm::StructType* structType = llvm::StructType::create(context.llvmContext, memberLLVMTypes, name);
-    return structType;
-}
-
-int NStructType::getMemberIndex(const std::string &memberName) const {
-    int index = 0;
-    for (NStructDeclaration *currentMember = members; currentMember != nullptr; currentMember = currentMember->next) {
-        if (currentMember->declarator->getName() == memberName) {
-            return index;
-        }
-        index++;
-    }
-    return -1;
-}
-
-NTypePtr NStructType::getMemberType(const std::string &memberName, ASTContext& context) const {
-    for (NStructDeclaration *currentMember = members; currentMember != nullptr; currentMember = currentMember->next) {
-        if (currentMember->declarator->getName() == memberName) {
-            return context.typeFactory->realize(currentMember->type);
-        }
-    }
-    return nullptr;
-}
-
-// ==================== TypeDescriptor Implementation ====================
+// ==================== StructTypeDescriptor ====================
 
 StructTypeDescriptor::StructTypeDescriptor(std::string name, NStructDeclaration* members)
     : name(std::move(name)), members(members) {}
@@ -232,98 +34,228 @@ StructTypeDescriptor::~StructTypeDescriptor() {
     SAFE_DELETE(members);
 }
 
-// ==================== TypeFactory Implementation ====================
+// ==================== StructMetadata ====================
 
-TypeFactory::TypeFactory() {
-    voidType = std::shared_ptr<NType>(new NType(VAR_TYPE_VOID));
-    boolType = std::shared_ptr<NType>(new NType(VAR_TYPE_BOOL));
-    charType = std::shared_ptr<NType>(new NType(VAR_TYPE_CHAR));
-    shortType = std::shared_ptr<NType>(new NType(VAR_TYPE_SHORT));
-    intType = std::shared_ptr<NType>(new NType(VAR_TYPE_INT));
-    longType = std::shared_ptr<NType>(new NType(VAR_TYPE_LONG));
-    floatType = std::shared_ptr<NType>(new NType(VAR_TYPE_FLOAT));
-    doubleType = std::shared_ptr<NType>(new NType(VAR_TYPE_DOUBLE));
+StructMetadata::~StructMetadata() {
+    SAFE_DELETE(members);
 }
 
-NTypePtr TypeFactory::getBasicType(VarType type) {
+// ==================== TypeManager Implementation ====================
+
+TypeManager::TypeManager(llvm::LLVMContext& ctx, llvm::Module& mod)
+    : context(ctx), module(mod) {}
+
+llvm::Type* TypeManager::getVoidType() {
+    return llvm::Type::getVoidTy(context);
+}
+
+llvm::Type* TypeManager::getBoolType() {
+    return llvm::Type::getInt1Ty(context);
+}
+
+llvm::Type* TypeManager::getCharType() {
+    return llvm::Type::getInt8Ty(context);
+}
+
+llvm::Type* TypeManager::getShortType() {
+    return llvm::Type::getInt16Ty(context);
+}
+
+llvm::Type* TypeManager::getIntType() {
+    return llvm::Type::getInt32Ty(context);
+}
+
+llvm::Type* TypeManager::getLongType() {
+    return llvm::Type::getInt64Ty(context);
+}
+
+llvm::Type* TypeManager::getFloatType() {
+    return llvm::Type::getFloatTy(context);
+}
+
+llvm::Type* TypeManager::getDoubleType() {
+    return llvm::Type::getDoubleTy(context);
+}
+
+llvm::Type* TypeManager::getBasicType(VarType type) {
     switch (type) {
-        case VAR_TYPE_VOID: return voidType;
-        case VAR_TYPE_BOOL: return boolType;
-        case VAR_TYPE_CHAR: return charType;
-        case VAR_TYPE_SHORT: return shortType;
-        case VAR_TYPE_INT: return intType;
-        case VAR_TYPE_LONG: return longType;
-        case VAR_TYPE_FLOAT: return floatType;
-        case VAR_TYPE_DOUBLE: return doubleType;
+        case VAR_TYPE_VOID: return getVoidType();
+        case VAR_TYPE_BOOL: return getBoolType();
+        case VAR_TYPE_CHAR: return getCharType();
+        case VAR_TYPE_SHORT: return getShortType();
+        case VAR_TYPE_INT: return getIntType();
+        case VAR_TYPE_LONG: return getLongType();
+        case VAR_TYPE_FLOAT: return getFloatType();
+        case VAR_TYPE_DOUBLE: return getDoubleType();
         default: return nullptr;
     }
 }
 
-NTypePtr TypeFactory::getPointerType(NTypePtr pointeeType) {
+llvm::PointerType* TypeManager::getPointerType(llvm::Type* pointeeType) {
     return getPointerType(pointeeType, 1);
 }
 
-NTypePtr TypeFactory::getPointerType(NTypePtr pointeeType, int level) {
+llvm::PointerType* TypeManager::getPointerType(llvm::Type* pointeeType, int level) {
     if (!pointeeType || level <= 0) {
         return nullptr;
     }
 
-    size_t hash = computeTypeHash(pointeeType) * 31 + level;
-
-    auto it = pointerTypeCache.find(hash);
-    if (it != pointerTypeCache.end()) {
-        return it->second;
+    llvm::Type* result = pointeeType;
+    for (int i = 0; i < level; ++i) {
+        result = llvm::PointerType::get(result, 0);
     }
 
-    NTypePtr ptrType = std::shared_ptr<NPointerType>(new NPointerType(pointeeType, level));
-    pointerTypeCache[hash] = ptrType;
-    return ptrType;
+    pointerMetadataMap[result] = pointeeType;
+    return llvm::cast<llvm::PointerType>(result);
 }
 
-NTypePtr TypeFactory::getArrayType(NTypePtr elementType, const std::vector<int>& dimensions) {
+llvm::ArrayType* TypeManager::getArrayType(llvm::Type* elementType, const std::vector<int>& dimensions) {
     if (!elementType || dimensions.empty()) {
         return nullptr;
     }
 
-    ArrayKey key{computeTypeHash(elementType), dimensions};
-    auto it = arrayTypeCache.find(key);
-    if (it != arrayTypeCache.end()) {
+    llvm::Type* arrayType = elementType;
+    for (auto dimIt = dimensions.rbegin(); dimIt != dimensions.rend(); ++dimIt) {
+        arrayType = llvm::ArrayType::get(arrayType, *dimIt);
+    }
+
+    if (arrayType) {
+        arrayMetadataMap[arrayType] = {dimensions, elementType};
+    }
+
+    return llvm::cast<llvm::ArrayType>(arrayType);
+}
+
+const ArrayMetadata* TypeManager::getArrayMetadata(llvm::Type* arrayType) const {
+    auto it = arrayMetadataMap.find(arrayType);
+    if (it != arrayMetadataMap.end()) {
+        return &it->second;
+    }
+    return nullptr;
+}
+
+llvm::StructType* TypeManager::createStructType(const std::string& name,
+                                                NStructDeclaration* members,
+                                                ASTContext& context) {
+    llvm::StructType* llvmStruct = llvm::StructType::create(this->context, name);
+
+    if (nullptr == members) {
+        return llvmStruct;
+    }
+
+    std::vector<llvm::Type*> memberLLVMTypes;
+    NStructDeclaration* current = members;
+
+    auto metadata = std::make_shared<StructMetadata>();
+    metadata->name = name;
+    metadata->members = members;
+
+    for (int index = 0; current != nullptr; index++, current = current->next) {
+        llvm::Type* memberType = realize(current->type, context);
+        if (nullptr == memberType) {
+            break;
+        }
+
+        memberLLVMTypes.push_back(memberType);
+        metadata->memberTypes.push_back(memberType);
+        std::string memberName = current->declarator->getName();
+        metadata->memberIndexMap[memberName] = index;
+    }
+
+    llvmStruct->setBody(memberLLVMTypes);
+
+    structMetadataByType[llvmStruct] = metadata;
+
+    return llvmStruct;
+}
+
+llvm::StructType* TypeManager::getStructType(const std::string& name) {
+    return llvm::StructType::getTypeByName(module.getContext(), name);
+}
+
+const std::shared_ptr<StructMetadata> TypeManager::getStructMetadata(llvm::StructType* structType) const {
+    auto it = structMetadataByType.find(structType);
+    if (it != structMetadataByType.end()) {
         return it->second;
     }
-
-    NTypePtr arrayType = std::shared_ptr<NArrayType>(new NArrayType(elementType, dimensions));
-    arrayTypeCache[key] = arrayType;
-    return arrayType;
+    return nullptr;
 }
 
-NTypePtr TypeFactory::createStructType(const std::string& name, NStructDeclaration* members) {
-    NTypePtr structType = std::shared_ptr<NStructType>(new NStructType(name, members));
-    if (false == name.empty()) {
-        structTypeRegistry[name] = structType;
-    }
-    return structType;
-}
-
-void TypeFactory::registerStructType(const std::string& name, NTypePtr structType) {
-    if (structType && structType->isStruct()) {
-        structTypeRegistry[name] = structType;
-    }
-}
-
-NTypePtr TypeFactory::getStructType(const std::string& name, NStructDeclaration* members) {
-    auto it = structTypeRegistry.find(name);
-    if (it != structTypeRegistry.end()) {
-        return it->second;
+llvm::Type* TypeManager::getPointeeType(llvm::Type* pointerType) {
+    if (nullptr == pointerType || false == pointerType->isPointerTy()) {
+        return nullptr;
     }
 
-    return createStructType(name, members);
+    return pointerMetadataMap[pointerType];
 }
 
-bool TypeFactory::hasStructType(const std::string& name) const {
-    return structTypeRegistry.find(name) != structTypeRegistry.end();
+llvm::Type* TypeManager::getArrayElementType(llvm::Type* arrayType) {
+    if (nullptr == arrayType || false == arrayType->isArrayTy()) {
+        return nullptr;
+    }
+    return llvm::cast<llvm::ArrayType>(arrayType)->getElementType();
 }
 
-NTypePtr TypeFactory::realize(const TypeDescriptor* descriptor) {
+std::string TypeManager::getTypeName(llvm::Type* type) const {
+    if (!type) {
+        return "null";
+    }
+
+    if (type->isIntegerTy(1)) return "bool";
+    if (type->isIntegerTy(8)) return "char";
+    if (type->isIntegerTy(16)) return "short";
+    if (type->isIntegerTy(32)) return "int";
+    if (type->isIntegerTy(64)) return "long";
+    if (type->isFloatTy()) return "float";
+    if (type->isDoubleTy()) return "double";
+    if (type->isVoidTy()) return "void";
+
+    if (type->isPointerTy()) {
+        return "ptr";
+    }
+
+    if (type->isArrayTy()) {
+        auto* arrayType = llvm::cast<llvm::ArrayType>(type);
+        return "array[" + std::to_string(arrayType->getNumElements()) + "]";
+    }
+
+    if (auto* structType = llvm::dyn_cast<llvm::StructType>(type)) {
+        if (structType->hasName()) {
+            return structType->getName().str();
+        }
+        return "struct";
+    }
+
+    return "unknown";
+}
+
+llvm::Type* TypeManager::getCommonType(llvm::Type* type1, llvm::Type* type2) {
+    if (nullptr == type1 || nullptr == type2) {
+        return nullptr;
+    }
+
+    if (type1 == type2) return type1;
+
+    if (true == isFloatingPointType(type1) && true == isFloatingPointType(type2)) {
+        if (type1->isDoubleTy() || type2->isDoubleTy()) {
+            return getDoubleType();
+        }
+        return getFloatType();
+    }
+
+    auto getIntegerRank = [](llvm::Type* type) -> int {
+        if (type->isIntegerTy(64)) return 5; // long
+        if (type->isIntegerTy(32)) return 4; // int
+        if (type->isIntegerTy(16)) return 3; // short
+        if (type->isIntegerTy(8)) return 2;  // char
+        if (type->isIntegerTy(1)) return 1;  // bool
+        return 0;
+    };
+
+    return (getIntegerRank(type1) >= getIntegerRank(type2)) ? type1 : type2;
+}
+
+llvm::Type* TypeManager::realize(const TypeDescriptor* descriptor, ASTContext& context) {
     if (!descriptor) {
         return nullptr;
     }
@@ -336,8 +268,8 @@ NTypePtr TypeFactory::realize(const TypeDescriptor* descriptor) {
 
         case TypeDescriptor::Pointer: {
             auto* ptrDesc = static_cast<const PointerTypeDescriptor*>(descriptor);
-            NTypePtr pointeeType = realize(ptrDesc->pointeeDesc.get());
-            if (!pointeeType) {
+            llvm::Type* pointeeType = realize(ptrDesc->pointeeDesc.get(), context);
+            if (nullptr == pointeeType) {
                 return nullptr;
             }
             return getPointerType(pointeeType, ptrDesc->level);
@@ -345,8 +277,8 @@ NTypePtr TypeFactory::realize(const TypeDescriptor* descriptor) {
 
         case TypeDescriptor::Array: {
             auto* arrayDesc = static_cast<const ArrayTypeDescriptor*>(descriptor);
-            NTypePtr elementType = realize(arrayDesc->elementDesc.get());
-            if (!elementType) {
+            llvm::Type* elementType = realize(arrayDesc->elementDesc.get(), context);
+            if (nullptr == elementType) {
                 return nullptr;
             }
             return getArrayType(elementType, arrayDesc->dimensions);
@@ -354,19 +286,17 @@ NTypePtr TypeFactory::realize(const TypeDescriptor* descriptor) {
 
         case TypeDescriptor::Struct: {
             auto* structDesc = static_cast<const StructTypeDescriptor*>(descriptor);
-            return getStructType(structDesc->name, structDesc->members);
+
+            llvm::StructType* existingStruct = getStructType(structDesc->name);
+            if (existingStruct && false == existingStruct->isOpaque()) {
+                return existingStruct;
+            }
+
+            return createStructType(structDesc->name, structDesc->members, context);
         }
 
         default:
             return nullptr;
     }
-}
-
-size_t TypeFactory::computeTypeHash(NTypePtr type) const {
-    if (!type) {
-        return 0;
-    }
-
-    return reinterpret_cast<size_t>(type.get());
 }
 

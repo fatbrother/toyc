@@ -143,6 +143,10 @@ public:
         return !arrayDimensions.empty();
     }
 
+    bool isPointer() const {
+        return pointerLevel > 0;
+    }
+
     const std::vector<int>& getArrayDimensions() const {
         return arrayDimensions;
     }

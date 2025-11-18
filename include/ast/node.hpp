@@ -119,11 +119,6 @@ public:
         return data.allocInst;
     }
 
-    template<typename U = T>
-    auto getLLVMType() const -> decltype(std::declval<U>().llvmType) {
-        return data.llvmType;
-    }
-
 private:
 
     T data;
@@ -160,34 +155,25 @@ private:
  */
 struct ExprValue {
     llvm::Value* value = nullptr;
-    NTypePtr type = nullptr;
+    llvm::Type* type = nullptr;
 
     ExprValue() = default;
-    ExprValue(llvm::Value* v, NTypePtr t) : value(v), type(t) {}
+    ExprValue(llvm::Value* v, llvm::Type* t) : value(v), type(t) {}
     bool isValid() const { return value != nullptr && type != nullptr; }
 };
 
 struct AllocValue {
     llvm::Value* allocInst = nullptr;
-    NTypePtr type = nullptr;
+    llvm::Type* type = nullptr;
 
     AllocValue() = default;
-    AllocValue(llvm::Value* a, NTypePtr t) : allocInst(a), type(t) {}
+    AllocValue(llvm::Value* a, llvm::Type* t) : allocInst(a), type(t) {}
     bool isValid() const { return allocInst != nullptr && type != nullptr; }
-};
-
-struct TypeValue {
-    llvm::Type* llvmType = nullptr;
-
-    TypeValue() = default;
-    TypeValue(llvm::Type* t) : llvmType(t) {}
-    bool isValid() const { return llvmType != nullptr; }
 };
 
 // Type aliases for common use cases
 using ExprCodegenResult = CodegenResult<ExprValue>;
 using StmtCodegenResult = CodegenResult<void>;
-using TypeCodegenResult = CodegenResult<TypeValue>;
 using AllocCodegenResult = CodegenResult<AllocValue>;
 
 template<typename T> class ScopeTable {
@@ -261,13 +247,12 @@ struct ASTContext {
     llvm::Module module;
     llvm::IRBuilder<> builder;
     NFunctionDefinition *currentFunction = nullptr;
-    ScopeTable<std::pair<llvm::AllocaInst *, NTypePtr>> *variableTable = nullptr;
-    ScopeTable<NTypePtr> *typeTable = nullptr;
+    ScopeTable<std::pair<llvm::AllocaInst *, llvm::Type*>> *variableTable = nullptr;
 
     std::map<std::string, NFunctionDefinition *> functionDefinitions;
     bool isInitializingFunction = false;
 
-    std::unique_ptr<TypeFactory> typeFactory;
+    std::unique_ptr<TypeManager> typeManager;
 
     // Jump context stack for break/continue statements
     // Used by loops (for/while/do-while) and switch statements
@@ -320,5 +305,8 @@ public:
 public:
     NExternalDeclaration *next = nullptr;
 };
+
+CodegenResult<ExprValue> typeCast(llvm::Value *value, llvm::Type* fromType,
+                                  llvm::Type* toType, toyc::ast::ASTContext &context);
 
 } // namespace toyc::ast

@@ -39,14 +39,14 @@ public:
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionDefinition"; }
     llvm::Function *getFunction() const { return llvmFunction; }
-    NTypePtr getReturnType() const { return returnType; }
+    llvm::Type* getReturnType() const { return returnType; }
     NParameter *getParams() const { return params; }
 
 private:
     llvm::Function *llvmFunction = nullptr;
     std::string name;
     TypeDescriptor *returnTypeDesc;
-    NTypePtr returnType;
+    llvm::Type* returnType;
     NParameter *params;
     NBlock *body;
 };
