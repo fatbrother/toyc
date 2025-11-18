@@ -52,7 +52,7 @@ void SemanticAnalyzer::exitScope() {
     }
 }
 
-bool SemanticAnalyzer::declareSymbol(const std::string& name, ast::TypeDescriptor* type, 
+bool SemanticAnalyzer::declareSymbol(const std::string& name, ast::TypeDescriptor* type,
                                       bool isFunction, bool isDefined) {
     // Check if symbol already exists in current scope
     Symbol* existing = lookupSymbolInCurrentScope(name);
@@ -114,11 +114,11 @@ bool SemanticAnalyzer::analyzeFunctionDefinition(ast::NFunctionDefinition* funcD
 
     // Get function name (this is a simplification; you'll need to implement getName())
     // For now, we'll skip detailed function analysis and focus on structure
-    
+
     // Note: NFunctionDefinition has name as private member
     // We would need to add a getter or make it accessible
     // For this implementation, we'll declare it based on presence
-    
+
     // Enter function scope
     enterScope();
 

@@ -15,7 +15,7 @@ namespace toyc::semantic {
 
 /**
  * @brief Parser Actions - handles all grammar rule actions
- * 
+ *
  * This class centralizes all parser actions from the grammar file,
  * providing better maintainability and enabling semantic processing
  * during parsing (e.g., symbol table management, type checking).
@@ -197,12 +197,21 @@ public:
         ast::NExpression* expr
     );
 
+    ast::NExpression* handleCastExpressionWithPointer(
+        ast::TypeDescriptor* baseType,
+        int pointerLevel,
+        ast::NExpression* expr
+    );
+
     ast::NExpression* handleSizeofType(ast::TypeDescriptor* type);
     ast::NExpression* handleSizeofExpression(ast::NExpression* expr);
 
     // Primary Expressions
     ast::NIdentifier* handleIdentifier(const std::string& name);
     ast::NInteger* handleInteger(int value);
+    ast::NInteger* handleIntegerFromString(const std::string& value);
+    ast::NInteger* handleCharConstant(const std::string& value);
+    ast::NFloat* handleFloat(const std::string& value);
     ast::NString* handleString(const std::string& value);
 
     // Arguments
@@ -219,8 +228,20 @@ public:
 
     // Expression Statement
     ast::NExpressionStatement* handleExpressionStatement(ast::NExpression* expr);
+    ast::NExpressionStatement* handleEmptyExpressionStatement();
+
+    // Comma Expression
+    ast::NExpression* handleCommaExpression(ast::NExpression* left, ast::NExpression* right);
+
+    // Compound Assignment
+    ast::NExpression* handleCompoundAssignment(
+        ast::NExpression* left,
+        ast::BineryOperator op,
+        ast::NExpression* right
+    );
 
     // Type Specifiers
+    ast::TypeDescriptor* handlePrimitiveType(const std::string& typeName);
     ast::TypeDescriptor* handlePointerType(
         ast::TypeDescriptor* baseType,
         int pointerLevel
@@ -242,7 +263,25 @@ public:
         ast::NStructDeclaration* declarations = nullptr
     );
 
+    ast::TypeDescriptor* handleAnonymousStruct(ast::NStructDeclaration* declarations);
     ast::TypeDescriptor* handleStructReference(const std::string& name);
+
+    // Type name with pointer/array
+    ast::TypeDescriptor* handleTypeNameWithPointer(
+        ast::TypeDescriptor* baseType,
+        int pointerLevel
+    );
+
+    ast::TypeDescriptor* handleTypeNameWithArray(
+        ast::TypeDescriptor* baseType,
+        const std::string& arraySize
+    );
+
+    ast::TypeDescriptor* handleTypeNameWithPointerAndArray(
+        ast::TypeDescriptor* baseType,
+        int pointerLevel,
+        const std::string& arraySize
+    );
 
     // Error reporting
     void reportError(const std::string& message, int line = 0, int column = 0);
@@ -255,13 +294,6 @@ public:
 private:
     SemanticAnalyzer semanticAnalyzer;
     bool errorOccurred;
-
-    // Symbol tracking for identifier reuse
-    std::unordered_map<std::string, ast::NIdentifier*> identifierCache;
-
-    // Helper methods
-    ast::NIdentifier* getOrCreateIdentifier(const std::string& name);
-    void validateVariadicParameter(ast::NParameter* param, int line, int column);
 };
 
 } // namespace toyc::semantic

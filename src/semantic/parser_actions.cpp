@@ -8,23 +8,6 @@ ParserActions::ParserActions()
 }
 
 ParserActions::~ParserActions() {
-    // Clean up cached identifiers
-    for (auto& pair : identifierCache) {
-        delete pair.second;
-    }
-    identifierCache.clear();
-}
-
-// Helper: Get or create identifier (enables node reuse)
-ast::NIdentifier* ParserActions::getOrCreateIdentifier(const std::string& name) {
-    auto it = identifierCache.find(name);
-    if (it != identifierCache.end()) {
-        return it->second;
-    }
-    
-    ast::NIdentifier* identifier = new ast::NIdentifier(name);
-    identifierCache[name] = identifier;
-    return identifier;
 }
 
 // External Declarations
@@ -73,7 +56,7 @@ ast::NParameter* ParserActions::handleParameterList(
         reportError("syntax error: variadic parameter must be the last parameter", line, column);
         return current;
     }
-    
+
     if (current) {
         current->next = next;
     }
@@ -307,6 +290,18 @@ ast::NExpression* ParserActions::handleCastExpression(
     return new ast::NCastExpression(type, expr);
 }
 
+ast::NExpression* ParserActions::handleCastExpressionWithPointer(
+    ast::TypeDescriptor* baseType,
+    int pointerLevel,
+    ast::NExpression* expr
+) {
+    ast::TypeDescriptorPtr typeDesc(baseType);
+    for (int i = 0; i < pointerLevel; i++) {
+        typeDesc = ast::makePointerDesc(std::move(typeDesc));
+    }
+    return new ast::NCastExpression(typeDesc.release(), expr);
+}
+
 ast::NExpression* ParserActions::handleSizeofType(ast::TypeDescriptor* type) {
     return new ast::NSizeofExpression(type);
 }
@@ -317,11 +312,48 @@ ast::NExpression* ParserActions::handleSizeofExpression(ast::NExpression* expr) 
 
 // Primary Expressions
 ast::NIdentifier* ParserActions::handleIdentifier(const std::string& name) {
-    return getOrCreateIdentifier(name);
+    return new ast::NIdentifier(name);
 }
 
 ast::NInteger* ParserActions::handleInteger(int value) {
     return new ast::NInteger(value);
+}
+
+ast::NInteger* ParserActions::handleIntegerFromString(const std::string& value) {
+    return new ast::NInteger(atoi(value.c_str()));
+}
+
+ast::NInteger* ParserActions::handleCharConstant(const std::string& value) {
+    // Character constant like 'a' or '\n', extract the character
+    // value format: 'c' or '\x'
+    if (value.length() >= 3) {
+        if (value[1] == '\\' && value.length() >= 4) {
+            // Escape sequence
+            switch (value[2]) {
+                case 'n': return new ast::NInteger((int)'\n');
+                case 't': return new ast::NInteger((int)'\t');
+                case 'r': return new ast::NInteger((int)'\r');
+                case '0': return new ast::NInteger((int)'\0');
+                case '\\': return new ast::NInteger((int)'\\');
+                case '\'': return new ast::NInteger((int)'\'');
+                case '"': return new ast::NInteger((int)'"');
+                case 'a': return new ast::NInteger((int)'\a');
+                case 'b': return new ast::NInteger((int)'\b');
+                case 'f': return new ast::NInteger((int)'\f');
+                case 'v': return new ast::NInteger((int)'\v');
+                case '?': return new ast::NInteger((int)'\?');
+                default: return new ast::NInteger((int)value[2]);
+            }
+        } else {
+            // Regular character
+            return new ast::NInteger((int)value[1]);
+        }
+    }
+    return new ast::NInteger(0);
+}
+
+ast::NFloat* ParserActions::handleFloat(const std::string& value) {
+    return new ast::NFloat(atof(value.c_str()));
 }
 
 ast::NString* ParserActions::handleString(const std::string& value) {
@@ -346,13 +378,14 @@ ast::NInitializerList* ParserActions::handleInitializerList(
     ast::NInitializerList* next
 ) {
     ast::NInitializerList* initList = new ast::NInitializerList();
-    initList->push_back(expr);
     if (next) {
-        // Merge elements from next list
+        // First add elements from existing list to maintain order
         for (auto* elem : next->getElements()) {
             initList->push_back(elem);
         }
     }
+    // Then add the new element at the end
+    initList->push_back(expr);
     return initList;
 }
 
@@ -361,7 +394,47 @@ ast::NExpressionStatement* ParserActions::handleExpressionStatement(ast::NExpres
     return new ast::NExpressionStatement(expr);
 }
 
+ast::NExpressionStatement* ParserActions::handleEmptyExpressionStatement() {
+    return new ast::NExpressionStatement(nullptr);
+}
+
+// Comma Expression
+ast::NExpression* ParserActions::handleCommaExpression(ast::NExpression* left, ast::NExpression* right) {
+    return new ast::NCommaExpression(left, right);
+}
+
+// Compound Assignment
+ast::NExpression* ParserActions::handleCompoundAssignment(
+    ast::NExpression* left,
+    ast::BineryOperator op,
+    ast::NExpression* right
+) {
+    ast::NExpression* binaryOp = new ast::NBinaryOperator(left, op, right);
+    return new ast::NAssignment(left, binaryOp);
+}
+
 // Type Specifiers
+ast::TypeDescriptor* ParserActions::handlePrimitiveType(const std::string& typeName) {
+    if (typeName == "bool") {
+        return ast::makeBoolDesc().release();
+    } else if (typeName == "char") {
+        return ast::makeCharDesc().release();
+    } else if (typeName == "short") {
+        return ast::makeShortDesc().release();
+    } else if (typeName == "int") {
+        return ast::makeIntDesc().release();
+    } else if (typeName == "long") {
+        return ast::makeLongDesc().release();
+    } else if (typeName == "float") {
+        return ast::makeFloatDesc().release();
+    } else if (typeName == "double") {
+        return ast::makeDoubleDesc().release();
+    } else if (typeName == "void") {
+        return ast::makeVoidDesc().release();
+    }
+    return nullptr;
+}
+
 ast::TypeDescriptor* ParserActions::handlePointerType(
     ast::TypeDescriptor* baseType,
     int pointerLevel
@@ -369,9 +442,11 @@ ast::TypeDescriptor* ParserActions::handlePointerType(
     if (pointerLevel <= 0) {
         return baseType;
     }
-    // PointerTypeDescriptor expects unique_ptr, need to wrap
-    ast::TypeDescriptorPtr basePtr(baseType);
-    return new ast::PointerTypeDescriptor(std::move(basePtr), pointerLevel);
+    ast::TypeDescriptorPtr typeDesc(baseType);
+    for (int i = 0; i < pointerLevel; i++) {
+        typeDesc = ast::makePointerDesc(std::move(typeDesc));
+    }
+    return typeDesc.release();
 }
 
 // Struct
@@ -396,11 +471,48 @@ ast::TypeDescriptor* ParserActions::handleStructSpecifier(
     const std::string& name,
     ast::NStructDeclaration* declarations
 ) {
-    return new ast::StructTypeDescriptor(name, declarations);
+    return ast::makeStructDesc(name, declarations).release();
+}
+
+ast::TypeDescriptor* ParserActions::handleAnonymousStruct(ast::NStructDeclaration* declarations) {
+    return ast::makeStructDesc("", declarations).release();
 }
 
 ast::TypeDescriptor* ParserActions::handleStructReference(const std::string& name) {
-    return new ast::StructTypeDescriptor(name, nullptr);
+    return ast::makeStructDesc(name, nullptr).release();
+}
+
+ast::TypeDescriptor* ParserActions::handleTypeNameWithPointer(
+    ast::TypeDescriptor* baseType,
+    int pointerLevel
+) {
+    ast::TypeDescriptorPtr typeDesc(baseType);
+    for (int i = 0; i < pointerLevel; i++) {
+        typeDesc = ast::makePointerDesc(std::move(typeDesc));
+    }
+    return typeDesc.release();
+}
+
+ast::TypeDescriptor* ParserActions::handleTypeNameWithArray(
+    ast::TypeDescriptor* baseType,
+    const std::string& arraySize
+) {
+    ast::TypeDescriptorPtr typeDesc(baseType);
+    std::vector<int> dims = {std::stoi(arraySize)};
+    return ast::makeArrayDesc(std::move(typeDesc), std::move(dims)).release();
+}
+
+ast::TypeDescriptor* ParserActions::handleTypeNameWithPointerAndArray(
+    ast::TypeDescriptor* baseType,
+    int pointerLevel,
+    const std::string& arraySize
+) {
+    ast::TypeDescriptorPtr typeDesc(baseType);
+    for (int i = 0; i < pointerLevel; i++) {
+        typeDesc = ast::makePointerDesc(std::move(typeDesc));
+    }
+    std::vector<int> dims = {std::stoi(arraySize)};
+    return ast::makeArrayDesc(std::move(typeDesc), std::move(dims)).release();
 }
 
 // Error reporting
