@@ -103,7 +103,8 @@ public:
 
     std::string getErrorMessage() const { return errorMessage; }
 
-    // Mixin methods - provides getValue() for types that have a 'value' member
+    T getData() const { return data; }
+
     template<typename U = T>
     auto getValue() const -> decltype(std::declval<U>().value) {
         return data.value;

@@ -537,6 +537,31 @@ ExprCodegenResult NString::codegen(ASTContext &context) {
     );
 }
 
+CodegenResult<llvm::Value*> NDeclarator::getArraySizeValue(ASTContext &context) {
+    if (arrayDimensions.empty()) {
+        return CodegenResult<llvm::Value*>("No array dimensions in declarator");
+    }
+
+    ExprCodegenResult sizeResult = arrayDimensions[0]->codegen(context);
+    if (false == sizeResult.isSuccess()) {
+        return CodegenResult<llvm::Value*>("Failed to generate code for array size expression") << sizeResult;
+    }
+    for (size_t i = 1; i < arrayDimensions.size(); ++i) {
+        // For multi-dimensional arrays, we can multiply the sizes together
+        sizeResult = NBinaryOperator(
+            arrayDimensions[i - 1],
+            BineryOperator::MUL,
+            arrayDimensions[i]
+        ).codegen(context);
+
+        if (false == sizeResult.isSuccess()) {
+            return CodegenResult<llvm::Value*>("Failed to compute total size for multi-dimensional array") << sizeResult;
+        }
+    }
+
+    return CodegenResult<llvm::Value*>(sizeResult.getValue());
+}
+
 ExprCodegenResult NArraySubscript::codegen(ASTContext &context) {
     CodegenResult ptrResult = allocgen(context);
     if (false == ptrResult.isSuccess()) {
@@ -565,14 +590,10 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
 
     llvm::Value *basePtr = arrayResult.getAllocaInst();
     llvm::Type* arrayType = arrayResult.getType();
-    llvm::Type* elemType = nullptr;
+    llvm::Type* elementType = nullptr;
 
     if (true == arrayType->isArrayTy()) {
-        elemType = context.typeManager->getArrayElementType(arrayType);
-        if (nullptr == elemType) {
-            return AllocCodegenResult("Array type does not have an element type in subscript operation");
-        }
-
+        elementType = context.typeManager->getArrayElementType(arrayType);
         std::vector<llvm::Value*> indices(2);
         indices[0] = context.builder.getInt32(0);
         indices[1] = indexResult.getValue();
@@ -584,26 +605,28 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
             "arrayidx"
         );
 
-        return AllocCodegenResult(elementPtr, elemType);
-    } else if (arrayType->isPointerTy()) {
+        return AllocCodegenResult(elementPtr, elementType);
+    } else if (true == arrayType->isPointerTy()) {
+        elementType = context.typeManager->getPointeeType(arrayType);
+
+        // For pointer types, basePtr is an alloca storing the pointer
+        // We need to load the pointer value first
         llvm::Value *ptrValue = context.builder.CreateLoad(
             arrayType,
             basePtr,
             "load_ptr"
         );
 
-        llvm::Type* elementType = context.typeManager->getPointeeType(arrayType);
         llvm::Value *elementPtr = context.builder.CreateGEP(
             elementType,
             ptrValue,
             indexResult.getValue(),
-            "ptr_arrayidx"
+            "ptridx"
         );
 
         return AllocCodegenResult(elementPtr, elementType);
     }
 
-    // Not an array or pointer type
     std::string typeName = context.typeManager->getTypeName(arrayType);
     return AllocCodegenResult("Base is not an array type in subscript operation, got: " + typeName);
 }

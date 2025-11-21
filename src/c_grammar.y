@@ -60,13 +60,13 @@ toyc::semantic::ParserActions *parser_actions = nullptr;
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
 %type	<expression> expression unary_expression assignment_expression relational_expression equality_expression shift_expression additive_expression
-%type	<expression> multiplicative_expression primary_expression numeric postfix_expression conditional_expression logical_or_expression
+%type	<expression> multiplicative_expression primary_expression numeric postfix_expression conditional_expression logical_or_expression constant_expression
 %type	<expression> logical_and_expression inclusive_or_expression exclusive_or_expression and_expression initializer cast_expression
 %type   <initializer_list> initializer_list
 %type   <type_specifier> type_specifier struct_specifier type_name
 %type   <struct_declaration> struct_declaration struct_declaration_list
 %type	<bop> relational_expression_op
-%type   <declarator> init_declarator init_declarator_list struct_declarator_list declarator
+%type   <declarator> init_declarator init_declarator_list struct_declarator_list declarator direct_declarator
 %type   <parameter> parameter_list parameter_declaration
 %type   <declaration_specifiers> declaration_specifiers
 %type   <statement> statement statement_list expression_statement jump_statement for_statement_init_declaration
@@ -293,40 +293,23 @@ init_declarator
 	;
 
 declarator
-	: pointer IDENTIFIER {
-		$$ = parser_actions->handleDeclarator($1, *$2);
-		delete $2;
+	: pointer direct_declarator {
+		$$ = parser_actions->handleDeclarator($1, $2);
 	}
-	| IDENTIFIER {
-		$$ = parser_actions->handleDeclarator(0, *$1);
-		delete $1;
-	}
-	| pointer IDENTIFIER '[' I_CONSTANT ']' {
-		$$ = parser_actions->handleArrayDeclarator($1, *$2, std::stoi(*$4));
-		delete $2;
-		delete $4;
-	}
-	| IDENTIFIER '[' I_CONSTANT ']' {
-		$$ = parser_actions->handleArrayDeclarator(0, *$1, std::stoi(*$3));
-		delete $1;
-		delete $3;
-	}
-	| pointer IDENTIFIER '[' ']' {
-		$$ = parser_actions->handleArrayDeclarator($1, *$2, 0);
-		delete $2;
-	}
-	| IDENTIFIER '[' ']' {
-		$$ = parser_actions->handleArrayDeclarator(0, *$1, 0);
-		delete $1;
-	}
-	| declarator '[' I_CONSTANT ']' {
+	| direct_declarator {
 		$$ = $1;
-		$$->addArrayDimension(std::stoi(*$3));
-		delete $3;
 	}
-	| declarator '[' ']' {
-		$$ = $1;
-		$$->addArrayDimension(0);
+	;
+
+direct_declarator
+	: IDENTIFIER {
+		$$ = parser_actions->handleDeclarator($1);
+	}
+	| direct_declarator '[' constant_expression ']' {
+		$$ = parser_actions->handleArrayDeclarator($1, $3);
+	}
+	| direct_declarator '[' ']' {
+		$$ = parser_actions->handleArrayDeclarator($1);
 	}
 	;
 
@@ -619,9 +602,11 @@ postfix_expression
 	  }
 	;
 
-/* constant_expression
-	: conditional_expression
-	; */
+constant_expression
+	: conditional_expression {
+		$$ = $1;
+	}
+	;
 
 argument_expression_list
 	: assignment_expression {

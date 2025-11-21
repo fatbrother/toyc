@@ -138,19 +138,16 @@ public:
 
     ast::NDeclarator* handleDeclarator(
         int pointerLevel,
-        const std::string& name
+        ast::NDeclarator* declarator
+    );
+
+    ast::NDeclarator* handleDeclarator(
+        const std::string* name
     );
 
     ast::NDeclarator* handleArrayDeclarator(
-        int pointerLevel,
-        const std::string& name,
-        int arraySize
-    );
-
-    ast::NDeclarator* handleMultiDimArrayDeclarator(
-        int pointerLevel,
-        const std::string& name,
-        ast::NExpression* dimensions
+        ast::NDeclarator* declarator,
+        ast::NExpression* arraySize = nullptr
     );
 
     // Expressions

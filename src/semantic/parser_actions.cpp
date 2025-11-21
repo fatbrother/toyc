@@ -200,30 +200,33 @@ ast::NDeclarator* ParserActions::handleInitDeclarator(
 
 ast::NDeclarator* ParserActions::handleDeclarator(
     int pointerLevel,
-    const std::string& name
+    ast::NDeclarator* declarator
 ) {
-    return new ast::NDeclarator(name, pointerLevel);
+    declarator->pointerLevel = pointerLevel;
+    return declarator;
+}
+
+ast::NDeclarator* ParserActions::handleDeclarator(
+    const std::string* name
+) {
+    std::string declName = name ? *name : "";
+    delete name;
+    return new ast::NDeclarator(declName);
 }
 
 ast::NDeclarator* ParserActions::handleArrayDeclarator(
-    int pointerLevel,
-    const std::string& name,
-    int arraySize
+    ast::NDeclarator* declarator,
+    ast::NExpression* arraySize
 ) {
-    ast::NDeclarator* decl = new ast::NDeclarator(name, pointerLevel);
-    decl->addArrayDimension(arraySize);
-    return decl;
-}
+    if (nullptr == arraySize) {
+        arraySize = handleInteger(0);
+    }
 
-ast::NDeclarator* ParserActions::handleMultiDimArrayDeclarator(
-    int pointerLevel,
-    const std::string& name,
-    ast::NExpression* dimensions
-) {
-    ast::NDeclarator* decl = new ast::NDeclarator(name, pointerLevel);
-    // Note: Would need to parse dimensions expression for multi-dimensional arrays
-    // For now, just create a basic declarator
-    return decl;
+    if (arraySize->getType() != "Integer") {
+        declarator->isVLA = true;
+    }
+    declarator->addArrayDimension(arraySize);
+    return declarator;
 }
 
 // Expressions

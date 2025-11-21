@@ -38,19 +38,21 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
             return StmtCodegenResult("Variable already declared in this scope: " + currentDeclarator->getName());
         }
 
-        llvm::Type* currType = type;
-        if (currentDeclarator->isArray()) {
-            const std::vector<int>& dimensions = currentDeclarator->getArrayDimensions();
-            currType = context.typeManager->getArrayType(type, dimensions);
-        } else if (currentDeclarator->isPointer()) {
-            currType = context.typeManager->getPointerType(type, currentDeclarator->pointerLevel);
+        AllocCodegenResult allocResult;
+        if (true == currentDeclarator->isArray()) {
+            allocResult = createArrayAllocation(context, type, currentDeclarator);
+        } else if (true == currentDeclarator->isPointer()) {
+            allocResult = createPointerAllocation(context, type, currentDeclarator);
+        } else {
+            allocResult = createSingleAllocation(context, type, currentDeclarator);
         }
 
-        if (nullptr == type) {
-            return StmtCodegenResult("Failed to get LLVM type for variable");
+        if (false == allocResult.isSuccess()) {
+            return StmtCodegenResult("Variable declaration codegen failed for variable: " + currentDeclarator->getName()) << allocResult;
         }
 
-        allocaInst = context.builder.CreateAlloca(currType, nullptr, currentDeclarator->getName());
+        allocaInst = static_cast<llvm::AllocaInst *>(allocResult.getAllocaInst());
+        llvm::Type* currType = allocResult.getType();
         context.variableTable->insert(currentDeclarator->getName(), std::make_pair(allocaInst, currType));
 
         if (true == currentDeclarator->isNonInitialized()) {
@@ -81,6 +83,50 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
     }
 
     return StmtCodegenResult();
+}
+
+AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &context, llvm::Type *baseType, NDeclarator* declarator) {
+    if (false == declarator->isVLA) {
+        std::vector<int> dimensions;
+        for (auto sizeExpr : declarator->getArrayDimensions()) {
+            dimensions.push_back(static_cast<NInteger*>(sizeExpr)->getValue());
+        }
+        llvm::Type *arrayType = context.typeManager->getArrayType(baseType, dimensions);
+        return createSingleAllocation(context, arrayType, declarator);
+    }
+
+    // Handle VLA allocation
+    CodegenResult<llvm::Value *> sizeValue = declarator->getArraySizeValue(context);
+    if (false == sizeValue.isSuccess()) {
+        return AllocCodegenResult("Failed to generate size value for VLA") << sizeValue;
+    }
+
+    // CreateAlloca with array size returns a pointer to the array
+    llvm::Value *vlaArrayPtr = context.builder.CreateAlloca(
+        baseType,
+        sizeValue.getData(),
+        declarator->getName() + ".vla");
+
+    // Wrap the VLA pointer in an alloca so it can be treated like a regular pointer
+    llvm::Type *ptrType = vlaArrayPtr->getType();
+    llvm::AllocaInst *ptrStorage = context.builder.CreateAlloca(
+        ptrType,
+        nullptr,
+        declarator->getName());
+
+    context.builder.CreateStore(vlaArrayPtr, ptrStorage);
+
+    return AllocCodegenResult(ptrStorage, ptrType);
+}
+
+AllocCodegenResult NDeclarationStatement::createPointerAllocation(ASTContext &context, llvm::Type *baseType, NDeclarator *declarator) {
+    llvm::Type *ptrType = context.typeManager->getPointerType(baseType, declarator->pointerLevel);
+    return createSingleAllocation(context, ptrType, declarator);
+}
+
+AllocCodegenResult NDeclarationStatement::createSingleAllocation(ASTContext &context, llvm::Type *type, NDeclarator *declarator) {
+    llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(type, nullptr, declarator->getName());
+    return AllocCodegenResult(allocaInst, type);
 }
 
 StmtCodegenResult NDeclarationStatement::initializeArrayElements(

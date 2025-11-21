@@ -39,6 +39,10 @@ private:
         NInitializerList* initList,
         ASTContext& context);
 
+    AllocCodegenResult createSingleAllocation(ASTContext &context, llvm::Type* type, NDeclarator* declarator);
+    AllocCodegenResult createArrayAllocation(ASTContext &context, llvm::Type* baseType, NDeclarator* declarator);
+    AllocCodegenResult createPointerAllocation(ASTContext &context, llvm::Type* baseType, NDeclarator* declarator);
+
     TypeDescriptor *typeDesc;
     NDeclarator *declarator;
 };
