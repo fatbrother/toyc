@@ -92,6 +92,7 @@ public:
     NInteger(int value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Integer"; }
+    int getValue() const { return value; }
 
 private:
     int value;
@@ -124,6 +125,9 @@ public:
     ~NDeclarator() {
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
+        for (auto dim : arrayDimensions) {
+            SAFE_DELETE(dim);
+        }
     }
     virtual ExprCodegenResult codegen(ASTContext &context) override {
         if (nullptr == expr) {
@@ -134,9 +138,14 @@ public:
     virtual std::string getType() const override { return "Declaration"; }
     std::string getName() const { return name; }
     bool isNonInitialized() const { return expr == nullptr; }
+    CodegenResult<llvm::Value*> getArraySizeValue(ASTContext &context);
 
-    void addArrayDimension(int size) {
+    void addArrayDimension(NExpression* size) {
         arrayDimensions.push_back(size);
+    }
+
+    int getArrayDimensionCount() const {
+        return static_cast<int>(arrayDimensions.size());
     }
 
     bool isArray() const {
@@ -147,7 +156,7 @@ public:
         return pointerLevel > 0;
     }
 
-    const std::vector<int>& getArrayDimensions() const {
+    const std::vector<NExpression*>& getArrayDimensions() const {
         return arrayDimensions;
     }
 
@@ -155,7 +164,8 @@ public:
     int pointerLevel = 0;
     NDeclarator *next = nullptr;
     NExpression *expr = nullptr;
-    std::vector<int> arrayDimensions;
+    std::vector<NExpression*> arrayDimensions;
+    bool isVLA = false;
 
 private:
     std::string name;

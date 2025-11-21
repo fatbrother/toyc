@@ -11,6 +11,6 @@ int sum_array(int arr[], int size) {
 
 int main() {
     int numbers[4] = {5, 10, 15, 20};
-printf("%d\n", sum_array(numbers, 4));
+    printf("%d\n", sum_array(numbers, 4));
     return 0;  // 應返回 50
 }
