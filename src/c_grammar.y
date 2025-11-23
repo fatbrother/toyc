@@ -326,11 +326,23 @@ pointer
 	| '*' VOLATILE {
 		$$ = 1;  // volatile pointer, qualifier ignored
 	}
+	| '*' CONST VOLATILE {
+		$$ = 1;  // const volatile pointer, qualifiers ignored
+	}
+	| '*' VOLATILE CONST {
+		$$ = 1;  // volatile const pointer, qualifiers ignored
+	}
 	| '*' CONST pointer {
 		$$ = $3 + 1;  // const pointer with additional levels
 	}
 	| '*' VOLATILE pointer {
 		$$ = $3 + 1;  // volatile pointer with additional levels
+	}
+	| '*' CONST VOLATILE pointer {
+		$$ = $4 + 1;  // const volatile pointer with additional levels
+	}
+	| '*' VOLATILE CONST pointer {
+		$$ = $4 + 1;  // volatile const pointer with additional levels
 	}
 	;
 

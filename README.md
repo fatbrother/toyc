@@ -104,6 +104,20 @@ Function calls with argument lists are supported
 ### Structures
 The compiler supports structure definitions and member access using the dot (`.`) and arrow (`->`) operators.
 
+### Type Qualifiers
+The compiler supports type qualifiers that can be used to modify type declarations:
+- `const` - Const-qualified types (parsed but not enforced at runtime)
+- `volatile` - Volatile-qualified types (parsed but not enforced at runtime)
+
+Type qualifiers can be used in:
+- Variable declarations: `const int x = 10;`
+- Function parameters: `int foo(const int a);`
+- Function return types: `const int bar();`
+- Pointer declarations: `const int *p;` or `int * const p;`
+- Struct members: `struct { const int id; };`
+
+Note: Type qualifiers are parsed and accepted by the compiler but do not affect code generation or runtime behavior. They serve primarily for syntactic compatibility with C code.
+
 ## Future Work
 This is an educational/toy C compiler that implements a significant subset of C functionality. The compiler successfully handles most common C programming patterns including functions, control flow, expressions, arrays, pointers, and structures. However, it does not implement the complete ANSI C specification.
 
@@ -113,10 +127,6 @@ This is an educational/toy C compiler that implements a significant subset of C 
 - `static` - Static storage duration (tokenized but not in grammar)
 - `auto` - Automatic storage duration (default)
 - `register` - Register storage hint
-
-**Type Qualifiers:**
-- `const` - Const-qualified types (tokenized but not in grammar)
-- `volatile` - Volatile-qualified types (tokenized but not in grammar)
 
 **Type Specifiers:**
 - `signed`/`unsigned` - Type modifiers for integer types
