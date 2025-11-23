@@ -54,7 +54,7 @@ toyc::semantic::ParserActions *parser_actions = nullptr;
 
 %token	TYPEDEF SIZEOF
 %token	BOOL CHAR SHORT INT LONG FLOAT DOUBLE VOID
-%token	SIGNED UNSIGNED CONST STATIC
+%token	SIGNED UNSIGNED CONST VOLATILE STATIC
 %token	STRUCT UNION ENUM ELLIPSIS
 
 %token	CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
@@ -319,6 +319,18 @@ pointer
 	}
 	| '*' pointer {
 		$$ = $2 + 1;
+	}
+	| '*' CONST {
+		$$ = 1;  // const pointer, qualifier ignored
+	}
+	| '*' VOLATILE {
+		$$ = 1;  // volatile pointer, qualifier ignored
+	}
+	| '*' CONST pointer {
+		$$ = $3 + 1;  // const pointer with additional levels
+	}
+	| '*' VOLATILE pointer {
+		$$ = $3 + 1;  // volatile pointer with additional levels
 	}
 	;
 
@@ -693,6 +705,12 @@ type_specifier
 	}
 	| struct_specifier {
 		$$ = $1;
+	}
+	| CONST type_specifier {
+		$$ = $2;  // For now, just pass through the type, ignoring const qualifier
+	}
+	| VOLATILE type_specifier {
+		$$ = $2;  // For now, just pass through the type, ignoring volatile qualifier
 	}
 	;
 

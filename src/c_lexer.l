@@ -86,6 +86,7 @@ yycolumn += yyleng;
 "union"					{ TOKEN(UNION); }
 "unsigned"				{ TOKEN(UNSIGNED); }
 "void"					{ TOKEN(VOID); }
+"volatile"				{ TOKEN(VOLATILE); }
 "while"					{ TOKEN(WHILE); }
 
 {L}{A}*					{ SAVE_TOKEN; return check_type(); }
