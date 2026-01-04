@@ -41,6 +41,7 @@ public:
     llvm::Function *getFunction() const { return llvmFunction; }
     llvm::Type* getReturnType() const { return returnType; }
     NParameter *getParams() const { return params; }
+    NBlock *getBody() const { return body; }
 
 private:
     llvm::Function *llvmFunction = nullptr;

@@ -9,7 +9,6 @@
 #include "ast/statement.hpp"
 #include "ast/external_definition.hpp"
 #include "ast/type.hpp"
-#include "semantic/semantic_analyzer.hpp"
 
 namespace toyc::semantic {
 
@@ -285,11 +284,7 @@ public:
     bool hasError() const { return errorOccurred; }
     void clearError() { errorOccurred = false; }
 
-    // Get semantic analyzer
-    SemanticAnalyzer* getSemanticAnalyzer() { return &semanticAnalyzer; }
-
 private:
-    SemanticAnalyzer semanticAnalyzer;
     bool errorOccurred;
 };
 
