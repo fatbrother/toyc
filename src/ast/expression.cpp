@@ -197,34 +197,42 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
         allocaInst = static_cast<llvm::AllocaInst *>(allocResult.getAllocaInst());
     }
 
+    if ((op == L_INC || op == R_INC || op == L_DEC || op == R_DEC) && context.typeManager->isConstQualified(typeIdx)) {
+        return ExprCodegenResult("Increment/decrement of const-qualified variable");
+    }
+
+    bool isVolatile = context.typeManager->isVolatileQualified(typeIdx);
     llvm::Value *tmp = nullptr;
     switch (op) {
         case L_INC:
             value = context.builder.CreateAdd(value, one, "inc");
-            context.builder.CreateStore(value, allocaInst);
+            context.builder.CreateStore(value, allocaInst, isVolatile);
             break;
         case R_INC:
             tmp = context.builder.CreateAdd(value, one, "inc");
-            context.builder.CreateStore(tmp, allocaInst);
+            context.builder.CreateStore(tmp, allocaInst, isVolatile);
             break;
         case L_DEC:
             value = context.builder.CreateSub(value, one, "dec");
-            context.builder.CreateStore(value, allocaInst);
+            context.builder.CreateStore(value, allocaInst, isVolatile);
             break;
         case R_DEC:
             tmp = context.builder.CreateSub(value, one, "dec");
-            context.builder.CreateStore(tmp, allocaInst);
+            context.builder.CreateStore(tmp, allocaInst, isVolatile);
             break;
         case ADDR:
             value = allocaInst;
             break;
         case DEREF: {
-            auto *ptrTc = dynamic_cast<const PointerTypeCodegen *>(context.typeManager->get(typeIdx));
+            TypeIdx unqualifiedIdx = context.typeManager->unqualify(typeIdx);
+            auto *ptrTc = dynamic_cast<const PointerTypeCodegen *>(context.typeManager->get(unqualifiedIdx));
             if (!ptrTc) {
                 return ExprCodegenResult("Cannot dereference non-pointer type");
             }
-            llvm::Type *pointeeType = context.typeManager->realize(ptrTc->getPointeeIdx());
-            value = context.builder.CreateLoad(pointeeType, value, "deref");
+            TypeIdx pointeeIdx = ptrTc->getPointeeIdx();
+            bool pointeeIsVolatile = context.typeManager->isVolatileQualified(pointeeIdx);
+            llvm::Type *pointeeType = context.typeManager->realize(pointeeIdx);
+            value = context.builder.CreateLoad(pointeeType, value, pointeeIsVolatile, "deref");
         } break;
         case PLUS:
             break;
@@ -250,7 +258,8 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
     if (op == ADDR) {
         resultTypeIdx = context.typeManager->getPointerIdx(typeIdx, 1);
     } else if (op == DEREF) {
-        auto *ptrTc = dynamic_cast<const PointerTypeCodegen *>(context.typeManager->get(typeIdx));
+        TypeIdx unqualifiedIdx = context.typeManager->unqualify(typeIdx);
+        auto *ptrTc = dynamic_cast<const PointerTypeCodegen *>(context.typeManager->get(unqualifiedIdx));
         resultTypeIdx = ptrTc ? ptrTc->getPointeeIdx() : InvalidTypeIdx;
     } else if (op == LOG_NOT) {
         resultTypeIdx = context.typeManager->getPrimitiveIdx(VAR_TYPE_BOOL);
@@ -326,7 +335,8 @@ ExprCodegenResult NIdentifier::codegen(ASTContext &context) {
         return ExprCodegenResult(value, context.typeManager->getPointerIdx(elementIdx, 1));
     }
 
-    value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
+    bool isVolatile = context.typeManager->isVolatileQualified(typeIdx);
+    value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, isVolatile, name);
     if (nullptr == value) {
         return ExprCodegenResult("Load failed for variable: " + name);
     }
@@ -356,12 +366,17 @@ ExprCodegenResult NAssignment::codegen(ASTContext &context) {
         return ExprCodegenResult("Assignment failed due to null values") << lhsResult << rhsResult;
     }
 
+    if (context.typeManager->isConstQualified(lhsTypeIdx)) {
+        return ExprCodegenResult("Assignment to const-qualified variable");
+    }
+
     CodegenResult castResult = context.typeManager->typeCast(rhsValue, rhsTypeIdx, lhsTypeIdx, context.builder);
     if (false == castResult.isSuccess()) {
         return ExprCodegenResult("Type cast failed during assignment") << castResult;
     }
     rhsValue = castResult.getValue();
-    context.builder.CreateStore(rhsValue, lhsAlloca);
+    bool isVolatile = context.typeManager->isVolatileQualified(lhsTypeIdx);
+    context.builder.CreateStore(rhsValue, lhsAlloca, isVolatile);
     return ExprCodegenResult(rhsValue, lhsTypeIdx);
 }
 

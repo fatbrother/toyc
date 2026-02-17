@@ -4,6 +4,15 @@
 
 namespace toyc::semantic {
 
+namespace {
+inline int decodePointerLevel(int encoded) {
+    return encoded & ast::POINTER_LEVEL_MASK;
+}
+inline uint8_t decodePointerQuals(int encoded) {
+    return static_cast<uint8_t>((encoded >> 16) & 0xFF);
+}
+}  // namespace
+
 ParserActions::ParserActions(ast::TypeManager* typeManager) : typeManager_(typeManager), errorOccurred(false) {}
 
 ParserActions::~ParserActions() {}
@@ -54,6 +63,8 @@ ast::NParameter* ParserActions::handleParameter(ast::TypeIdx typeIdx, ast::NDecl
             finalIdx = typeManager_->getPointerIdx(typeIdx, 1);
         } else if (0 < declarator->pointerLevel) {
             finalIdx = typeManager_->getPointerIdx(typeIdx, declarator->pointerLevel);
+            if (declarator->qualifiers != ast::QUAL_NONE)
+                finalIdx = typeManager_->getQualifiedIdx(finalIdx, declarator->qualifiers);
         }
     }
     return new ast::NParameter(finalIdx, std::move(name), declarator);
@@ -155,8 +166,9 @@ ast::NDeclarator* ParserActions::handleInitDeclarator(ast::NDeclarator* declarat
     return declarator;
 }
 
-ast::NDeclarator* ParserActions::handleDeclarator(int pointerLevel, ast::NDeclarator* declarator) {
-    declarator->pointerLevel = pointerLevel;
+ast::NDeclarator* ParserActions::handleDeclarator(int encoded, ast::NDeclarator* declarator) {
+    declarator->pointerLevel = decodePointerLevel(encoded);
+    declarator->qualifiers = decodePointerQuals(encoded);
     return declarator;
 }
 
@@ -218,9 +230,12 @@ ast::NExpression* ParserActions::handleCastExpression(ast::TypeIdx typeIdx, ast:
     return new ast::NCastExpression(typeIdx, expr);
 }
 
-ast::NExpression* ParserActions::handleCastExpressionWithPointer(ast::TypeIdx baseTypeIdx, int pointerLevel,
+ast::NExpression* ParserActions::handleCastExpressionWithPointer(ast::TypeIdx baseTypeIdx, int encoded,
                                                                  ast::NExpression* expr) {
-    ast::TypeIdx typeIdx = typeManager_->getPointerIdx(baseTypeIdx, pointerLevel);
+    ast::TypeIdx typeIdx = typeManager_->getPointerIdx(baseTypeIdx, decodePointerLevel(encoded));
+    uint8_t quals = decodePointerQuals(encoded);
+    if (quals != ast::QUAL_NONE)
+        typeIdx = typeManager_->getQualifiedIdx(typeIdx, quals);
     return new ast::NCastExpression(typeIdx, expr);
 }
 
@@ -361,11 +376,20 @@ ast::TypeIdx ParserActions::handlePrimitiveType(const std::string& typeName) {
     return ast::InvalidTypeIdx;
 }
 
-ast::TypeIdx ParserActions::handlePointerType(ast::TypeIdx baseTypeIdx, int pointerLevel) {
-    if (pointerLevel <= 0) {
+ast::TypeIdx ParserActions::handlePointerType(ast::TypeIdx baseTypeIdx, int encoded) {
+    int level = decodePointerLevel(encoded);
+    if (level <= 0) {
         return baseTypeIdx;
     }
-    return typeManager_->getPointerIdx(baseTypeIdx, pointerLevel);
+    ast::TypeIdx ptrIdx = typeManager_->getPointerIdx(baseTypeIdx, level);
+    uint8_t quals = decodePointerQuals(encoded);
+    if (quals != ast::QUAL_NONE)
+        ptrIdx = typeManager_->getQualifiedIdx(ptrIdx, quals);
+    return ptrIdx;
+}
+
+ast::TypeIdx ParserActions::handleQualifiedType(ast::TypeIdx baseTypeIdx, uint8_t qualifiers) {
+    return typeManager_->getQualifiedIdx(baseTypeIdx, qualifiers);
 }
 
 // Struct
@@ -393,8 +417,12 @@ ast::TypeIdx ParserActions::handleStructReference(const std::string& name) {
     return typeManager_->getStructIdx(name, nullptr);
 }
 
-ast::TypeIdx ParserActions::handleTypeNameWithPointer(ast::TypeIdx baseTypeIdx, int pointerLevel) {
-    return typeManager_->getPointerIdx(baseTypeIdx, pointerLevel);
+ast::TypeIdx ParserActions::handleTypeNameWithPointer(ast::TypeIdx baseTypeIdx, int encoded) {
+    ast::TypeIdx ptrIdx = typeManager_->getPointerIdx(baseTypeIdx, decodePointerLevel(encoded));
+    uint8_t quals = decodePointerQuals(encoded);
+    if (quals != ast::QUAL_NONE)
+        ptrIdx = typeManager_->getQualifiedIdx(ptrIdx, quals);
+    return ptrIdx;
 }
 
 ast::TypeIdx ParserActions::handleTypeNameWithArray(ast::TypeIdx baseTypeIdx, const std::string& arraySize) {
@@ -402,9 +430,12 @@ ast::TypeIdx ParserActions::handleTypeNameWithArray(ast::TypeIdx baseTypeIdx, co
     return typeManager_->getArrayIdx(baseTypeIdx, std::move(dims));
 }
 
-ast::TypeIdx ParserActions::handleTypeNameWithPointerAndArray(ast::TypeIdx baseTypeIdx, int pointerLevel,
+ast::TypeIdx ParserActions::handleTypeNameWithPointerAndArray(ast::TypeIdx baseTypeIdx, int encoded,
                                                               const std::string& arraySize) {
-    ast::TypeIdx ptrIdx = typeManager_->getPointerIdx(baseTypeIdx, pointerLevel);
+    ast::TypeIdx ptrIdx = typeManager_->getPointerIdx(baseTypeIdx, decodePointerLevel(encoded));
+    uint8_t quals = decodePointerQuals(encoded);
+    if (quals != ast::QUAL_NONE)
+        ptrIdx = typeManager_->getQualifiedIdx(ptrIdx, quals);
     std::vector<int> dims = {std::stoi(arraySize)};
     return typeManager_->getArrayIdx(ptrIdx, std::move(dims));
 }

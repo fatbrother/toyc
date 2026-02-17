@@ -139,6 +139,7 @@ public:
     // Type Specifiers — return TypeIdx registered in TypeManager
     ast::TypeIdx handlePrimitiveType(const std::string& typeName);
     ast::TypeIdx handlePointerType(ast::TypeIdx baseTypeIdx, int pointerLevel);
+    ast::TypeIdx handleQualifiedType(ast::TypeIdx baseTypeIdx, uint8_t qualifiers);
 
     // Struct
     ast::NStructDeclaration* handleStructDeclaration(ast::TypeIdx typeIdx, ast::NDeclarator* declarator);

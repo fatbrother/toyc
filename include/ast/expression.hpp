@@ -144,6 +144,7 @@ public:
 
 public:
     int pointerLevel = 0;
+    uint8_t qualifiers = QUAL_NONE;
     NDeclarator *next = nullptr;
     NExpression *expr = nullptr;
     std::vector<NExpression *> arrayDimensions;

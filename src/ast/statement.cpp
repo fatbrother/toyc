@@ -86,7 +86,8 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
                                          currentDeclarator->getName())
                        << castResult;
             }
-            context.builder.CreateStore(castResult.getValue(), allocaInst);
+            bool isVolatile = context.typeManager->isVolatileQualified(currTypeIdx);
+            context.builder.CreateStore(castResult.getValue(), allocaInst, isVolatile);
         }
     }
 
@@ -128,6 +129,8 @@ AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &cont
 AllocCodegenResult NDeclarationStatement::createPointerAllocation(ASTContext &context, llvm::Type *baseType,
                                                                   TypeIdx baseTypeIdx, NDeclarator *declarator) {
     TypeIdx ptrTypeIdx = context.typeManager->getPointerIdx(baseTypeIdx, declarator->pointerLevel);
+    if (declarator->qualifiers != QUAL_NONE)
+        ptrTypeIdx = context.typeManager->getQualifiedIdx(ptrTypeIdx, declarator->qualifiers);
     llvm::Type *ptrType = context.typeManager->realize(ptrTypeIdx);
     return createSingleAllocation(context, ptrType, ptrTypeIdx, declarator);
 }

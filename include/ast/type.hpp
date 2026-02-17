@@ -65,6 +65,20 @@ private:
     int level;
 };
 
+class QualifiedTypeCodegen : public TypeCodegen {
+public:
+    QualifiedTypeCodegen(TypeIdx base, uint8_t qualifiers) : baseIdx(base), qualifiers(qualifiers) {}
+    llvm::Type* getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) override;
+    TypeIdx getBaseIdx() const { return baseIdx; }
+    uint8_t getQualifiers() const { return qualifiers; }
+    bool isConst() const { return (qualifiers & QUAL_CONST) != 0; }
+    bool isVolatile() const { return (qualifiers & QUAL_VOLATILE) != 0; }
+
+private:
+    TypeIdx baseIdx;
+    uint8_t qualifiers;
+};
+
 class ArrayTypeCodegen : public TypeCodegen {
 public:
     ArrayTypeCodegen(TypeIdx elem, int size) : elementIdx(elem), size(size) {}
@@ -100,13 +114,15 @@ private:
 // ==================== TypeKey ====================
 
 struct TypeKey {
-    enum Kind { Primitive, Pointer, Array, Struct } kind;
+    enum Kind { Primitive, Pointer, Array, Struct, Qualified } kind;
     VarType varType = VAR_TYPE_VOID;      // Primitive only
     TypeIdx pointeeIdx = InvalidTypeIdx;  // Pointer only
     int level = 0;                        // Pointer only
     TypeIdx elementIdx = InvalidTypeIdx;  // Array only
     int size = 0;                         // Array only
     std::string structName;               // Struct only
+    TypeIdx baseIdx = InvalidTypeIdx;     // Qualified only
+    uint8_t qualifiers = QUAL_NONE;       // Qualified only
 
     bool operator==(const TypeKey& o) const {
         if (kind != o.kind)
@@ -120,6 +136,8 @@ struct TypeKey {
                 return elementIdx == o.elementIdx && size == o.size;
             case Struct:
                 return structName == o.structName;
+            case Qualified:
+                return baseIdx == o.baseIdx && qualifiers == o.qualifiers;
         }
         return false;
     }
@@ -135,6 +153,10 @@ struct TypeKeyHash {
             case TypeKey::Pointer:
                 h ^= std::hash<uint32_t>{}(k.pointeeIdx) << 1;
                 h ^= std::hash<int>{}(k.level) << 2;
+                break;
+            case TypeKey::Qualified:
+                h ^= std::hash<uint32_t>{}(k.baseIdx) << 1;
+                h ^= std::hash<uint8_t>{}(k.qualifiers) << 2;
                 break;
             case TypeKey::Array:
                 h ^= std::hash<uint32_t>{}(k.elementIdx) << 1;
@@ -160,11 +182,15 @@ public:
     // ==================== TypeIdx Factory ====================
     TypeIdx getPrimitiveIdx(VarType vt);
     TypeIdx getPointerIdx(TypeIdx pointee, int level = 1);
+    TypeIdx getQualifiedIdx(TypeIdx base, uint8_t qualifiers);
     TypeIdx getArrayIdx(TypeIdx elem, std::vector<int> dims);
     TypeIdx getStructIdx(const std::string& name, NStructDeclaration* members);
 
     // ==================== Type Info Access ====================
     bool isFloatingPointType(TypeIdx idx) const;
+    bool isConstQualified(TypeIdx idx) const;
+    bool isVolatileQualified(TypeIdx idx) const;
+    TypeIdx unqualify(TypeIdx idx) const;
     ExprCodegenResult typeCast(llvm::Value* value, TypeIdx fromTypeIdx, TypeIdx toTypeIdx, llvm::IRBuilder<>& builder);
 
     // ==================== TypeCodegen Access ====================

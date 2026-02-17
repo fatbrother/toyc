@@ -74,7 +74,7 @@ toyc::semantic::ParserActions *parser_actions = nullptr;
 %type   <block> compound_statement
 %type   <external_declaration> program external_declaration external_declaration_list function_definition
 %type   <arguments> argument_expression_list
-%type   <integer> pointer
+%type   <integer> pointer_qualifier
 
 %start program
 %%
@@ -293,7 +293,7 @@ init_declarator
 	;
 
 declarator
-	: pointer direct_declarator {
+	: pointer_qualifier direct_declarator {
 		$$ = parser_actions->handleDeclarator($1, $2);
 	}
 	| direct_declarator {
@@ -313,36 +313,36 @@ direct_declarator
 	}
 	;
 
-pointer
+pointer_qualifier
 	: '*' {
 		$$ = 1;
 	}
-	| '*' pointer {
-		$$ = $2 + 1;
+	| '*' pointer_qualifier {
+		$$ = ($2 & toyc::ast::POINTER_LEVEL_MASK) + 1;
 	}
 	| '*' CONST {
-		$$ = 1;  // const pointer, qualifier ignored
+		$$ = 1 | toyc::ast::POINTER_CONST_BIT;
 	}
 	| '*' VOLATILE {
-		$$ = 1;  // volatile pointer, qualifier ignored
+		$$ = 1 | toyc::ast::POINTER_VOLATILE_BIT;
 	}
 	| '*' CONST VOLATILE {
-		$$ = 1;  // const volatile pointer, qualifiers ignored
+		$$ = 1 | toyc::ast::POINTER_CONST_BIT | toyc::ast::POINTER_VOLATILE_BIT;
 	}
 	| '*' VOLATILE CONST {
-		$$ = 1;  // volatile const pointer, qualifiers ignored
+		$$ = 1 | toyc::ast::POINTER_CONST_BIT | toyc::ast::POINTER_VOLATILE_BIT;
 	}
-	| '*' CONST pointer {
-		$$ = $3 + 1;  // const pointer with additional levels
+	| '*' CONST pointer_qualifier {
+		$$ = ($3 & toyc::ast::POINTER_LEVEL_MASK) + 1 | toyc::ast::POINTER_CONST_BIT;
 	}
-	| '*' VOLATILE pointer {
-		$$ = $3 + 1;  // volatile pointer with additional levels
+	| '*' VOLATILE pointer_qualifier {
+		$$ = ($3 & toyc::ast::POINTER_LEVEL_MASK) + 1 | toyc::ast::POINTER_VOLATILE_BIT;
 	}
-	| '*' CONST VOLATILE pointer {
-		$$ = $4 + 1;  // const volatile pointer with additional levels
+	| '*' CONST VOLATILE pointer_qualifier {
+		$$ = ($4 & toyc::ast::POINTER_LEVEL_MASK) + 1 | toyc::ast::POINTER_CONST_BIT | toyc::ast::POINTER_VOLATILE_BIT;
 	}
-	| '*' VOLATILE CONST pointer {
-		$$ = $4 + 1;  // volatile const pointer with additional levels
+	| '*' VOLATILE CONST pointer_qualifier {
+		$$ = ($4 & toyc::ast::POINTER_LEVEL_MASK) + 1 | toyc::ast::POINTER_CONST_BIT | toyc::ast::POINTER_VOLATILE_BIT;
 	}
 	;
 
@@ -551,7 +551,7 @@ cast_expression
 	: unary_expression {
 		$$ = $1;
 	  }
-	| '(' type_specifier pointer ')' cast_expression {
+	| '(' type_specifier pointer_qualifier ')' cast_expression {
 		$$ = parser_actions->handleCastExpressionWithPointer($2, $3, $5);
 	  }
 	| '(' type_specifier ')' cast_expression {
@@ -719,10 +719,10 @@ type_specifier
 		$$ = $1;
 	}
 	| CONST type_specifier {
-		$$ = $2;  // For now, just pass through the type, ignoring const qualifier
+		$$ = parser_actions->handleQualifiedType($2, toyc::ast::QUAL_CONST);
 	}
 	| VOLATILE type_specifier {
-		$$ = $2;  // For now, just pass through the type, ignoring volatile qualifier
+		$$ = parser_actions->handleQualifiedType($2, toyc::ast::QUAL_VOLATILE);
 	}
 	;
 
@@ -744,14 +744,14 @@ type_name
 	: type_specifier {
 		$$ = $1;
 	}
-	| type_specifier pointer {
+	| type_specifier pointer_qualifier {
 		$$ = parser_actions->handleTypeNameWithPointer($1, $2);
 	}
 	| type_specifier '[' I_CONSTANT ']' {
 		$$ = parser_actions->handleTypeNameWithArray($1, *$3);
 		delete $3;
 	}
-	| type_specifier pointer '[' I_CONSTANT ']' {
+	| type_specifier pointer_qualifier '[' I_CONSTANT ']' {
 		$$ = parser_actions->handleTypeNameWithPointerAndArray($1, $2, *$4);
 		delete $4;
 	}

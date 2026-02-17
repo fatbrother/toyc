@@ -86,6 +86,10 @@ llvm::Type* PointerTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& 
     return llvm::cast<llvm::PointerType>(result);
 }
 
+llvm::Type* QualifiedTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
+    return tm.realize(baseIdx);
+}
+
 llvm::Type* ArrayTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
     llvm::Type* elemLLVMType = tm.realize(elementIdx);
     if (!elemLLVMType)
@@ -147,6 +151,16 @@ TypeIdx TypeManager::getPointerIdx(TypeIdx pointee, int level) {
     return registerType(key, std::make_unique<PointerTypeCodegen>(pointee, level));
 }
 
+TypeIdx TypeManager::getQualifiedIdx(TypeIdx base, uint8_t qualifiers) {
+    if (qualifiers == QUAL_NONE)
+        return base;
+    TypeKey key;
+    key.kind = TypeKey::Qualified;
+    key.baseIdx = base;
+    key.qualifiers = qualifiers;
+    return registerType(key, std::make_unique<QualifiedTypeCodegen>(base, qualifiers));
+}
+
 TypeIdx TypeManager::getArrayIdx(TypeIdx elem, std::vector<int> dims) {
     TypeIdx current = elem;
     for (auto it = dims.rbegin(); it != dims.rend(); ++it) {
@@ -174,6 +188,24 @@ TypeIdx TypeManager::getStructIdx(const std::string& name, NStructDeclaration* m
         return it->second;
     }
     return registerType(key, std::make_unique<StructTypeCodegen>(name, members));
+}
+
+bool TypeManager::isConstQualified(TypeIdx idx) const {
+    if (auto* q = dynamic_cast<const QualifiedTypeCodegen*>(get(idx)))
+        return q->isConst();
+    return false;
+}
+
+bool TypeManager::isVolatileQualified(TypeIdx idx) const {
+    if (auto* q = dynamic_cast<const QualifiedTypeCodegen*>(get(idx)))
+        return q->isVolatile();
+    return false;
+}
+
+TypeIdx TypeManager::unqualify(TypeIdx idx) const {
+    if (auto* q = dynamic_cast<const QualifiedTypeCodegen*>(get(idx)))
+        return q->getBaseIdx();
+    return idx;
 }
 
 bool TypeManager::isFloatingPointType(TypeIdx idx) const {
