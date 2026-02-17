@@ -34,7 +34,7 @@ private:
 class NFunctionDefinition : public NExternalDeclaration {
 public:
     NFunctionDefinition(TypeIdx returnTypeIdx, const std::string &name, NParameter *params, NBlock *body)
-        : returnTypeIdx(returnTypeIdx), name(name), params(params), body(body) {}
+        : name(name), returnTypeIdx(returnTypeIdx), params(params), body(body) {}
     ~NFunctionDefinition();
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionDefinition"; }

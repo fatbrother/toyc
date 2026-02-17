@@ -547,7 +547,6 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
 
     if (auto *arrTc = dynamic_cast<const ArrayTypeCodegen *>(context.typeManager->get(arrayTypeIdx))) {
         TypeIdx elementTypeIdx = arrTc->getElementIdx();
-        llvm::Type *elementType = context.typeManager->realize(elementTypeIdx);
         std::vector<llvm::Value *> indices(2);
         indices[0] = context.builder.getInt32(0);
         indices[1] = indexResult.getValue();
@@ -569,7 +568,7 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
     return AllocCodegenResult("Base is not an array type in subscript operation, got: " + typeName);
 }
 
-ExprCodegenResult NInitializerList::codegen(ASTContext &context) {
+ExprCodegenResult NInitializerList::codegen(ASTContext & /*context*/) {
     return ExprCodegenResult("InitializerList cannot be used directly in expressions");
 }
 

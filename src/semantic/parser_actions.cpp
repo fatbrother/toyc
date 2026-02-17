@@ -28,13 +28,14 @@ ast::NExternalDeclaration* ParserActions::handleExternalDeclarationList(ast::NEx
 
 // Function Definition
 ast::NFunctionDefinition* ParserActions::handleFunctionDefinition(ast::TypeIdx returnTypeIdx, const std::string& name,
-                                                                  ast::NParameter* params, ast::NBlock* body, int line,
-                                                                  int column) {
+                                                                  ast::NParameter* params, ast::NBlock* body,
+                                                                  int /*line*/, int /*column*/) {
     return new ast::NFunctionDefinition(returnTypeIdx, name, params, body);
 }
 
 ast::NFunctionDefinition* ParserActions::handleFunctionDeclaration(ast::TypeIdx returnTypeIdx, const std::string& name,
-                                                                   ast::NParameter* params, int line, int column) {
+                                                                   ast::NParameter* params, int /*line*/,
+                                                                   int /*column*/) {
     return new ast::NFunctionDefinition(returnTypeIdx, name, params, nullptr);
 }
 
@@ -52,8 +53,8 @@ ast::NParameter* ParserActions::handleParameterList(ast::NParameter* current, as
     return current;
 }
 
-ast::NParameter* ParserActions::handleParameter(ast::TypeIdx typeIdx, ast::NDeclarator* declarator, int line,
-                                                int column) {
+ast::NParameter* ParserActions::handleParameter(ast::TypeIdx typeIdx, ast::NDeclarator* declarator, int /*line*/,
+                                                int /*column*/) {
     // Array parameters are treated as pointers per C semantics
     ast::TypeIdx finalIdx = typeIdx;
     std::string name = "";

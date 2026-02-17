@@ -51,7 +51,8 @@ TypeIdx StructTypeCodegen::getMemberTypeIdx(int index) const {
 
 // ==================== TypeCodegen getLLVMType implementations ====================
 
-llvm::Type* PrimitiveTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
+llvm::Type* PrimitiveTypeCodegen::getLLVMType(TypeManager& /*tm*/, llvm::LLVMContext& context,
+                                              llvm::Module& /*module*/) {
     switch (varType) {
         case VAR_TYPE_VOID:
             return llvm::Type::getVoidTy(context);
@@ -74,7 +75,7 @@ llvm::Type* PrimitiveTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext
     }
 }
 
-llvm::Type* PointerTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
+llvm::Type* PointerTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& /*context*/, llvm::Module& /*module*/) {
     llvm::Type* pointeeLLVMType = tm.realize(pointeeIdx);
     if (!pointeeLLVMType)
         return nullptr;
@@ -86,11 +87,12 @@ llvm::Type* PointerTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& 
     return llvm::cast<llvm::PointerType>(result);
 }
 
-llvm::Type* QualifiedTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
+llvm::Type* QualifiedTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& /*context*/,
+                                              llvm::Module& /*module*/) {
     return tm.realize(baseIdx);
 }
 
-llvm::Type* ArrayTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
+llvm::Type* ArrayTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& /*context*/, llvm::Module& /*module*/) {
     llvm::Type* elemLLVMType = tm.realize(elementIdx);
     if (!elemLLVMType)
         return nullptr;
@@ -362,11 +364,9 @@ std::string TypeManager::getTypeName(llvm::Type* type) const {
     if (auto* structType = llvm::dyn_cast<llvm::StructType>(type)) {
         std::string name;
         if (structType->hasName()) {
-            name = structType->getName().str();
-        } else {
-            name = "anonymous_struct";
+            return structType->getName().str();
         }
-        return structType->getName().str();
+        return "anonymous_struct";
     }
     return "unknown";
 }

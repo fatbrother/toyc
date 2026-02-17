@@ -9,7 +9,7 @@ namespace toyc::ast {
 class NExpression : public BasicNode {
 public:
     virtual ExprCodegenResult codegen(ASTContext &context) = 0;
-    virtual AllocCodegenResult allocgen(ASTContext &context) {
+    virtual AllocCodegenResult allocgen(ASTContext & /*context*/) {
         return AllocCodegenResult("Allocation not supported for " + getType());
     }
     virtual std::string getType() const override { return "Expression"; }
@@ -113,7 +113,7 @@ private:
 
 class NDeclarator : public NExpression {
 public:
-    explicit NDeclarator(const std::string &name, int pointerLevel = 0) : name(name), pointerLevel(pointerLevel) {}
+    explicit NDeclarator(const std::string &name, int pointerLevel = 0) : pointerLevel(pointerLevel), name(name) {}
     ~NDeclarator() {
         SAFE_DELETE(expr);
         SAFE_DELETE(next);

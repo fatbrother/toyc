@@ -208,7 +208,7 @@ void Preprocessor::handleDefine(const std::string& line, int lineNumber) {
     }
 }
 
-std::string Preprocessor::handleInclude(const std::string& line, const std::string& currentFile, int lineNumber) {
+std::string Preprocessor::handleInclude(const std::string& line, const std::string& /*currentFile*/, int lineNumber) {
     std::regex includeRegex(R"(include\s*[<"](.*?)[>"])");
     std::smatch match;
 

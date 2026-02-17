@@ -126,7 +126,7 @@ AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &cont
     return AllocCodegenResult(ptrStorage, ptrTypeIdx);
 }
 
-AllocCodegenResult NDeclarationStatement::createPointerAllocation(ASTContext &context, llvm::Type *baseType,
+AllocCodegenResult NDeclarationStatement::createPointerAllocation(ASTContext &context, llvm::Type * /*baseType*/,
                                                                   TypeIdx baseTypeIdx, NDeclarator *declarator) {
     TypeIdx ptrTypeIdx = context.typeManager->getPointerIdx(baseTypeIdx, declarator->pointerLevel);
     if (declarator->qualifiers != QUAL_NONE)
@@ -150,8 +150,6 @@ StmtCodegenResult NDeclarationStatement::initializeArrayElements(llvm::AllocaIns
     llvm::Type *arrayType = context.typeManager->realize(arrayTypeIdx);
     auto *arrTc = dynamic_cast<const ArrayTypeCodegen *>(context.typeManager->get(arrayTypeIdx));
     TypeIdx elementTypeIdx = arrTc ? arrTc->getElementIdx() : InvalidTypeIdx;
-    llvm::Type *elementType = context.typeManager->realize(elementTypeIdx);
-
     const std::vector<NExpression *> &elements = initList->getElements();
 
     for (size_t i = 0; i < elements.size(); i++) {
@@ -477,7 +475,7 @@ StmtCodegenResult NGotoStatement::codegen(ASTContext &context) {
         // Label not yet defined, create a placeholder block
         targetBlock = llvm::BasicBlock::Create(context.llvmContext, "label_" + label, function);
 
-        llvm::BranchInst *branch = context.builder.CreateBr(targetBlock);
+        context.builder.CreateBr(targetBlock);
         context.registerLabel(label, targetBlock);
         context.pendingGotos.insert(label);
     } else {
