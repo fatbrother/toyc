@@ -32,13 +32,13 @@ public:
 private:
     StmtCodegenResult initializeArrayElements(
         llvm::AllocaInst* allocaInst,
-        llvm::Type* arrayType,
+        TypeIdx arrayTypeIdx,
         NInitializerList* initList,
         ASTContext& context);
 
-    AllocCodegenResult createSingleAllocation(ASTContext &context, llvm::Type* type, NDeclarator* declarator);
-    AllocCodegenResult createArrayAllocation(ASTContext &context, llvm::Type* baseType, NDeclarator* declarator);
-    AllocCodegenResult createPointerAllocation(ASTContext &context, llvm::Type* baseType, NDeclarator* declarator);
+    AllocCodegenResult createSingleAllocation(ASTContext &context, llvm::Type* type, TypeIdx typeIdx, NDeclarator* declarator);
+    AllocCodegenResult createArrayAllocation(ASTContext &context, llvm::Type* baseType, TypeIdx baseTypeIdx, NDeclarator* declarator);
+    AllocCodegenResult createPointerAllocation(ASTContext &context, llvm::Type* baseType, TypeIdx baseTypeIdx, NDeclarator* declarator);
 
     TypeIdx typeIdx;
     NDeclarator *declarator;

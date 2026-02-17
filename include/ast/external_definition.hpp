@@ -41,6 +41,7 @@ public:
     virtual std::string getType() const override { return "FunctionDefinition"; }
     llvm::Function *getFunction() const { return llvmFunction; }
     llvm::Type* getReturnType() const { return returnType; }
+    TypeIdx getReturnTypeIdx() const { return returnTypeIdx; }
     NParameter *getParams() const { return params; }
     NBlock *getBody() const { return body; }
 

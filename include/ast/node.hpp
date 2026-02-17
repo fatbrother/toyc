@@ -12,170 +12,11 @@
 #include <llvm/IR/Instructions.h>
 
 #include "ast/type.hpp"
+#include "ast/codegen_result.hpp"
 
 namespace toyc::ast {
 
-enum BineryOperator {
-    AND,
-    OR,
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    MOD,
-    LEFT,
-    RIGHT,
-    EQ,
-    NE,
-    LE,
-    GE,
-    LT,
-    GT,
-    BIT_AND,
-    BIT_OR,
-    XOR
-};
-
-enum UnaryOperator {
-    L_INC,
-    R_INC,
-    L_DEC,
-    R_DEC,
-    ADDR,
-    DEREF,
-    PLUS,
-    MINUS,
-    LOG_NOT,
-    BIT_NOT
-};
-
-#define SAFE_DELETE(ptr) \
-    if (ptr) {           \
-        delete ptr;      \
-        ptr = nullptr;   \
-    }
-
 class NFunctionDefinition;
-
-template<typename T>
-class CodegenResult {
-public:
-    CodegenResult() : errorMessage("") {}
-    CodegenResult(const T& data) : data(data), errorMessage("") {}
-    CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
-    CodegenResult(const char *errMsg) : errorMessage(std::string(errMsg)) {}
-
-    template<typename... Args>
-    CodegenResult(Args... args) : data(args...), errorMessage("") {}
-
-    template<typename U>
-    CodegenResult& operator<<(const CodegenResult<U>& other) {
-        if (!other.isSuccess()) {
-            if (errorMessage.empty()) {
-                errorMessage = other.getErrorMessage();
-            } else {
-                errorMessage = errorMessage + "\n" + other.getErrorMessage();
-            }
-        }
-        return *this;
-    }
-
-    bool isSuccess() const {
-        if constexpr (std::is_same_v<T, void>) {
-            return errorMessage.empty();
-        } else {
-            return isSuccessImpl(0);
-        }
-    }
-
-private:
-    template<typename U = T>
-    auto isSuccessImpl(int) const -> decltype(std::declval<U>().isValid(), bool()) {
-        return errorMessage.empty() && data.isValid();
-    }
-
-    template<typename U = T>
-    bool isSuccessImpl(long) const {
-        return errorMessage.empty();
-    }
-
-public:
-
-    std::string getErrorMessage() const { return errorMessage; }
-
-    T getData() const { return data; }
-
-    template<typename U = T>
-    auto getValue() const -> decltype(std::declval<U>().value) {
-        return data.value;
-    }
-
-    template<typename U = T>
-    auto getType() const -> decltype(std::declval<U>().type) {
-        return data.type;
-    }
-
-    template<typename U = T>
-    auto getAllocaInst() const -> decltype(std::declval<U>().allocInst) {
-        return data.allocInst;
-    }
-
-private:
-
-    T data;
-    std::string errorMessage;
-};
-
-template<>
-class CodegenResult<void> {
-public:
-    CodegenResult() : errorMessage("") {}
-    CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
-
-    template<typename U>
-    CodegenResult& operator<<(const CodegenResult<U>& other) {
-        if (!other.isSuccess()) {
-            if (errorMessage.empty()) {
-                errorMessage = other.getErrorMessage();
-            } else {
-                errorMessage = errorMessage + "\n" + other.getErrorMessage();
-            }
-        }
-        return *this;
-    }
-
-    bool isSuccess() const { return errorMessage.empty(); }
-    std::string getErrorMessage() const { return errorMessage; }
-
-private:
-    std::string errorMessage;
-};
-
-/**
- * Value type for Expression code generation results.
- */
-struct ExprValue {
-    llvm::Value* value = nullptr;
-    llvm::Type* type = nullptr;
-
-    ExprValue() = default;
-    ExprValue(llvm::Value* v, llvm::Type* t) : value(v), type(t) {}
-    bool isValid() const { return value != nullptr && type != nullptr; }
-};
-
-struct AllocValue {
-    llvm::Value* allocInst = nullptr;
-    llvm::Type* type = nullptr;
-
-    AllocValue() = default;
-    AllocValue(llvm::Value* a, llvm::Type* t) : allocInst(a), type(t) {}
-    bool isValid() const { return allocInst != nullptr && type != nullptr; }
-};
-
-// Type aliases for common use cases
-using ExprCodegenResult = CodegenResult<ExprValue>;
-using StmtCodegenResult = CodegenResult<void>;
-using AllocCodegenResult = CodegenResult<AllocValue>;
 
 template<typename T> class ScopeTable {
 public:
@@ -248,7 +89,7 @@ struct ASTContext {
     llvm::Module module;
     llvm::IRBuilder<> builder;
     NFunctionDefinition *currentFunction = nullptr;
-    ScopeTable<std::pair<llvm::AllocaInst *, llvm::Type*>> *variableTable = nullptr;
+    ScopeTable<std::pair<llvm::AllocaInst *, TypeIdx>> *variableTable = nullptr;
 
     std::map<std::string, NFunctionDefinition *> functionDefinitions;
     bool isInitializingFunction = false;
@@ -307,8 +148,5 @@ public:
 public:
     NExternalDeclaration *next = nullptr;
 };
-
-CodegenResult<ExprValue> typeCast(llvm::Value *value, llvm::Type* fromType,
-                                  llvm::Type* toType, toyc::ast::ASTContext &context);
 
 } // namespace toyc::ast
