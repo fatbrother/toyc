@@ -77,4 +77,20 @@ clean-cache:
 clean:
 	rm -rf $(BUILDDIR) toyc
 
-.PHONY: all test clean clean-cache test-build
+# Format all C++ sources and headers in-place using clang-format
+CLANG_FORMAT ?= clang-format
+FORMAT_SRCS = $(shell find $(SRCDIR) $(INCDIR) -name "*.cpp" -o -name "*.hpp")
+
+format:
+	$(CLANG_FORMAT) -i --style=file $(FORMAT_SRCS)
+
+format-check:
+	$(CLANG_FORMAT) --dry-run --Werror --style=file $(FORMAT_SRCS)
+
+# Run cpplint on all C++ sources and headers
+LINT_SRCS = $(SRCDIR) $(INCDIR)
+
+lint:
+	cpplint --recursive $(LINT_SRCS)
+
+.PHONY: all test clean clean-cache test-build format format-check lint
