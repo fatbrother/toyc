@@ -111,6 +111,7 @@ struct ASTContext {
     bool switchHasDefault = false;
 
     ASTContext();
+    ~ASTContext();
 
     // Jump context management helpers
     void pushJumpContext(std::shared_ptr<NJumpContext> ctx);

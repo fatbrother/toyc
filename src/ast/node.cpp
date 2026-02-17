@@ -9,6 +9,12 @@ ASTContext::ASTContext()
     pushScope();
 }
 
+ASTContext::~ASTContext() {
+    while (variableTable) {
+        popScope();
+    }
+}
+
 void ASTContext::pushJumpContext(std::shared_ptr<NJumpContext> ctx) {
     jumpContextStack.push(ctx);
 }

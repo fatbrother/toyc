@@ -117,14 +117,18 @@ int main(int argc, char *argv[]) {
     if (res != 0 && error_handler != nullptr) {
         error_handler->setFileName(inputFileName);
         error_handler->logError();
+        delete program;
+        delete parser_actions;
         return -1;
     }
 
     // Code generation
-    for (auto &decl = program; decl != nullptr; decl = decl->next) {
+    for (auto *decl = program; decl != nullptr; decl = decl->next) {
         toyc::ast::CodegenResult result = decl->codegen(astContext);
         if (false == result.isSuccess()) {
             std::cerr << "Error: \n" << result.getErrorMessage() << std::endl;
+            delete program;
+            delete parser_actions;
             return -1;
         }
     }
@@ -142,10 +146,14 @@ int main(int argc, char *argv[]) {
         llvm::raw_fd_ostream llvmFile(outputFileName, EC);
         if (EC) {
             std::cerr << "Error opening file for writing: " << EC.message() << std::endl;
+            delete program;
+            delete parser_actions;
             return -1;
         }
         astContext.module.print(llvmFile, nullptr);
         llvmFile.close();
+        delete program;
+        delete parser_actions;
         return 0;
     }
 
@@ -154,6 +162,8 @@ int main(int argc, char *argv[]) {
     isOutputFile = objectGenner.generate(astContext.module, TMP_FILE_NAME);
     if (!isOutputFile) {
         std::cerr << "Failed to generate object file." << std::endl;
+        delete program;
+        delete parser_actions;
         return -1;
     }
 
@@ -162,6 +172,8 @@ int main(int argc, char *argv[]) {
     int ret = system(command.c_str());
     if (ret == -1) {
         std::cerr << "Failed to generate executable file." << std::endl;
+        delete program;
+        delete parser_actions;
         return -1;
     }
 
@@ -171,6 +183,7 @@ int main(int argc, char *argv[]) {
 
     // Clean up AST memory
     delete program;
+    delete parser_actions;
 
     return 0;
 }
