@@ -1,8 +1,10 @@
 #include "ast/external_definition.hpp"
-#include "utility/raii_guard.hpp"
+
+#include <llvm/IR/Verifier.h>
 
 #include <iostream>
-#include <llvm/IR/Verifier.h>
+
+#include "utility/raii_guard.hpp"
 
 using namespace toyc::ast;
 
@@ -21,7 +23,6 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     std::vector<std::string> paramNames;
     llvm::FunctionType *functionType = nullptr;
     bool isVariadic = false;
-
 
     for (NParameter *paramIt = params; paramIt != nullptr; paramIt = paramIt->next) {
         if (true == paramIt->isVariadic) {
@@ -44,7 +45,7 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
         return StmtCodegenResult("Function creation failed for " + name);
     }
 
-    NParameter* paramIt = params;
+    NParameter *paramIt = params;
     for (auto it = llvmFunction->arg_begin(); it != llvmFunction->arg_end() && paramIt != nullptr; ++it) {
         it->setName(paramIt->getName());
         paramIt = paramIt->next;
@@ -59,9 +60,7 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     context.currentFunction = this;
     context.isInitializingFunction = true;
     body->setName("entry");
-    auto labelGuard = toyc::utility::makeScopeGuard([&context]() {
-        context.clearLabels();
-    });
+    auto labelGuard = toyc::utility::makeScopeGuard([&context]() { context.clearLabels(); });
     StmtCodegenResult bodyResult = body->codegen(context);
     if (false == bodyResult.isSuccess()) {
         return StmtCodegenResult("Function body code generation failed for " + name) << bodyResult;

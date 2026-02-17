@@ -38,16 +38,15 @@ void ASTContext::clearLabels() {
 }
 
 void ASTContext::pushScope() {
-    variableTable = new ScopeTable<std::pair<llvm::AllocaInst *, TypeIdx>>(variableTable);
+    variableTable = new ScopeTable<std::pair<llvm::AllocaInst*, TypeIdx>>(variableTable);
 }
 
 void ASTContext::popScope() {
     if (variableTable) {
-        ScopeTable<std::pair<llvm::AllocaInst *, TypeIdx>> *parent = variableTable->parent;
+        ScopeTable<std::pair<llvm::AllocaInst*, TypeIdx>>* parent = variableTable->parent;
         delete variableTable;
         variableTable = parent;
     }
 }
 
-
-} // namespace toyc::ast
+}  // namespace toyc::ast

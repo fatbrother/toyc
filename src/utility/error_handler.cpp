@@ -1,10 +1,11 @@
 #include "utility/error_handler.hpp"
+
 #include <fstream>
 #include <sstream>
 
 namespace toyc::utility {
 
-void ErrorHandler::setFileName(const std::string &name) {
+void ErrorHandler::setFileName(const std::string& name) {
     fileName = name;
 }
 
@@ -88,4 +89,4 @@ std::string ErrorHandler::buildIndicatorLine(const std::string& line, int logica
     return indicator;
 }
 
-} // namespace toyc::utility
+}  // namespace toyc::utility

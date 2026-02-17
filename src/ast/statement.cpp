@@ -1,9 +1,9 @@
 #include "ast/statement.hpp"
 
+#include <iostream>
+
 #include "ast/external_definition.hpp"
 #include "utility/raii_guard.hpp"
-
-#include <iostream>
 
 using namespace toyc::ast;
 using namespace toyc::utility;
@@ -28,12 +28,13 @@ StmtCodegenResult NExpressionStatement::codegen(ASTContext &context) {
 
 StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
     llvm::AllocaInst *allocaInst = nullptr;
-    llvm::Type* type = context.typeManager->realize(typeIdx);
+    llvm::Type *type = context.typeManager->realize(typeIdx);
     if (nullptr == type) {
         return StmtCodegenResult("Failed to realize type from descriptor");
     }
 
-    for (auto currentDeclarator = declarator; currentDeclarator != nullptr; currentDeclarator = currentDeclarator->next) {
+    for (auto currentDeclarator = declarator; currentDeclarator != nullptr;
+         currentDeclarator = currentDeclarator->next) {
         if (true == context.variableTable->lookup(currentDeclarator->getName(), false).first) {
             return StmtCodegenResult("Variable already declared in this scope: " + currentDeclarator->getName());
         }
@@ -48,7 +49,9 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
         }
 
         if (false == allocResult.isSuccess()) {
-            return StmtCodegenResult("Variable declaration codegen failed for variable: " + currentDeclarator->getName()) << allocResult;
+            return StmtCodegenResult("Variable declaration codegen failed for variable: " +
+                                     currentDeclarator->getName())
+                   << allocResult;
         }
 
         allocaInst = static_cast<llvm::AllocaInst *>(allocResult.getAllocaInst());
@@ -59,9 +62,9 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
             continue;
         }
 
-        llvm::Type* currType = context.typeManager->realize(currTypeIdx);
+        llvm::Type *currType = context.typeManager->realize(currTypeIdx);
         if (nullptr != currType && true == currType->isArrayTy()) {
-            NInitializerList* initList = dynamic_cast<NInitializerList*>(currentDeclarator->expr);
+            NInitializerList *initList = dynamic_cast<NInitializerList *>(currentDeclarator->expr);
             StmtCodegenResult initResult = initializeArrayElements(allocaInst, currTypeIdx, initList, context);
             if (false == initResult.isSuccess()) {
                 return initResult;
@@ -73,11 +76,15 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
         llvm::Value *value = codegenResult.getValue();
         TypeIdx valTypeIdx = codegenResult.getType();
         if ((false == codegenResult.isSuccess()) || (nullptr == value)) {
-            return StmtCodegenResult("Initializer codegen failed for variable: " + currentDeclarator->getName()) << codegenResult;
+            return StmtCodegenResult("Initializer codegen failed for variable: " + currentDeclarator->getName())
+                   << codegenResult;
         } else {
-            ExprCodegenResult castResult = context.typeManager->typeCast(value, valTypeIdx, currTypeIdx, context.builder);
+            ExprCodegenResult castResult =
+                context.typeManager->typeCast(value, valTypeIdx, currTypeIdx, context.builder);
             if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
-                return StmtCodegenResult("Type cast failed for initializer of variable: " + currentDeclarator->getName()) << castResult;
+                return StmtCodegenResult("Type cast failed for initializer of variable: " +
+                                         currentDeclarator->getName())
+                       << castResult;
             }
             context.builder.CreateStore(castResult.getValue(), allocaInst);
         }
@@ -86,11 +93,12 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
     return StmtCodegenResult();
 }
 
-AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &context, llvm::Type *baseType, TypeIdx baseTypeIdx, NDeclarator* declarator) {
+AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &context, llvm::Type *baseType,
+                                                                TypeIdx baseTypeIdx, NDeclarator *declarator) {
     if (false == declarator->isVLA) {
         std::vector<int> dimensions;
         for (auto sizeExpr : declarator->getArrayDimensions()) {
-            dimensions.push_back(static_cast<NInteger*>(sizeExpr)->getValue());
+            dimensions.push_back(static_cast<NInteger *>(sizeExpr)->getValue());
         }
         TypeIdx arrayTypeIdx = context.typeManager->getArrayIdx(baseTypeIdx, dimensions);
         llvm::Type *arrayType = context.typeManager->realize(arrayTypeIdx);
@@ -104,67 +112,63 @@ AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &cont
     }
 
     // CreateAlloca with array size returns a pointer to the array
-    llvm::Value *vlaArrayPtr = context.builder.CreateAlloca(
-        baseType,
-        sizeValue.getData(),
-        declarator->getName() + ".vla");
+    llvm::Value *vlaArrayPtr =
+        context.builder.CreateAlloca(baseType, sizeValue.getData(), declarator->getName() + ".vla");
 
     // Wrap the VLA pointer in an alloca so it can be treated like a regular pointer
     llvm::Type *ptrType = vlaArrayPtr->getType();
     TypeIdx ptrTypeIdx = context.typeManager->getPointerIdx(baseTypeIdx, 1);
-    llvm::AllocaInst *ptrStorage = context.builder.CreateAlloca(
-        ptrType,
-        nullptr,
-        declarator->getName());
+    llvm::AllocaInst *ptrStorage = context.builder.CreateAlloca(ptrType, nullptr, declarator->getName());
 
     context.builder.CreateStore(vlaArrayPtr, ptrStorage);
 
     return AllocCodegenResult(ptrStorage, ptrTypeIdx);
 }
 
-AllocCodegenResult NDeclarationStatement::createPointerAllocation(ASTContext &context, llvm::Type *baseType, TypeIdx baseTypeIdx, NDeclarator *declarator) {
+AllocCodegenResult NDeclarationStatement::createPointerAllocation(ASTContext &context, llvm::Type *baseType,
+                                                                  TypeIdx baseTypeIdx, NDeclarator *declarator) {
     TypeIdx ptrTypeIdx = context.typeManager->getPointerIdx(baseTypeIdx, declarator->pointerLevel);
     llvm::Type *ptrType = context.typeManager->realize(ptrTypeIdx);
     return createSingleAllocation(context, ptrType, ptrTypeIdx, declarator);
 }
 
-AllocCodegenResult NDeclarationStatement::createSingleAllocation(ASTContext &context, llvm::Type *type, TypeIdx typeIdx, NDeclarator *declarator) {
+AllocCodegenResult NDeclarationStatement::createSingleAllocation(ASTContext &context, llvm::Type *type, TypeIdx typeIdx,
+                                                                 NDeclarator *declarator) {
     llvm::AllocaInst *allocaInst = context.builder.CreateAlloca(type, nullptr, declarator->getName());
     return AllocCodegenResult(allocaInst, typeIdx);
 }
 
-StmtCodegenResult NDeclarationStatement::initializeArrayElements(
-    llvm::AllocaInst* allocaInst,
-    TypeIdx arrayTypeIdx,
-    NInitializerList* initList,
-    ASTContext& context)
-{
+StmtCodegenResult NDeclarationStatement::initializeArrayElements(llvm::AllocaInst *allocaInst, TypeIdx arrayTypeIdx,
+                                                                 NInitializerList *initList, ASTContext &context) {
     if (nullptr == initList) {
         return StmtCodegenResult("Array must be initialized with initializer list");
     }
 
-    llvm::Type* arrayType = context.typeManager->realize(arrayTypeIdx);
-    auto* arrTc = dynamic_cast<const ArrayTypeCodegen*>(context.typeManager->get(arrayTypeIdx));
+    llvm::Type *arrayType = context.typeManager->realize(arrayTypeIdx);
+    auto *arrTc = dynamic_cast<const ArrayTypeCodegen *>(context.typeManager->get(arrayTypeIdx));
     TypeIdx elementTypeIdx = arrTc ? arrTc->getElementIdx() : InvalidTypeIdx;
-    llvm::Type* elementType = context.typeManager->realize(elementTypeIdx);
+    llvm::Type *elementType = context.typeManager->realize(elementTypeIdx);
 
-    const std::vector<NExpression*>& elements = initList->getElements();
+    const std::vector<NExpression *> &elements = initList->getElements();
 
     for (size_t i = 0; i < elements.size(); i++) {
-        std::vector<llvm::Value*> indices;
+        std::vector<llvm::Value *> indices;
         indices.push_back(context.builder.getInt32(0));
         indices.push_back(context.builder.getInt32(i));
 
-        llvm::Value* elementPtr = context.builder.CreateGEP(arrayType, allocaInst, indices);
+        llvm::Value *elementPtr = context.builder.CreateGEP(arrayType, allocaInst, indices);
 
         ExprCodegenResult elemResult = elements[i]->codegen(context);
         if (false == elemResult.isSuccess()) {
-            return StmtCodegenResult("Array initializer element " + std::to_string(i) + " codegen failed") << elemResult;
+            return StmtCodegenResult("Array initializer element " + std::to_string(i) + " codegen failed")
+                   << elemResult;
         }
 
-        ExprCodegenResult castResult = context.typeManager->typeCast(elemResult.getValue(), elemResult.getType(), elementTypeIdx, context.builder);
+        ExprCodegenResult castResult =
+            context.typeManager->typeCast(elemResult.getValue(), elemResult.getType(), elementTypeIdx, context.builder);
         if (false == castResult.isSuccess()) {
-            return StmtCodegenResult("Type cast failed for array initializer element " + std::to_string(i)) << castResult;
+            return StmtCodegenResult("Type cast failed for array initializer element " + std::to_string(i))
+                   << castResult;
         }
 
         context.builder.CreateStore(castResult.getValue(), elementPtr);
@@ -179,9 +183,7 @@ StmtCodegenResult NBlock::codegen(ASTContext &context) {
 
     context.builder.SetInsertPoint(block);
 
-    auto scopeGuard = toyc::utility::makeScopeGuard([&context]() {
-        context.popScope();
-    });
+    auto scopeGuard = toyc::utility::makeScopeGuard([&context]() { context.popScope(); });
     context.pushScope();
 
     if (true == context.isInitializingFunction) {
@@ -191,7 +193,8 @@ StmtCodegenResult NBlock::codegen(ASTContext &context) {
             context.builder.CreateStore(&arg, allocaInst);
             TypeIdx paramTypeIdx = (param != nullptr) ? param->getTypeIdx() : InvalidTypeIdx;
             context.variableTable->insert(arg.getName().str(), std::make_pair(allocaInst, paramTypeIdx));
-            if (param != nullptr) param = param->next;
+            if (param != nullptr)
+                param = param->next;
         }
     }
     context.isInitializingFunction = false;
@@ -206,7 +209,6 @@ StmtCodegenResult NBlock::codegen(ASTContext &context) {
             return StmtCodegenResult("Failed to generate code for block statement") << stmtResult;
         }
     }
-
 
     if (nullptr != nextBlock && !context.builder.GetInsertBlock()->getTerminator()) {
         context.builder.CreateBr(nextBlock);
@@ -224,11 +226,8 @@ StmtCodegenResult NReturnStatement::codegen(ASTContext &context) {
         if (false == exprResult.isSuccess()) {
             return StmtCodegenResult("Failed to generate code for return expression") << exprResult;
         }
-        ExprCodegenResult castResult = context.typeManager->typeCast(
-            value,
-            typeIdx,
-            context.currentFunction->getReturnTypeIdx(),
-            context.builder);
+        ExprCodegenResult castResult =
+            context.typeManager->typeCast(value, typeIdx, context.currentFunction->getReturnTypeIdx(), context.builder);
         if (false == castResult.isSuccess()) {
             return StmtCodegenResult("Type cast failed for return statement") << castResult;
         }
@@ -296,9 +295,7 @@ StmtCodegenResult NForStatement::codegen(ASTContext &context) {
     initializationNode->codegen(context);
     context.builder.CreateBr(loopCondition);
 
-    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() {
-        context.popJumpContext();
-    });
+    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() { context.popJumpContext(); });
     context.pushJumpContext(std::make_shared<NJumpContext>(loopIncrement, afterBlock));
 
     bodyNode->setParent(this);
@@ -320,10 +317,7 @@ StmtCodegenResult NForStatement::codegen(ASTContext &context) {
         return StmtCodegenResult("For loop condition generation failed") << condResult;
     }
     ExprCodegenResult conditionCastResult = context.typeManager->typeCast(
-        conditionValue,
-        conditionTypeIdx,
-        context.typeManager->getPrimitiveIdx(VAR_TYPE_BOOL),
-        context.builder);
+        conditionValue, conditionTypeIdx, context.typeManager->getPrimitiveIdx(VAR_TYPE_BOOL), context.builder);
     if (false == conditionCastResult.isSuccess()) {
         return StmtCodegenResult("Type cast failed for for loop condition") << conditionCastResult;
     }
@@ -358,10 +352,7 @@ StmtCodegenResult NWhileStatement::codegen(ASTContext &context) {
         return StmtCodegenResult("While loop condition generation failed") << condResult;
     }
     ExprCodegenResult castResult = context.typeManager->typeCast(
-        conditionValue,
-        conditionTypeIdx,
-        context.typeManager->getPrimitiveIdx(VAR_TYPE_BOOL),
-        context.builder);
+        conditionValue, conditionTypeIdx, context.typeManager->getPrimitiveIdx(VAR_TYPE_BOOL), context.builder);
     if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
         return StmtCodegenResult("Type cast failed for while loop condition") << castResult;
     }
@@ -370,9 +361,7 @@ StmtCodegenResult NWhileStatement::codegen(ASTContext &context) {
     // Get the actual block after condition evaluation (may have changed due to short-circuit)
     llvm::BasicBlock *conditionEndBlock = context.builder.GetInsertBlock();
 
-    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() {
-        context.popJumpContext();
-    });
+    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() { context.popJumpContext(); });
     context.pushJumpContext(std::make_shared<NJumpContext>(loopCondition, afterBlock));
 
     bodyNode->setParent(this);
@@ -415,8 +404,7 @@ StmtCodegenResult NBreakStatement::codegen(ASTContext &context) {
 
     // Create an unreachable block after the break to avoid dangling insert point
     llvm::Function *function = context.builder.GetInsertBlock()->getParent();
-    llvm::BasicBlock *unreachableBlock = llvm::BasicBlock::Create(
-        context.llvmContext, "after_break", function);
+    llvm::BasicBlock *unreachableBlock = llvm::BasicBlock::Create(context.llvmContext, "after_break", function);
     context.builder.SetInsertPoint(unreachableBlock);
 
     return StmtCodegenResult();
@@ -429,8 +417,7 @@ StmtCodegenResult NContinueStatement::codegen(ASTContext &context) {
     }
 
     if (!jumpCtx->supportsContinue()) {
-        return StmtCodegenResult("Continue statement not supported in " +
-                           jumpCtx->getContextName() + " context");
+        return StmtCodegenResult("Continue statement not supported in " + jumpCtx->getContextName() + " context");
     }
 
     // Get the continue target from the jump context
@@ -439,8 +426,7 @@ StmtCodegenResult NContinueStatement::codegen(ASTContext &context) {
 
     // Create an unreachable block after the continue to avoid dangling insert point
     llvm::Function *function = context.builder.GetInsertBlock()->getParent();
-    llvm::BasicBlock *unreachableBlock = llvm::BasicBlock::Create(
-        context.llvmContext, "after_continue", function);
+    llvm::BasicBlock *unreachableBlock = llvm::BasicBlock::Create(context.llvmContext, "after_continue", function);
     context.builder.SetInsertPoint(unreachableBlock);
 
     return StmtCodegenResult();
@@ -456,8 +442,7 @@ StmtCodegenResult NLabelStatement::codegen(ASTContext &context) {
         }
         context.pendingGotos.erase(label);
     } else {
-        labelBlock = llvm::BasicBlock::Create(
-            context.llvmContext, "label_" + label, function);
+        labelBlock = llvm::BasicBlock::Create(context.llvmContext, "label_" + label, function);
 
         context.registerLabel(label, labelBlock);
     }
@@ -487,8 +472,7 @@ StmtCodegenResult NGotoStatement::codegen(ASTContext &context) {
 
     if (!targetBlock) {
         // Label not yet defined, create a placeholder block
-        targetBlock = llvm::BasicBlock::Create(
-            context.llvmContext, "label_" + label, function);
+        targetBlock = llvm::BasicBlock::Create(context.llvmContext, "label_" + label, function);
 
         llvm::BranchInst *branch = context.builder.CreateBr(targetBlock);
         context.registerLabel(label, targetBlock);
@@ -498,8 +482,7 @@ StmtCodegenResult NGotoStatement::codegen(ASTContext &context) {
     }
 
     // Create an unreachable block after the goto
-    llvm::BasicBlock *afterGoto = llvm::BasicBlock::Create(
-        context.llvmContext, "after_goto", function);
+    llvm::BasicBlock *afterGoto = llvm::BasicBlock::Create(context.llvmContext, "after_goto", function);
     context.builder.SetInsertPoint(afterGoto);
 
     return StmtCodegenResult();
@@ -523,25 +506,18 @@ StmtCodegenResult NSwitchStatement::codegen(ASTContext &context) {
 
     llvm::Function *function = context.currentFunction->getFunction();
     llvm::BasicBlock *currentBlock = context.builder.GetInsertBlock();
-    llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(
-        context.llvmContext, "switch_after", function);
-    llvm::BasicBlock *switchBlock = llvm::BasicBlock::Create(
-        context.llvmContext, "switch_entry", function);
-    llvm::BasicBlock *defaultBlock = llvm::BasicBlock::Create(
-        context.llvmContext, "switch_default", function);
+    llvm::BasicBlock *afterBlock = llvm::BasicBlock::Create(context.llvmContext, "switch_after", function);
+    llvm::BasicBlock *switchBlock = llvm::BasicBlock::Create(context.llvmContext, "switch_entry", function);
+    llvm::BasicBlock *defaultBlock = llvm::BasicBlock::Create(context.llvmContext, "switch_default", function);
     context.builder.SetInsertPoint(currentBlock);
     context.builder.CreateBr(switchBlock);
     context.builder.SetInsertPoint(switchBlock);
 
-    llvm::SwitchInst *switchInst = context.builder.CreateSwitch(
-        condValue,
-        defaultBlock,
-        10  // Estimated number of cases
+    llvm::SwitchInst *switchInst = context.builder.CreateSwitch(condValue, defaultBlock,
+                                                                10  // Estimated number of cases
     );
 
-    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() {
-        context.popJumpContext();
-    });
+    auto jumpGuard = toyc::utility::makeScopeGuard([&context]() { context.popJumpContext(); });
     context.pushJumpContext(std::make_shared<NSwitchContext>(afterBlock));
 
     // Store switch info in context for case statements to register themselves
@@ -549,12 +525,13 @@ StmtCodegenResult NSwitchStatement::codegen(ASTContext &context) {
     llvm::BasicBlock *oldSwitchAfter = context.currentSwitchAfter;
     llvm::BasicBlock *oldDefaultBlock = context.currentSwitchDefault;
     bool oldHasDefault = context.switchHasDefault;
-    auto restoreGuard = toyc::utility::makeScopeGuard([&context, oldSwitch, oldSwitchAfter, oldDefaultBlock, oldHasDefault]() {
-        context.currentSwitch = oldSwitch;
-        context.currentSwitchAfter = oldSwitchAfter;
-        context.currentSwitchDefault = oldDefaultBlock;
-        context.switchHasDefault = oldHasDefault;
-    });
+    auto restoreGuard =
+        toyc::utility::makeScopeGuard([&context, oldSwitch, oldSwitchAfter, oldDefaultBlock, oldHasDefault]() {
+            context.currentSwitch = oldSwitch;
+            context.currentSwitchAfter = oldSwitchAfter;
+            context.currentSwitchDefault = oldDefaultBlock;
+            context.switchHasDefault = oldHasDefault;
+        });
     context.currentSwitch = switchInst;
     context.currentSwitchAfter = afterBlock;
     context.currentSwitchDefault = defaultBlock;

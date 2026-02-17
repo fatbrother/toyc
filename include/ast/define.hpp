@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <climits>
+#include <cstdint>
 
 namespace toyc::ast {
 
@@ -31,39 +31,8 @@ enum VarType {
 using TypeIdx = uint32_t;
 static constexpr TypeIdx InvalidTypeIdx = UINT32_MAX;
 
-enum BineryOperator {
-    AND,
-    OR,
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    MOD,
-    LEFT,
-    RIGHT,
-    EQ,
-    NE,
-    LE,
-    GE,
-    LT,
-    GT,
-    BIT_AND,
-    BIT_OR,
-    XOR
-};
+enum BineryOperator { AND, OR, ADD, SUB, MUL, DIV, MOD, LEFT, RIGHT, EQ, NE, LE, GE, LT, GT, BIT_AND, BIT_OR, XOR };
 
-enum UnaryOperator {
-    L_INC,
-    R_INC,
-    L_DEC,
-    R_DEC,
-    ADDR,
-    DEREF,
-    PLUS,
-    MINUS,
-    LOG_NOT,
-    BIT_NOT
-};
+enum UnaryOperator { L_INC, R_INC, L_DEC, R_DEC, ADDR, DEREF, PLUS, MINUS, LOG_NOT, BIT_NOT };
 
-
-} // namespace toyc::ast
+}  // namespace toyc::ast

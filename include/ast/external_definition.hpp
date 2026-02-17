@@ -1,10 +1,10 @@
 #pragma once
 
-#include "ast/node.hpp"
-#include "ast/expression.hpp"
-#include "ast/statement.hpp"
-
 #include <iostream>
+
+#include "ast/expression.hpp"
+#include "ast/node.hpp"
+#include "ast/statement.hpp"
 
 namespace toyc::ast {
 
@@ -31,7 +31,6 @@ private:
     std::string name;
 };
 
-
 class NFunctionDefinition : public NExternalDeclaration {
 public:
     NFunctionDefinition(TypeIdx returnTypeIdx, const std::string &name, NParameter *params, NBlock *body)
@@ -40,7 +39,7 @@ public:
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionDefinition"; }
     llvm::Function *getFunction() const { return llvmFunction; }
-    llvm::Type* getReturnType() const { return returnType; }
+    llvm::Type *getReturnType() const { return returnType; }
     TypeIdx getReturnTypeIdx() const { return returnTypeIdx; }
     NParameter *getParams() const { return params; }
     NBlock *getBody() const { return body; }
@@ -49,9 +48,9 @@ private:
     llvm::Function *llvmFunction = nullptr;
     std::string name;
     TypeIdx returnTypeIdx;
-    llvm::Type* returnType = nullptr;
+    llvm::Type *returnType = nullptr;
     NParameter *params;
     NBlock *body;
 };
 
-} // namespace toyc::ast
+}  // namespace toyc::ast

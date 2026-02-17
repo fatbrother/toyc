@@ -1,24 +1,26 @@
 #pragma once
 
-#include <string>
-#include <stack>
-#include <map>
-#include <unordered_set>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Value.h>
+
 #include <algorithm>
 #include <iostream>
-#include <llvm/IR/Value.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Instructions.h>
+#include <map>
+#include <stack>
+#include <string>
+#include <unordered_set>
 
-#include "ast/type.hpp"
 #include "ast/codegen_result.hpp"
+#include "ast/type.hpp"
 
 namespace toyc::ast {
 
 class NFunctionDefinition;
 
-template<typename T> class ScopeTable {
+template <typename T>
+class ScopeTable {
 public:
     ScopeTable() = default;
     ScopeTable(ScopeTable<T> *parent) : parent(parent) {}
@@ -43,15 +45,13 @@ public:
     /**
      * Inserts a new object into the current scope.
      */
-    void insert(const std::string &name, T obj) {
-        variables[name] = obj;
-    }
+    void insert(const std::string &name, T obj) { variables[name] = obj; }
 
 private:
     std::map<std::string, T> variables;
     ScopeTable<T> *parent = nullptr;
 
-friend class ASTContext;
+    friend class ASTContext;
 };
 
 // Jump context for break/continue statements
@@ -61,8 +61,8 @@ public:
     NJumpContext(llvm::BasicBlock *continueTarget, llvm::BasicBlock *breakTarget)
         : continueTarget(continueTarget), breakTarget(breakTarget) {}
 
-    llvm::BasicBlock* getContinueTarget() const { return continueTarget; }
-    llvm::BasicBlock* getBreakTarget() const { return breakTarget; }
+    llvm::BasicBlock *getContinueTarget() const { return continueTarget; }
+    llvm::BasicBlock *getBreakTarget() const { return breakTarget; }
 
     virtual bool supportsContinue() const { return true; }
     virtual bool supportsBreak() const { return true; }
@@ -76,8 +76,7 @@ protected:
 // Switch context - only supports break, not continue
 class NSwitchContext : public NJumpContext {
 public:
-    NSwitchContext(llvm::BasicBlock *breakTarget)
-        : NJumpContext(nullptr, breakTarget) {}
+    NSwitchContext(llvm::BasicBlock *breakTarget) : NJumpContext(nullptr, breakTarget) {}
 
     virtual bool supportsContinue() const override { return false; }
     virtual bool supportsBreak() const override { return true; }
@@ -95,14 +94,14 @@ struct ASTContext {
     bool isInitializingFunction = false;
 
     std::unique_ptr<TypeManager> typeManager;
-    TypeManager& getTypeManager() { return *typeManager; }
+    TypeManager &getTypeManager() { return *typeManager; }
 
     // Jump context stack for break/continue statements
     // Used by loops (for/while/do-while) and switch statements
     std::stack<std::shared_ptr<NJumpContext>> jumpContextStack;
 
     // Label management for goto statements
-    std::map<std::string, llvm::BasicBlock*> labels;
+    std::map<std::string, llvm::BasicBlock *> labels;
     std::unordered_set<std::string> pendingGotos;
 
     // Switch statement tracking (for case/default statements)
@@ -119,8 +118,8 @@ struct ASTContext {
     std::shared_ptr<NJumpContext> getCurrentJumpContext() const;
 
     // Label management for goto
-    void registerLabel(const std::string& name, llvm::BasicBlock* block);
-    llvm::BasicBlock* getLabel(const std::string& name);
+    void registerLabel(const std::string &name, llvm::BasicBlock *block);
+    llvm::BasicBlock *getLabel(const std::string &name);
     void clearLabels();
 
     void pushScope();
@@ -139,9 +138,7 @@ public:
 
 class NExternalDeclaration : public BasicNode {
 public:
-    virtual ~NExternalDeclaration() {
-        SAFE_DELETE(next);
-    }
+    virtual ~NExternalDeclaration() { SAFE_DELETE(next); }
 
     virtual StmtCodegenResult codegen(ASTContext &context) = 0;
 
@@ -149,4 +146,4 @@ public:
     NExternalDeclaration *next = nullptr;
 };
 
-} // namespace toyc::ast
+}  // namespace toyc::ast

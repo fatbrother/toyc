@@ -1,14 +1,15 @@
 #include "ast/type.hpp"
-#include "ast/node.hpp"
-#include "ast/expression.hpp"
 
-#include <llvm/IR/Type.h>
 #include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/Module.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Type.h>
 
 #include <iostream>
 #include <string>
+
+#include "ast/expression.hpp"
+#include "ast/node.hpp"
 
 using namespace toyc::ast;
 
@@ -23,7 +24,7 @@ NStructDeclaration::~NStructDeclaration() {
 
 StructTypeCodegen::StructTypeCodegen(std::string name, NStructDeclaration* members) : name(std::move(name)) {
     setMembers(members);
-    delete members; // StructTypeCodegen takes ownership of members
+    delete members;  // StructTypeCodegen takes ownership of members
 }
 
 void StructTypeCodegen::setMembers(NStructDeclaration* m) {
@@ -36,7 +37,8 @@ void StructTypeCodegen::setMembers(NStructDeclaration* m) {
 
 int StructTypeCodegen::getMemberIndex(const std::string& memberName) const {
     for (size_t i = 0; i < memberInfos.size(); ++i) {
-        if (memberInfos[i].name == memberName) return static_cast<int>(i);
+        if (memberInfos[i].name == memberName)
+            return static_cast<int>(i);
     }
     return -1;
 }
@@ -51,21 +53,31 @@ TypeIdx StructTypeCodegen::getMemberTypeIdx(int index) const {
 
 llvm::Type* PrimitiveTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
     switch (varType) {
-        case VAR_TYPE_VOID:   return llvm::Type::getVoidTy(context);
-        case VAR_TYPE_BOOL:   return llvm::Type::getInt1Ty(context);
-        case VAR_TYPE_CHAR:   return llvm::Type::getInt8Ty(context);
-        case VAR_TYPE_SHORT:  return llvm::Type::getInt16Ty(context);
-        case VAR_TYPE_INT:    return llvm::Type::getInt32Ty(context);
-        case VAR_TYPE_LONG:   return llvm::Type::getInt64Ty(context);
-        case VAR_TYPE_FLOAT:  return llvm::Type::getFloatTy(context);
-        case VAR_TYPE_DOUBLE: return llvm::Type::getDoubleTy(context);
-        default: return nullptr;
+        case VAR_TYPE_VOID:
+            return llvm::Type::getVoidTy(context);
+        case VAR_TYPE_BOOL:
+            return llvm::Type::getInt1Ty(context);
+        case VAR_TYPE_CHAR:
+            return llvm::Type::getInt8Ty(context);
+        case VAR_TYPE_SHORT:
+            return llvm::Type::getInt16Ty(context);
+        case VAR_TYPE_INT:
+            return llvm::Type::getInt32Ty(context);
+        case VAR_TYPE_LONG:
+            return llvm::Type::getInt64Ty(context);
+        case VAR_TYPE_FLOAT:
+            return llvm::Type::getFloatTy(context);
+        case VAR_TYPE_DOUBLE:
+            return llvm::Type::getDoubleTy(context);
+        default:
+            return nullptr;
     }
 }
 
 llvm::Type* PointerTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
     llvm::Type* pointeeLLVMType = tm.realize(pointeeIdx);
-    if (!pointeeLLVMType) return nullptr;
+    if (!pointeeLLVMType)
+        return nullptr;
 
     llvm::Type* result = pointeeLLVMType;
     for (int i = 0; i < level; ++i)
@@ -76,13 +88,15 @@ llvm::Type* PointerTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& 
 
 llvm::Type* ArrayTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
     llvm::Type* elemLLVMType = tm.realize(elementIdx);
-    if (!elemLLVMType) return nullptr;
+    if (!elemLLVMType)
+        return nullptr;
     return llvm::ArrayType::get(elemLLVMType, size);
 }
 
 llvm::Type* StructTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) {
     llvm::StructType* existing = llvm::StructType::getTypeByName(module.getContext(), name);
-    if (existing && !existing->isOpaque()) return existing;
+    if (existing && !existing->isOpaque())
+        return existing;
 
     llvm::StructType* llvmStruct = llvm::StructType::create(context, name);
     if (false == this->hasMembers()) {
@@ -93,7 +107,8 @@ llvm::Type* StructTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& c
     std::vector<llvm::Type*> memberLLVMTypes;
     for (const MemberInfo& memberInfo : memberInfos) {
         llvm::Type* memberType = tm.realize(memberInfo.typeIdx);
-        if (!memberType) break;
+        if (!memberType)
+            break;
         memberLLVMTypes.push_back(memberType);
     }
 
@@ -105,12 +120,12 @@ llvm::Type* StructTypeCodegen::getLLVMType(TypeManager& tm, llvm::LLVMContext& c
 
 // ==================== TypeManager ====================
 
-TypeManager::TypeManager(llvm::LLVMContext& ctx, llvm::Module& mod)
-    : context(ctx), module(mod) {}
+TypeManager::TypeManager(llvm::LLVMContext& ctx, llvm::Module& mod) : context(ctx), module(mod) {}
 
 TypeIdx TypeManager::registerType(const TypeKey& key, std::unique_ptr<TypeCodegen> node) {
     auto it = cache_.find(key);
-    if (it != cache_.end()) return it->second;
+    if (it != cache_.end())
+        return it->second;
     TypeIdx idx = static_cast<TypeIdx>(types_.size());
     cache_[key] = idx;
     types_.push_back(std::move(node));
@@ -170,9 +185,10 @@ bool TypeManager::isFloatingPointType(TypeIdx idx) const {
     return false;
 }
 
-ExprCodegenResult TypeManager::typeCast(llvm::Value* value, TypeIdx fromTypeIdx, TypeIdx toTypeIdx, llvm::IRBuilder<>& builder) {
+ExprCodegenResult TypeManager::typeCast(llvm::Value* value, TypeIdx fromTypeIdx, TypeIdx toTypeIdx,
+                                        llvm::IRBuilder<>& builder) {
     llvm::Type* fromType = realize(fromTypeIdx);
-    llvm::Type* toType   = realize(toTypeIdx);
+    llvm::Type* toType = realize(toTypeIdx);
 
     if (!value || !fromType || !toType) {
         return ExprCodegenResult("Type cast failed due to null value or type");
@@ -182,12 +198,12 @@ ExprCodegenResult TypeManager::typeCast(llvm::Value* value, TypeIdx fromTypeIdx,
         return ExprCodegenResult(value, toTypeIdx);
     }
 
-    llvm::Value *result = nullptr;
+    llvm::Value* result = nullptr;
     bool fromIsFloat = fromType && (fromType->isFloatTy() || fromType->isDoubleTy());
     bool toIsFloat = toType && (toType->isFloatTy() || toType->isDoubleTy());
 
-    bool toIsInt = toType && toType->isIntegerTy();    bool fromIsInt = fromType && fromType->isIntegerTy();
-
+    bool toIsInt = toType && toType->isIntegerTy();
+    bool fromIsInt = fromType && fromType->isIntegerTy();
 
     // Bool to X
     if (fromType->isIntegerTy(1)) {
@@ -255,45 +271,58 @@ ExprCodegenResult TypeManager::typeCast(llvm::Value* value, TypeIdx fromTypeIdx,
         return ExprCodegenResult(result, toTypeIdx);
     }
 
-    return ExprCodegenResult("Unsupported type cast from " + getTypeName(fromType) +
-                           " to " + getTypeName(toType));
+    return ExprCodegenResult("Unsupported type cast from " + getTypeName(fromType) + " to " + getTypeName(toType));
 }
 
-
 const TypeCodegen* TypeManager::get(TypeIdx idx) const {
-    if (idx == InvalidTypeIdx || idx >= static_cast<TypeIdx>(types_.size())) return nullptr;
+    if (idx == InvalidTypeIdx || idx >= static_cast<TypeIdx>(types_.size()))
+        return nullptr;
     return types_[idx].get();
 }
 
 llvm::Type* TypeManager::realize(TypeIdx idx) {
-    if (idx == InvalidTypeIdx || idx >= static_cast<TypeIdx>(types_.size())) return nullptr;
+    if (idx == InvalidTypeIdx || idx >= static_cast<TypeIdx>(types_.size()))
+        return nullptr;
     return types_[idx]->getLLVMType(*this, context, module);
 }
 
 // ==================== LLVM-level helpers ====================
 
 TypeIdx TypeManager::getCommonTypeIdx(TypeIdx a, TypeIdx b) {
-    if (a == b) return a;
+    if (a == b)
+        return a;
     llvm::Type* ta = realize(a);
     llvm::Type* tb = realize(b);
     llvm::Type* common = getCommonType(ta, tb);
-    if (common == ta) return a;
-    if (common == tb) return b;
+    if (common == ta)
+        return a;
+    if (common == tb)
+        return b;
     // Fallback for float promotion (double)
     return (common && common->isDoubleTy()) ? getPrimitiveIdx(VAR_TYPE_DOUBLE) : getPrimitiveIdx(VAR_TYPE_FLOAT);
 }
 
 std::string TypeManager::getTypeName(llvm::Type* type) const {
-    if (!type) return "null";
-    if (type->isIntegerTy(1))  return "bool";
-    if (type->isIntegerTy(8))  return "char";
-    if (type->isIntegerTy(16)) return "short";
-    if (type->isIntegerTy(32)) return "int";
-    if (type->isIntegerTy(64)) return "long";
-    if (type->isFloatTy())     return "float";
-    if (type->isDoubleTy())    return "double";
-    if (type->isVoidTy())      return "void";
-    if (type->isPointerTy())   return "ptr";
+    if (!type)
+        return "null";
+    if (type->isIntegerTy(1))
+        return "bool";
+    if (type->isIntegerTy(8))
+        return "char";
+    if (type->isIntegerTy(16))
+        return "short";
+    if (type->isIntegerTy(32))
+        return "int";
+    if (type->isIntegerTy(64))
+        return "long";
+    if (type->isFloatTy())
+        return "float";
+    if (type->isDoubleTy())
+        return "double";
+    if (type->isVoidTy())
+        return "void";
+    if (type->isPointerTy())
+        return "ptr";
     if (type->isArrayTy()) {
         auto* arrayType = llvm::cast<llvm::ArrayType>(type);
         return "array[" + std::to_string(arrayType->getNumElements()) + "]";
@@ -311,8 +340,10 @@ std::string TypeManager::getTypeName(llvm::Type* type) const {
 }
 
 llvm::Type* TypeManager::getCommonType(llvm::Type* type1, llvm::Type* type2) {
-    if (!type1 || !type2) return nullptr;
-    if (type1 == type2) return type1;
+    if (!type1 || !type2)
+        return nullptr;
+    if (type1 == type2)
+        return type1;
 
     if (type1->isDoubleTy() || type2->isDoubleTy()) {
         return llvm::Type::getDoubleTy(context);
@@ -321,11 +352,16 @@ llvm::Type* TypeManager::getCommonType(llvm::Type* type1, llvm::Type* type2) {
     }
 
     auto getIntegerRank = [](llvm::Type* t) -> int {
-        if (t->isIntegerTy(64)) return 5;
-        if (t->isIntegerTy(32)) return 4;
-        if (t->isIntegerTy(16)) return 3;
-        if (t->isIntegerTy(8))  return 2;
-        if (t->isIntegerTy(1))  return 1;
+        if (t->isIntegerTy(64))
+            return 5;
+        if (t->isIntegerTy(32))
+            return 4;
+        if (t->isIntegerTy(16))
+            return 3;
+        if (t->isIntegerTy(8))
+            return 2;
+        if (t->isIntegerTy(1))
+            return 1;
         return 0;
     };
     return (getIntegerRank(type1) >= getIntegerRank(type2)) ? type1 : type2;

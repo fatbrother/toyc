@@ -11,4 +11,4 @@ public:
     bool generate(llvm::Module& module, const std::string& outputFileName);
 };
 
-} // namespace toyc::obj
+}  // namespace toyc::obj

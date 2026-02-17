@@ -1,24 +1,25 @@
 #pragma once
 
-#include <string>
 #include <llvm/IR/Value.h>
+
+#include <string>
 
 #include "ast/define.hpp"
 
 namespace toyc::ast {
 
-template<typename T>
+template <typename T>
 class CodegenResult {
 public:
     CodegenResult() : errorMessage("") {}
     CodegenResult(const T& data) : data(data), errorMessage("") {}
     CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
-    CodegenResult(const char *errMsg) : errorMessage(std::string(errMsg)) {}
+    CodegenResult(const char* errMsg) : errorMessage(std::string(errMsg)) {}
 
-    template<typename... Args>
+    template <typename... Args>
     CodegenResult(Args... args) : data(args...), errorMessage("") {}
 
-    template<typename U>
+    template <typename U>
     CodegenResult& operator<<(const CodegenResult<U>& other) {
         if (!other.isSuccess()) {
             if (errorMessage.empty()) {
@@ -39,50 +40,48 @@ public:
     }
 
 private:
-    template<typename U = T>
+    template <typename U = T>
     auto isSuccessImpl(int) const -> decltype(std::declval<U>().isValid(), bool()) {
         return errorMessage.empty() && data.isValid();
     }
 
-    template<typename U = T>
+    template <typename U = T>
     bool isSuccessImpl(long) const {
         return errorMessage.empty();
     }
 
 public:
-
     std::string getErrorMessage() const { return errorMessage; }
 
     T getData() const { return data; }
 
-    template<typename U = T>
+    template <typename U = T>
     auto getValue() const -> decltype(std::declval<U>().value) {
         return data.value;
     }
 
-    template<typename U = T>
+    template <typename U = T>
     auto getType() const -> decltype(std::declval<U>().type) {
         return data.type;
     }
 
-    template<typename U = T>
+    template <typename U = T>
     auto getAllocaInst() const -> decltype(std::declval<U>().allocInst) {
         return data.allocInst;
     }
 
 private:
-
     T data;
     std::string errorMessage;
 };
 
-template<>
+template <>
 class CodegenResult<void> {
 public:
     CodegenResult() : errorMessage("") {}
     CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
 
-    template<typename U>
+    template <typename U>
     CodegenResult& operator<<(const CodegenResult<U>& other) {
         if (!other.isSuccess()) {
             if (errorMessage.empty()) {
@@ -127,4 +126,4 @@ using ExprCodegenResult = CodegenResult<ExprValue>;
 using StmtCodegenResult = CodegenResult<void>;
 using AllocCodegenResult = CodegenResult<AllocValue>;
 
-}   // namespace toyc::ast
+}  // namespace toyc::ast

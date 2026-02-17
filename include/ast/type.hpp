@@ -1,16 +1,17 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <memory>
-#include <map>
-#include <unordered_map>
-#include <functional>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 
-#include "define.hpp"
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "ast/codegen_result.hpp"
+#include "define.hpp"
 
 namespace toyc::ast {
 
@@ -24,13 +25,12 @@ class NDeclarator;
 
 class NStructDeclaration {
 public:
-    NStructDeclaration(TypeIdx typeIdx, NDeclarator* declarator)
-        : typeIdx(typeIdx), declarator(declarator) {}
+    NStructDeclaration(TypeIdx typeIdx, NDeclarator* declarator) : typeIdx(typeIdx), declarator(declarator) {}
     ~NStructDeclaration();
 
     TypeIdx typeIdx;
-    NDeclarator *declarator = nullptr;
-    NStructDeclaration *next = nullptr;
+    NDeclarator* declarator = nullptr;
+    NStructDeclaration* next = nullptr;
 };
 
 // ==================== TypeCodegen ====================
@@ -55,8 +55,7 @@ private:
 
 class PointerTypeCodegen : public TypeCodegen {
 public:
-    PointerTypeCodegen(TypeIdx pointee, int level)
-        : pointeeIdx(pointee), level(level) {}
+    PointerTypeCodegen(TypeIdx pointee, int level) : pointeeIdx(pointee), level(level) {}
     llvm::Type* getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) override;
     TypeIdx getPointeeIdx() const { return pointeeIdx; }
     int getLevel() const { return level; }
@@ -68,8 +67,7 @@ private:
 
 class ArrayTypeCodegen : public TypeCodegen {
 public:
-    ArrayTypeCodegen(TypeIdx elem, int size)
-        : elementIdx(elem), size(size) {}
+    ArrayTypeCodegen(TypeIdx elem, int size) : elementIdx(elem), size(size) {}
     llvm::Type* getLLVMType(TypeManager& tm, llvm::LLVMContext& context, llvm::Module& module) override;
     TypeIdx getElementIdx() const { return elementIdx; }
     int getSize() const { return size; }
@@ -103,20 +101,25 @@ private:
 
 struct TypeKey {
     enum Kind { Primitive, Pointer, Array, Struct } kind;
-    VarType varType = VAR_TYPE_VOID;       // Primitive only
-    TypeIdx pointeeIdx = InvalidTypeIdx;   // Pointer only
-    int level = 0;                         // Pointer only
-    TypeIdx elementIdx = InvalidTypeIdx;   // Array only
-    int size = 0;                          // Array only
-    std::string structName;                // Struct only
+    VarType varType = VAR_TYPE_VOID;      // Primitive only
+    TypeIdx pointeeIdx = InvalidTypeIdx;  // Pointer only
+    int level = 0;                        // Pointer only
+    TypeIdx elementIdx = InvalidTypeIdx;  // Array only
+    int size = 0;                         // Array only
+    std::string structName;               // Struct only
 
     bool operator==(const TypeKey& o) const {
-        if (kind != o.kind) return false;
+        if (kind != o.kind)
+            return false;
         switch (kind) {
-            case Primitive: return varType == o.varType;
-            case Pointer:   return pointeeIdx == o.pointeeIdx && level == o.level;
-            case Array:     return elementIdx == o.elementIdx && size == o.size;
-            case Struct:    return structName == o.structName;
+            case Primitive:
+                return varType == o.varType;
+            case Pointer:
+                return pointeeIdx == o.pointeeIdx && level == o.level;
+            case Array:
+                return elementIdx == o.elementIdx && size == o.size;
+            case Struct:
+                return structName == o.structName;
         }
         return false;
     }
@@ -187,4 +190,4 @@ private:
     std::unordered_map<TypeKey, TypeIdx, TypeKeyHash> cache_;
 };
 
-} // namespace toyc::ast
+}  // namespace toyc::ast

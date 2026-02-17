@@ -1,18 +1,19 @@
-#include <iostream>
 #include <llvm/IR/LegacyPassManager.h>
-#include <llvm/Transforms/Utils.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
+#include <llvm/Transforms/Utils.h>
+
+#include <filesystem>
+#include <iostream>
 #include <unistd.h>
 #include <vector>
-#include <filesystem>
 
 #include "ast/node.hpp"
 #include "obj/object_genner.hpp"
-#include "utility/parse_file.hpp"
-#include "utility/error_handler.hpp"
-#include "utility/preprocessor.hpp"
 #include "semantic/parser_actions.hpp"
+#include "utility/error_handler.hpp"
+#include "utility/parse_file.hpp"
+#include "utility/preprocessor.hpp"
 
 extern toyc::ast::NExternalDeclaration *program;
 extern toyc::utility::ErrorHandler *error_handler;
@@ -93,12 +94,12 @@ int main(int argc, char *argv[]) {
         toyc::utility::Preprocessor preprocessor;
 
         // Add user-defined macros
-        for (const auto& macro : macroDefines) {
+        for (const auto &macro : macroDefines) {
             preprocessor.addPredefinedMacro(macro.first, macro.second);
         }
 
         // Add include paths
-        for (const auto& path : includePaths) {
+        for (const auto &path : includePaths) {
             preprocessor.addIncludePath(path);
         }
 

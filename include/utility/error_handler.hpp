@@ -1,15 +1,15 @@
 #pragma once
 
-#include <string>
 #include <iostream>
+#include <string>
 
 namespace toyc::utility {
 
 class ErrorHandler {
 public:
-    ErrorHandler(const std::string &message, int line = 0, int column = 0, int tokenSize = 0)
+    ErrorHandler(const std::string& message, int line = 0, int column = 0, int tokenSize = 0)
         : errorMessage(message), lineNumber(line), columnNumber(column), tokenSize(tokenSize) {}
-    void setFileName(const std::string &name);
+    void setFileName(const std::string& name);
     void logError() const;
     void logError(std::ostream& output) const;
     std::string getFormattedError() const;
@@ -29,4 +29,4 @@ private:
     std::string buildIndicatorLine(const std::string& line, int logicalColumn) const;
 };
 
-} // namespace toyc::utility
+}  // namespace toyc::utility
