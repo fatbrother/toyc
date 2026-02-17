@@ -83,6 +83,9 @@ FORMAT_SRCS = $(shell find $(SRCDIR) $(INCDIR) -name "*.cpp" -o -name "*.hpp")
 
 format:
 	$(CLANG_FORMAT) -i --style=file $(FORMAT_SRCS)
+	@for f in $(FORMAT_SRCS); do \
+		if [ -n "$$(tail -c1 $$f)" ]; then printf '\n' >> $$f; fi; \
+	done
 
 format-check:
 	$(CLANG_FORMAT) --dry-run --Werror --style=file $(FORMAT_SRCS)
