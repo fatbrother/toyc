@@ -7,7 +7,7 @@ namespace toyc::utility {
 
 class ErrorHandler {
 public:
-    ErrorHandler(const std::string& message, int line = 0, int column = 0, int tokenSize = 0)
+    explicit ErrorHandler(const std::string& message, int line = 0, int column = 0, int tokenSize = 0)
         : errorMessage(message), lineNumber(line), columnNumber(column), tokenSize(tokenSize) {}
     void setFileName(const std::string& name);
     void logError() const;

@@ -9,7 +9,7 @@ namespace toyc::utility {
 template <typename T>
 class ScopeGuard {
 public:
-    ScopeGuard(std::function<void()> cleanup) : cleanup_(cleanup), dismissed_(false) {}
+    explicit ScopeGuard(std::function<void()> cleanup) : cleanup_(cleanup), dismissed_(false) {}
 
     ~ScopeGuard() {
         if (!dismissed_) {

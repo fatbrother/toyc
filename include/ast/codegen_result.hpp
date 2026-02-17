@@ -12,12 +12,12 @@ template <typename T>
 class CodegenResult {
 public:
     CodegenResult() : errorMessage("") {}
-    CodegenResult(const T& data) : data(data), errorMessage("") {}
-    CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
-    CodegenResult(const char* errMsg) : errorMessage(std::string(errMsg)) {}
+    explicit CodegenResult(const T& data) : data(data), errorMessage("") {}
+    explicit CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
+    explicit CodegenResult(const char* errMsg) : errorMessage(std::string(errMsg)) {}
 
     template <typename... Args>
-    CodegenResult(Args... args) : data(args...), errorMessage("") {}
+    explicit CodegenResult(Args... args) : data(args...), errorMessage("") {}
 
     template <typename U>
     CodegenResult& operator<<(const CodegenResult<U>& other) {
@@ -79,7 +79,7 @@ template <>
 class CodegenResult<void> {
 public:
     CodegenResult() : errorMessage("") {}
-    CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
+    explicit CodegenResult(const std::string& errMsg) : errorMessage(errMsg) {}
 
     template <typename U>
     CodegenResult& operator<<(const CodegenResult<U>& other) {

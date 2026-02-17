@@ -253,35 +253,35 @@ ast::NInteger* ParserActions::handleCharConstant(const std::string& value) {
             // Escape sequence
             switch (value[2]) {
                 case 'n':
-                    return new ast::NInteger((int)'\n');
+                    return new ast::NInteger('\n');
                 case 't':
-                    return new ast::NInteger((int)'\t');
+                    return new ast::NInteger('\t');
                 case 'r':
-                    return new ast::NInteger((int)'\r');
+                    return new ast::NInteger('\r');
                 case '0':
-                    return new ast::NInteger((int)'\0');
+                    return new ast::NInteger('\0');
                 case '\\':
-                    return new ast::NInteger((int)'\\');
+                    return new ast::NInteger('\\');
                 case '\'':
-                    return new ast::NInteger((int)'\'');
+                    return new ast::NInteger('\'');
                 case '"':
-                    return new ast::NInteger((int)'"');
+                    return new ast::NInteger('"');
                 case 'a':
-                    return new ast::NInteger((int)'\a');
+                    return new ast::NInteger('\a');
                 case 'b':
-                    return new ast::NInteger((int)'\b');
+                    return new ast::NInteger('\b');
                 case 'f':
-                    return new ast::NInteger((int)'\f');
+                    return new ast::NInteger('\f');
                 case 'v':
-                    return new ast::NInteger((int)'\v');
+                    return new ast::NInteger('\v');
                 case '?':
-                    return new ast::NInteger((int)'\?');
+                    return new ast::NInteger('\?');
                 default:
-                    return new ast::NInteger((int)value[2]);
+                    return new ast::NInteger(static_cast<int>(value[2]));
             }
         } else {
             // Regular character
-            return new ast::NInteger((int)value[1]);
+            return new ast::NInteger(static_cast<int>(value[1]));
         }
     }
     return new ast::NInteger(0);

@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "ast/codegen_result.hpp"
-#include "define.hpp"
+#include "ast/define.hpp"
 
 namespace toyc::ast {
 

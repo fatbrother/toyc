@@ -637,7 +637,6 @@ std::string Preprocessor::expandMacros(const std::string& text) {
                 }
             }
         }
-
     } while (result != lastResult && iteration < maxIterations);
 
     return result;

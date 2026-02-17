@@ -43,7 +43,7 @@ private:
 
 class NExpressionStatement : public NStatement {
 public:
-    NExpressionStatement(NExpression *expression) : expression(expression) {}
+    explicit NExpressionStatement(NExpression *expression) : expression(expression) {}
     ~NExpressionStatement() { SAFE_DELETE(expression); }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ExpressionStatement"; }
@@ -54,7 +54,7 @@ private:
 
 class NBlock : public NStatement {
 public:
-    NBlock(NStatement *statements = nullptr) : statements(statements) {}
+    explicit NBlock(NStatement *statements = nullptr) : statements(statements) {}
     ~NBlock() { SAFE_DELETE(statements); }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Block"; }
@@ -72,7 +72,7 @@ private:
 
 class NReturnStatement : public NStatement {
 public:
-    NReturnStatement(NExpression *expression = nullptr) : expression(expression) {}
+    explicit NReturnStatement(NExpression *expression = nullptr) : expression(expression) {}
     ~NReturnStatement() { SAFE_DELETE(expression); }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ReturnStatement"; }
@@ -194,7 +194,7 @@ private:
 
 class NGotoStatement : public NStatement {
 public:
-    NGotoStatement(const std::string &label) : label(label) {}
+    explicit NGotoStatement(const std::string &label) : label(label) {}
     ~NGotoStatement() = default;
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "GotoStatement"; }
@@ -220,10 +220,10 @@ private:
 
 class NCaseStatement : public NStatement {
 public:
-    NCaseStatement(NExpression *value, NStatement *statements = nullptr)
+    explicit NCaseStatement(NExpression *value, NStatement *statements = nullptr)
         : value(value), statements(statements), isDefault(false) {}
 
-    NCaseStatement(bool isDefault, NStatement *statements = nullptr)
+    explicit NCaseStatement(bool isDefault, NStatement *statements = nullptr)
         : value(nullptr), statements(statements), isDefault(isDefault) {}
 
     ~NCaseStatement() {

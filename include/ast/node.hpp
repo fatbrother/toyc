@@ -23,7 +23,7 @@ template <typename T>
 class ScopeTable {
 public:
     ScopeTable() = default;
-    ScopeTable(ScopeTable<T> *parent) : parent(parent) {}
+    explicit ScopeTable(ScopeTable<T> *parent) : parent(parent) {}
 
     /**
      * Looks up a object in the current scope and parent scopes.
@@ -76,7 +76,7 @@ protected:
 // Switch context - only supports break, not continue
 class NSwitchContext : public NJumpContext {
 public:
-    NSwitchContext(llvm::BasicBlock *breakTarget) : NJumpContext(nullptr, breakTarget) {}
+    explicit NSwitchContext(llvm::BasicBlock *breakTarget) : NJumpContext(nullptr, breakTarget) {}
 
     virtual bool supportsContinue() const override { return false; }
     virtual bool supportsBreak() const override { return true; }

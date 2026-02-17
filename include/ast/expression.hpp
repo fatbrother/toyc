@@ -71,7 +71,7 @@ private:
 
 class NIdentifier : public NExpression {
 public:
-    NIdentifier(const std::string &name) : name(name) {}
+    explicit NIdentifier(const std::string &name) : name(name) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "Identifier"; }
@@ -82,7 +82,7 @@ private:
 
 class NInteger : public NExpression {
 public:
-    NInteger(int value) : value(value) {}
+    explicit NInteger(int value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Integer"; }
     int getValue() const { return value; }
@@ -93,7 +93,7 @@ private:
 
 class NFloat : public NExpression {
 public:
-    NFloat(double value) : value(value) {}
+    explicit NFloat(double value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Float"; }
 
@@ -103,7 +103,7 @@ private:
 
 class NString : public NExpression {
 public:
-    NString(const std::string &value) : value(value) {}
+    explicit NString(const std::string &value) : value(value) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "String"; }
 
@@ -113,7 +113,7 @@ private:
 
 class NDeclarator : public NExpression {
 public:
-    NDeclarator(const std::string &name, int pointerLevel = 0) : name(name), pointerLevel(pointerLevel) {}
+    explicit NDeclarator(const std::string &name, int pointerLevel = 0) : name(name), pointerLevel(pointerLevel) {}
     ~NDeclarator() {
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
@@ -170,7 +170,7 @@ private:
 
 class NArguments : public NExpression {
 public:
-    NArguments(NExpression *expr) : expr(expr) {}
+    explicit NArguments(NExpression *expr) : expr(expr) {}
     ~NArguments() {
         SAFE_DELETE(expr);
         SAFE_DELETE(next);
