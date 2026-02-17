@@ -8,17 +8,18 @@
 
 namespace toyc::ast {
 
-class TypeDescriptor;
-
 class NParameter : public BasicNode {
 public:
-    NParameter() : isVariadic(true), typeDesc(nullptr), name("") {}
-    NParameter(TypeDescriptor *typeDesc, NDeclarator *declarator);
+    NParameter() : isVariadic(true), typeIdx(InvalidTypeIdx), name("") {}
+    NParameter(TypeIdx typeIdx, std::string name, NDeclarator *declarator)
+        : isVariadic(false), typeIdx(typeIdx), name(std::move(name)) {
+        SAFE_DELETE(declarator);
+    }
 
-    ~NParameter();
+    ~NParameter() { SAFE_DELETE(next); }
     virtual std::string getType() const override { return "Parameter"; }
 
-    TypeDescriptor* getTypeDescriptor() const { return typeDesc; }
+    TypeIdx getTypeIdx() const { return typeIdx; }
     std::string getName() const { return name; }
 
 public:
@@ -26,15 +27,15 @@ public:
     bool isVariadic = false;
 
 private:
-    TypeDescriptor *typeDesc;
+    TypeIdx typeIdx;
     std::string name;
 };
 
 
 class NFunctionDefinition : public NExternalDeclaration {
 public:
-    NFunctionDefinition(TypeDescriptor *returnTypeDesc, const std::string &name, NParameter *params, NBlock *body)
-        : returnTypeDesc(returnTypeDesc), name(name), params(params), body(body) {}
+    NFunctionDefinition(TypeIdx returnTypeIdx, const std::string &name, NParameter *params, NBlock *body)
+        : returnTypeIdx(returnTypeIdx), name(name), params(params), body(body) {}
     ~NFunctionDefinition();
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionDefinition"; }
@@ -46,8 +47,8 @@ public:
 private:
     llvm::Function *llvmFunction = nullptr;
     std::string name;
-    TypeDescriptor *returnTypeDesc;
-    llvm::Type* returnType;
+    TypeIdx returnTypeIdx;
+    llvm::Type* returnType = nullptr;
     NParameter *params;
     NBlock *body;
 };

@@ -272,17 +272,16 @@ private:
 // Cast expression: (type) expression
 class NCastExpression : public NExpression {
 public:
-    NCastExpression(TypeDescriptor *targetTypeDesc, NExpression *expr)
-        : targetTypeDesc(targetTypeDesc), expr(expr) {}
+    NCastExpression(TypeIdx targetTypeIdx, NExpression *expr)
+        : targetTypeIdx(targetTypeIdx), expr(expr) {}
     ~NCastExpression() {
-        SAFE_DELETE(targetTypeDesc);
         SAFE_DELETE(expr);
     }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "CastExpression"; }
 
 private:
-    TypeDescriptor *targetTypeDesc;
+    TypeIdx targetTypeIdx;
     NExpression *expr;
 };
 
@@ -290,20 +289,19 @@ private:
 class NSizeofExpression : public NExpression {
 public:
     // sizeof(type)
-    NSizeofExpression(TypeDescriptor *targetTypeDesc)
-        : targetTypeDesc(targetTypeDesc), expr(nullptr), isSizeofType(true) {}
+    explicit NSizeofExpression(TypeIdx targetTypeIdx)
+        : targetTypeIdx(targetTypeIdx), expr(nullptr), isSizeofType(true) {}
     // sizeof expression
-    NSizeofExpression(NExpression *expr)
-        : targetTypeDesc(nullptr), expr(expr), isSizeofType(false) {}
+    explicit NSizeofExpression(NExpression *expr)
+        : targetTypeIdx(InvalidTypeIdx), expr(expr), isSizeofType(false) {}
     ~NSizeofExpression() {
-        SAFE_DELETE(targetTypeDesc);
         SAFE_DELETE(expr);
     }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "SizeofExpression"; }
 
 private:
-    TypeDescriptor *targetTypeDesc;
+    TypeIdx targetTypeIdx;
     NExpression *expr;
     bool isSizeofType;
 };

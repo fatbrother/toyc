@@ -28,7 +28,7 @@ StmtCodegenResult NExpressionStatement::codegen(ASTContext &context) {
 
 StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
     llvm::AllocaInst *allocaInst = nullptr;
-    llvm::Type* type = context.typeManager->realize(typeDesc, context);
+    llvm::Type* type = context.typeManager->realize(typeIdx);
     if (nullptr == type) {
         return StmtCodegenResult("Failed to realize type from descriptor");
     }
@@ -91,7 +91,9 @@ AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &cont
         for (auto sizeExpr : declarator->getArrayDimensions()) {
             dimensions.push_back(static_cast<NInteger*>(sizeExpr)->getValue());
         }
-        llvm::Type *arrayType = context.typeManager->getArrayType(baseType, dimensions);
+        llvm::Type *arrayType = baseType;
+        for (auto it = dimensions.rbegin(); it != dimensions.rend(); ++it)
+            arrayType = llvm::ArrayType::get(arrayType, *it);
         return createSingleAllocation(context, arrayType, declarator);
     }
 
@@ -120,7 +122,12 @@ AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &cont
 }
 
 AllocCodegenResult NDeclarationStatement::createPointerAllocation(ASTContext &context, llvm::Type *baseType, NDeclarator *declarator) {
-    llvm::Type *ptrType = context.typeManager->getPointerType(baseType, declarator->pointerLevel);
+    llvm::Type *ptrType = baseType;
+    for (int i = 0; i < declarator->pointerLevel; i++) {
+        llvm::Type *next = llvm::PointerType::get(ptrType, 0);
+        context.typeManager->registerPointerMetadata(next, ptrType);
+        ptrType = next;
+    }
     return createSingleAllocation(context, ptrType, declarator);
 }
 
@@ -140,7 +147,7 @@ StmtCodegenResult NDeclarationStatement::initializeArrayElements(
     }
 
     const std::vector<NExpression*>& elements = initList->getElements();
-    llvm::Type* elementType = context.typeManager->getArrayElementType(arrayType);
+    llvm::Type* elementType = llvm::cast<llvm::ArrayType>(arrayType)->getElementType();
 
     for (size_t i = 0; i < elements.size(); i++) {
         std::vector<llvm::Value*> indices;
@@ -321,7 +328,7 @@ StmtCodegenResult NForStatement::codegen(ASTContext &context) {
     ExprCodegenResult conditionCastResult = typeCast(
         conditionValue,
         conditionType,
-        context.typeManager->getBoolType(),
+        context.typeManager->getBasicType(VAR_TYPE_BOOL),
         context);
     if (false == conditionCastResult.isSuccess()) {
         return StmtCodegenResult("Type cast failed for for loop condition") << conditionCastResult;
@@ -359,7 +366,7 @@ StmtCodegenResult NWhileStatement::codegen(ASTContext &context) {
     ExprCodegenResult castResult = typeCast(
         conditionValue,
         conditionType,
-        context.typeManager->getBoolType(),
+        context.typeManager->getBasicType(VAR_TYPE_BOOL),
         context);
     if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
         return StmtCodegenResult("Type cast failed for while loop condition") << castResult;
@@ -513,7 +520,7 @@ StmtCodegenResult NSwitchStatement::codegen(ASTContext &context) {
         return StmtCodegenResult("Failed to evaluate switch condition") << condResult;
     }
 
-    llvm::Type* intType = context.typeManager->getIntType();
+    llvm::Type* intType = context.typeManager->getBasicType(VAR_TYPE_INT);
     ExprCodegenResult castResult = typeCast(condValue, condType, intType, context);
     if (false == castResult.isSuccess() || nullptr == castResult.getValue()) {
         return StmtCodegenResult("Failed to cast switch condition to integer") << castResult;

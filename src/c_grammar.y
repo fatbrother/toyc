@@ -28,7 +28,7 @@ toyc::semantic::ParserActions *parser_actions = nullptr;
 %union
 {
 	toyc::ast::NExpression *expression;
-	toyc::ast::TypeDescriptor *type_specifier;
+	toyc::ast::TypeIdx type_specifier;
 	toyc::ast::NDeclarator *declarator;
 	toyc::ast::NStatement *statement;
 	toyc::ast::NDeclarationStatement *declaration_specifiers;
@@ -689,7 +689,7 @@ relational_expression_op
 
 type_specifier
 	: TYPEDEF_NAME {
-		$$ = nullptr;
+		$$ = toyc::ast::InvalidTypeIdx;
 	}
 	| BOOL {
 		$$ = parser_actions->handlePrimitiveType("bool");

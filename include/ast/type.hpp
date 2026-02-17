@@ -4,6 +4,10 @@
 #include <vector>
 #include <memory>
 #include <map>
+#include <unordered_map>
+#include <functional>
+#include <cstdint>
+#include <climits>
 
 // Forward declarations for LLVM types
 namespace llvm {
@@ -38,140 +42,83 @@ enum VarType {
 bool isFloatingPointType(llvm::Type* type);
 bool isIntegerType(llvm::Type* type);
 
+// ==================== TypeIdx ====================
+
+using TypeIdx = uint32_t;
+static constexpr TypeIdx InvalidTypeIdx = UINT32_MAX;
+
 // ==================== Forward Declarations ====================
 class TypeManager;
 class NDeclarator;
-class NStructDeclaration;
 
-// ==================== TypeDescriptor ====================
-
-struct TypeDescriptor {
-    enum Kind {
-        Primitive,
-        Pointer,
-        Array,
-        Struct
-    };
-
-    virtual ~TypeDescriptor() = default;
-    virtual Kind getKind() const = 0;
-};
-
-using TypeDescriptorPtr = std::unique_ptr<TypeDescriptor>;
-
-struct PrimitiveTypeDescriptor : public TypeDescriptor {
-    VarType varType;
-
-    explicit PrimitiveTypeDescriptor(VarType varType)
-        : varType(varType) {}
-
-    Kind getKind() const override { return Primitive; }
-};
-
-struct PointerTypeDescriptor : public TypeDescriptor {
-    TypeDescriptorPtr pointeeDesc;
-    int level;
-
-    PointerTypeDescriptor(TypeDescriptorPtr pointee, int level = 1)
-        : pointeeDesc(std::move(pointee)), level(level) {}
-
-    Kind getKind() const override { return Pointer; }
-};
-
-struct ArrayTypeDescriptor : public TypeDescriptor {
-    TypeDescriptorPtr elementDesc;
-    std::vector<int> dimensions;
-
-    ArrayTypeDescriptor(TypeDescriptorPtr element, std::vector<int> dims)
-        : elementDesc(std::move(element)), dimensions(std::move(dims)) {}
-
-    Kind getKind() const override { return Array; }
-};
+// ==================== NStructDeclaration ====================
 
 class NStructDeclaration {
 public:
-    NStructDeclaration(TypeDescriptor* type, NDeclarator* declarator)
-        : type(type), declarator(declarator) {}
+    NStructDeclaration(TypeIdx typeIdx, NDeclarator* declarator)
+        : typeIdx(typeIdx), declarator(declarator) {}
     ~NStructDeclaration();
 
-    TypeDescriptor *type;
+    TypeIdx typeIdx;
     NDeclarator *declarator = nullptr;
     NStructDeclaration *next = nullptr;
 };
 
-struct StructTypeDescriptor : public TypeDescriptor {
-    std::string name;
-    NStructDeclaration* members;
+// ==================== TypeCodegen ====================
+// Abstract base for singleton type nodes stored in TypeManager.
+// Each unique type has exactly one TypeCodegen instance.
 
-    StructTypeDescriptor(std::string name, NStructDeclaration* members);
-    ~StructTypeDescriptor();
-
-    Kind getKind() const override { return Struct; }
+class TypeCodegen {
+public:
+    virtual ~TypeCodegen() = default;
+    virtual llvm::Type* getLLVMType(TypeManager& tm) = 0;
 };
 
-// ==================== TypeDescriptor Helper Functions ====================
+class PrimitiveTypeCodegen : public TypeCodegen {
+public:
+    explicit PrimitiveTypeCodegen(VarType vt) : varType(vt) {}
+    llvm::Type* getLLVMType(TypeManager& tm) override;
+    VarType getVarType() const { return varType; }
+private:
+    VarType varType;
+};
 
-inline TypeDescriptorPtr makePrimitiveDesc(VarType type) {
-    return std::make_unique<PrimitiveTypeDescriptor>(type);
-}
+class PointerTypeCodegen : public TypeCodegen {
+public:
+    PointerTypeCodegen(TypeIdx pointee, int level)
+        : pointeeIdx(pointee), level(level) {}
+    llvm::Type* getLLVMType(TypeManager& tm) override;
+    TypeIdx getPointeeIdx() const { return pointeeIdx; }
+    int getLevel() const { return level; }
+private:
+    TypeIdx pointeeIdx;
+    int level;
+};
 
-inline TypeDescriptorPtr makeBoolDesc() {
-    return makePrimitiveDesc(VAR_TYPE_BOOL);
-}
-
-inline TypeDescriptorPtr makeCharDesc() {
-    return makePrimitiveDesc(VAR_TYPE_CHAR);
-}
-
-inline TypeDescriptorPtr makeShortDesc() {
-    return makePrimitiveDesc(VAR_TYPE_SHORT);
-}
-
-inline TypeDescriptorPtr makeIntDesc() {
-    return makePrimitiveDesc(VAR_TYPE_INT);
-}
-
-inline TypeDescriptorPtr makeLongDesc() {
-    return makePrimitiveDesc(VAR_TYPE_LONG);
-}
-
-inline TypeDescriptorPtr makeFloatDesc() {
-    return makePrimitiveDesc(VAR_TYPE_FLOAT);
-}
-
-inline TypeDescriptorPtr makeDoubleDesc() {
-    return makePrimitiveDesc(VAR_TYPE_DOUBLE);
-}
-
-inline TypeDescriptorPtr makeVoidDesc() {
-    return makePrimitiveDesc(VAR_TYPE_VOID);
-}
-
-inline TypeDescriptorPtr makePointerDesc(TypeDescriptorPtr pointee, int level = 1) {
-    return std::make_unique<PointerTypeDescriptor>(std::move(pointee), level);
-}
-
-inline TypeDescriptorPtr makeArrayDesc(TypeDescriptorPtr element, std::vector<int> dims) {
-    return std::make_unique<ArrayTypeDescriptor>(std::move(element), std::move(dims));
-}
-
-inline TypeDescriptorPtr makeStructDesc(const std::string& name, NStructDeclaration* members) {
-    return std::make_unique<StructTypeDescriptor>(name, members);
-}
-
-// ==================== Array Metadata ====================
-
-struct ArrayMetadata {
+class ArrayTypeCodegen : public TypeCodegen {
+public:
+    ArrayTypeCodegen(TypeIdx elem, std::vector<int> dims)
+        : elementIdx(elem), dimensions(std::move(dims)) {}
+    llvm::Type* getLLVMType(TypeManager& tm) override;
+    TypeIdx getElementIdx() const { return elementIdx; }
+    const std::vector<int>& getDimensions() const { return dimensions; }
+private:
+    TypeIdx elementIdx;
     std::vector<int> dimensions;
-    llvm::Type* elementType;
+};
 
-    int getTotalSize() const {
-        int total = 1;
-        for (int dim : dimensions) {
-            total *= dim;
-        }
-        return total;
-    }
+class StructTypeCodegen : public TypeCodegen {
+public:
+    StructTypeCodegen(std::string name, NStructDeclaration* members)
+        : name(std::move(name)), members(members) {}
+    ~StructTypeCodegen();
+    llvm::Type* getLLVMType(TypeManager& tm) override;
+    const std::string& getName() const { return name; }
+    NStructDeclaration* getMembers() const { return members; }
+    void setMembers(NStructDeclaration* m) { members = m; }
+private:
+    std::string name;
+    NStructDeclaration* members; // owned by this node
 };
 
 // ==================== Struct Metadata ====================
@@ -180,9 +127,6 @@ struct StructMetadata {
     std::string name;
     std::map<std::string, int> memberIndexMap;
     std::vector<llvm::Type*> memberTypes;
-    NStructDeclaration* members = nullptr;
-
-    ~StructMetadata();
 
     int getMemberIndex(const std::string& memberName) const {
         auto it = memberIndexMap.find(memberName);
@@ -190,10 +134,55 @@ struct StructMetadata {
     }
 
     llvm::Type* getMemberType(int index) const {
-        if (index >= 0 && static_cast<size_t>(index) < memberTypes.size()) {
+        if (index >= 0 && static_cast<size_t>(index) < memberTypes.size())
             return memberTypes[index];
-        }
         return nullptr;
+    }
+};
+
+// ==================== TypeKey ====================
+
+struct TypeKey {
+    enum Kind { Primitive, Pointer, Array, Struct } kind;
+    VarType varType = VAR_TYPE_VOID;       // Primitive only
+    TypeIdx pointeeIdx = InvalidTypeIdx;   // Pointer only
+    int level = 0;                         // Pointer only
+    TypeIdx elementIdx = InvalidTypeIdx;   // Array only
+    std::vector<int> dims;                 // Array only
+    std::string structName;                // Struct only
+
+    bool operator==(const TypeKey& o) const {
+        if (kind != o.kind) return false;
+        switch (kind) {
+            case Primitive: return varType == o.varType;
+            case Pointer:   return pointeeIdx == o.pointeeIdx && level == o.level;
+            case Array:     return elementIdx == o.elementIdx && dims == o.dims;
+            case Struct:    return structName == o.structName;
+        }
+        return false;
+    }
+};
+
+struct TypeKeyHash {
+    size_t operator()(const TypeKey& k) const {
+        size_t h = std::hash<int>{}(k.kind);
+        switch (k.kind) {
+            case TypeKey::Primitive:
+                h ^= std::hash<int>{}(k.varType) << 1;
+                break;
+            case TypeKey::Pointer:
+                h ^= std::hash<uint32_t>{}(k.pointeeIdx) << 1;
+                h ^= std::hash<int>{}(k.level) << 2;
+                break;
+            case TypeKey::Array:
+                h ^= std::hash<uint32_t>{}(k.elementIdx) << 1;
+                for (int d : k.dims) h ^= std::hash<int>{}(d) << 2;
+                break;
+            case TypeKey::Struct:
+                h ^= std::hash<std::string>{}(k.structName) << 1;
+                break;
+        }
+        return h;
     }
 };
 
@@ -206,45 +195,45 @@ public:
     TypeManager(const TypeManager&) = delete;
     TypeManager& operator=(const TypeManager&) = delete;
 
-    // ==================== Basic Types ====================
-    llvm::Type* getVoidType();
-    llvm::Type* getBoolType();
-    llvm::Type* getCharType();
-    llvm::Type* getShortType();
-    llvm::Type* getIntType();
-    llvm::Type* getLongType();
-    llvm::Type* getFloatType();
-    llvm::Type* getDoubleType();
-    llvm::Type* getBasicType(VarType type);
+    // ==================== TypeIdx Factory (singleton per unique type) ====================
+    TypeIdx getPrimitiveIdx(VarType vt);
+    TypeIdx getPointerIdx(TypeIdx pointee, int level = 1);
+    TypeIdx getArrayIdx(TypeIdx elem, std::vector<int> dims);
+    TypeIdx getStructIdx(const std::string& name, NStructDeclaration* members);
 
-    // =================== Pointer ====================
-    llvm::PointerType* getPointerType(llvm::Type* pointeeType);
-    llvm::PointerType* getPointerType(llvm::Type* pointeeType, int level);
+    // ==================== TypeCodegen Access ====================
+    const TypeCodegen* get(TypeIdx idx) const;
+
+    // ==================== Realization: TypeIdx -> llvm::Type* ====================
+    llvm::Type* realize(TypeIdx idx);
+
+    // ==================== LLVM-level helpers (for codegen use) ====================
     llvm::Type* getPointeeType(llvm::Type* pointerType);
-
-    // ==================== Array =====================
-    llvm::ArrayType* getArrayType(llvm::Type* elementType, const std::vector<int>& dimensions);
-    llvm::Type* getArrayElementType(llvm::Type* arrayType);
-    const ArrayMetadata* getArrayMetadata(llvm::Type* arrayType) const;
-
-    // ==================== Struct ====================
-    llvm::StructType* createStructType(const std::string& name, NStructDeclaration* members, ASTContext& context);
-    llvm::StructType* getStructType(const std::string& name);
     const std::shared_ptr<StructMetadata> getStructMetadata(llvm::StructType* structType) const;
-
-    // ==================== TypeDescriptor Realization ====================
-    llvm::Type* realize(const TypeDescriptor* descriptor, ASTContext& context);
-
-    // ==================== Helper Functions ====================
     std::string getTypeName(llvm::Type* type) const;
     llvm::Type* getCommonType(llvm::Type* type1, llvm::Type* type2);
 
+    // ==================== Accessors for TypeCodegen::getLLVMType implementations ====================
+    llvm::LLVMContext& getLLVMContext() { return context; }
+    llvm::Module& getModule() { return module; }
+    llvm::Type* getBasicType(VarType vt);
+    llvm::StructType* getStructType(const std::string& name);
+
+    // TypeCodegen calls these to register metadata after building LLVM types
+    void registerPointerMetadata(llvm::Type* ptrType, llvm::Type* pointeeType);
+    void registerStructMetadata(llvm::StructType* structType, std::shared_ptr<StructMetadata> meta);
+
 private:
+    TypeIdx registerType(const TypeKey& key, std::unique_ptr<TypeCodegen> node);
+
     llvm::LLVMContext& context;
     llvm::Module& module;
 
-    std::map<llvm::Type*, llvm::Type*> pointerMetadataMap;  // pointer type -> pointee type
-    std::map<llvm::Type*, ArrayMetadata> arrayMetadataMap;
+    std::vector<std::unique_ptr<TypeCodegen>> types_;
+    std::unordered_map<TypeKey, TypeIdx, TypeKeyHash> cache_;
+
+    // LLVM-level metadata caches (used by codegen helpers)
+    std::map<llvm::Type*, llvm::Type*> pointerMetadataMap;
     std::map<llvm::StructType*, std::shared_ptr<StructMetadata>> structMetadataByType;
 };
 

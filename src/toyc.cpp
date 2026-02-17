@@ -12,9 +12,11 @@
 #include "utility/parse_file.hpp"
 #include "utility/error_handler.hpp"
 #include "utility/preprocessor.hpp"
+#include "semantic/parser_actions.hpp"
 
 extern toyc::ast::NExternalDeclaration *program;
 extern toyc::utility::ErrorHandler *error_handler;
+extern toyc::semantic::ParserActions *parser_actions;
 
 #define TMP_FILE_NAME "%%%%TMP%%%%.o"
 
@@ -105,6 +107,10 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    // Create ASTContext early so TypeManager is available during parsing
+    toyc::ast::ASTContext astContext;
+    parser_actions = new toyc::semantic::ParserActions(&astContext.getTypeManager());
+
     // Parse the file with preprocessor
     res = toyc::parser::parseFileWithPreprocessor(inputFileName, macroDefines, includePaths);
     if (res != 0 && error_handler != nullptr) {
@@ -114,7 +120,6 @@ int main(int argc, char *argv[]) {
     }
 
     // Code generation
-    toyc::ast::ASTContext astContext;
     for (auto &decl = program; decl != nullptr; decl = decl->next) {
         toyc::ast::CodegenResult result = decl->codegen(astContext);
         if (false == result.isSuccess()) {

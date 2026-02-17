@@ -21,7 +21,7 @@ namespace toyc::semantic {
  */
 class ParserActions {
 public:
-    ParserActions();
+    explicit ParserActions(ast::TypeManager* typeManager);
     ~ParserActions();
 
     // External Declarations
@@ -32,7 +32,7 @@ public:
 
     // Function Definition
     ast::NFunctionDefinition* handleFunctionDefinition(
-        ast::TypeDescriptor* returnType,
+        ast::TypeIdx returnTypeIdx,
         const std::string& name,
         ast::NParameter* params,
         ast::NBlock* body,
@@ -41,7 +41,7 @@ public:
     );
 
     ast::NFunctionDefinition* handleFunctionDeclaration(
-        ast::TypeDescriptor* returnType,
+        ast::TypeIdx returnTypeIdx,
         const std::string& name,
         ast::NParameter* params,
         int line = 0,
@@ -57,7 +57,7 @@ public:
     );
 
     ast::NParameter* handleParameter(
-        ast::TypeDescriptor* type,
+        ast::TypeIdx typeIdx,
         ast::NDeclarator* declarator,
         int line = 0,
         int column = 0
@@ -119,11 +119,11 @@ public:
 
     // Declarations
     ast::NDeclarationStatement* handleDeclarationStatement(
-        ast::TypeDescriptor* type,
+        ast::TypeIdx typeIdx,
         ast::NDeclarator* declarator
     );
 
-    ast::NDeclarationStatement* handleEmptyDeclaration(ast::TypeDescriptor* type);
+    ast::NDeclarationStatement* handleEmptyDeclaration(ast::TypeIdx typeIdx);
 
     ast::NDeclarator* handleDeclaratorList(
         ast::NDeclarator* current,
@@ -189,17 +189,17 @@ public:
     );
 
     ast::NExpression* handleCastExpression(
-        ast::TypeDescriptor* type,
+        ast::TypeIdx typeIdx,
         ast::NExpression* expr
     );
 
     ast::NExpression* handleCastExpressionWithPointer(
-        ast::TypeDescriptor* baseType,
+        ast::TypeIdx baseTypeIdx,
         int pointerLevel,
         ast::NExpression* expr
     );
 
-    ast::NExpression* handleSizeofType(ast::TypeDescriptor* type);
+    ast::NExpression* handleSizeofType(ast::TypeIdx typeIdx);
     ast::NExpression* handleSizeofExpression(ast::NExpression* expr);
 
     // Primary Expressions
@@ -236,16 +236,13 @@ public:
         ast::NExpression* right
     );
 
-    // Type Specifiers
-    ast::TypeDescriptor* handlePrimitiveType(const std::string& typeName);
-    ast::TypeDescriptor* handlePointerType(
-        ast::TypeDescriptor* baseType,
-        int pointerLevel
-    );
+    // Type Specifiers — return TypeIdx registered in TypeManager
+    ast::TypeIdx handlePrimitiveType(const std::string& typeName);
+    ast::TypeIdx handlePointerType(ast::TypeIdx baseTypeIdx, int pointerLevel);
 
     // Struct
     ast::NStructDeclaration* handleStructDeclaration(
-        ast::TypeDescriptor* type,
+        ast::TypeIdx typeIdx,
         ast::NDeclarator* declarator
     );
 
@@ -254,27 +251,27 @@ public:
         ast::NStructDeclaration* next
     );
 
-    ast::TypeDescriptor* handleStructSpecifier(
+    ast::TypeIdx handleStructSpecifier(
         const std::string& name,
         ast::NStructDeclaration* declarations = nullptr
     );
 
-    ast::TypeDescriptor* handleAnonymousStruct(ast::NStructDeclaration* declarations);
-    ast::TypeDescriptor* handleStructReference(const std::string& name);
+    ast::TypeIdx handleAnonymousStruct(ast::NStructDeclaration* declarations);
+    ast::TypeIdx handleStructReference(const std::string& name);
 
-    // Type name with pointer/array
-    ast::TypeDescriptor* handleTypeNameWithPointer(
-        ast::TypeDescriptor* baseType,
+    // Type name with pointer/array — return TypeIdx
+    ast::TypeIdx handleTypeNameWithPointer(
+        ast::TypeIdx baseTypeIdx,
         int pointerLevel
     );
 
-    ast::TypeDescriptor* handleTypeNameWithArray(
-        ast::TypeDescriptor* baseType,
+    ast::TypeIdx handleTypeNameWithArray(
+        ast::TypeIdx baseTypeIdx,
         const std::string& arraySize
     );
 
-    ast::TypeDescriptor* handleTypeNameWithPointerAndArray(
-        ast::TypeDescriptor* baseType,
+    ast::TypeIdx handleTypeNameWithPointerAndArray(
+        ast::TypeIdx baseTypeIdx,
         int pointerLevel,
         const std::string& arraySize
     );
@@ -285,6 +282,7 @@ public:
     void clearError() { errorOccurred = false; }
 
 private:
+    ast::TypeManager* typeManager_;
     bool errorOccurred;
 };
 

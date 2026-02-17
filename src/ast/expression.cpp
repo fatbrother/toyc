@@ -17,7 +17,7 @@ ExprCodegenResult NLogicalOperator::codegen(ASTContext &context) {
     }
 
     // Cast lhs to bool
-    CodegenResult castLhsResult = typeCast(lhsValue, lhsType, context.typeManager->getBoolType(), context);
+    CodegenResult castLhsResult = typeCast(lhsValue, lhsType, context.typeManager->getBasicType(VAR_TYPE_BOOL), context);
     if (false == castLhsResult.isSuccess()) {
         return ExprCodegenResult("Type cast failed for left-hand side in logical operation") << castLhsResult;
     }
@@ -55,7 +55,7 @@ ExprCodegenResult NLogicalOperator::codegen(ASTContext &context) {
     }
 
     // Cast rhs to bool
-    CodegenResult castRhsResult = typeCast(rhsValue, rhsType, context.typeManager->getBoolType(), context);
+    CodegenResult castRhsResult = typeCast(rhsValue, rhsType, context.typeManager->getBasicType(VAR_TYPE_BOOL), context);
     if (false == castRhsResult.isSuccess()) {
         return ExprCodegenResult("Type cast failed for right-hand side in logical operation") << castRhsResult;
     }
@@ -70,7 +70,7 @@ ExprCodegenResult NLogicalOperator::codegen(ASTContext &context) {
     phiNode->addIncoming(lhsValue, lhsEndBlock);
     phiNode->addIncoming(rhsValue, rhsEndBlock);
 
-    return ExprCodegenResult(phiNode, context.typeManager->getBoolType());
+    return ExprCodegenResult(phiNode, context.typeManager->getBasicType(VAR_TYPE_BOOL));
 }
 
 ExprCodegenResult NBinaryOperator::codegen(ASTContext &context) {
@@ -91,7 +91,7 @@ ExprCodegenResult NBinaryOperator::codegen(ASTContext &context) {
 
     targetType = context.typeManager->getCommonType(lhsType, rhsType);
     if (op == EQ || op == NE || op == LE || op == GE || op == LT || op == GT) {
-        resultType = context.typeManager->getBoolType();
+        resultType = context.typeManager->getBasicType(VAR_TYPE_BOOL);
     } else {
         resultType = targetType;
     }
@@ -256,7 +256,7 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
             value = context.builder.CreateXor(value, context.builder.getInt32(-1), "bit_not");
             break;
         case LOG_NOT: {
-                CodegenResult castResult = typeCast(value, type, context.typeManager->getBoolType(), context);
+                CodegenResult castResult = typeCast(value, type, context.typeManager->getBasicType(VAR_TYPE_BOOL), context);
                 if (false == castResult.isSuccess()) {
                     return ExprCodegenResult("Failed to cast value to bool for logical not") << castResult;
                 }
@@ -268,11 +268,11 @@ ExprCodegenResult NUnaryExpression::codegen(ASTContext &context) {
     }
 
     if (op == ADDR) {
-        resultType = context.typeManager->getPointerType(type);
+        resultType = llvm::PointerType::get(type, 0);
     } else if (op == DEREF) {
         resultType = context.typeManager->getPointeeType(type);
     } else if (op == LOG_NOT) {
-        resultType = context.typeManager->getBoolType();
+        resultType = context.typeManager->getBasicType(VAR_TYPE_BOOL);
     } else {
         resultType = type;
     }
@@ -351,8 +351,8 @@ ExprCodegenResult NIdentifier::codegen(ASTContext &context) {
             name + "_decay"
         );
 
-        llvm::Type* elementType = context.typeManager->getArrayElementType(type);
-        return ExprCodegenResult(value, context.typeManager->getPointerType(elementType));
+        llvm::Type* elementType = llvm::cast<llvm::ArrayType>(type)->getElementType();
+        return ExprCodegenResult(value, llvm::PointerType::get(elementType, 0));
     }
 
     value = context.builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst, name);
@@ -425,7 +425,7 @@ ExprCodegenResult NFunctionCall::codegen(ASTContext &context) {
             CodegenResult castResult = typeCast(
                 argValue,
                 argType,
-                context.typeManager->realize(paramIt->getTypeDescriptor(), context),
+                context.typeManager->realize(paramIt->getTypeIdx()),
                 context);
             if (false == castResult.isSuccess()) {
                 return ExprCodegenResult("Type cast failed for argument in function call: " + name) << castResult;
@@ -518,22 +518,21 @@ AllocCodegenResult NMemberAccess::allocgen(ASTContext &context) {
 ExprCodegenResult NInteger::codegen(ASTContext &context) {
     return ExprCodegenResult(
         context.builder.getInt32(value),
-        context.typeManager->getIntType()
+        context.typeManager->getBasicType(VAR_TYPE_INT)
     );
 }
 
 ExprCodegenResult NFloat::codegen(ASTContext &context) {
     return ExprCodegenResult(
         llvm::ConstantFP::get(llvm::Type::getDoubleTy(context.llvmContext), value),
-        context.typeManager->getDoubleType()
+        context.typeManager->getBasicType(VAR_TYPE_DOUBLE)
     );
 }
 
 ExprCodegenResult NString::codegen(ASTContext &context) {
     return ExprCodegenResult(
         context.builder.CreateGlobalStringPtr(value, "string_literal"),
-        context.typeManager->getPointerType(
-            context.typeManager->getCharType())
+        llvm::PointerType::get(context.typeManager->getBasicType(VAR_TYPE_CHAR), 0)
     );
 }
 
@@ -593,7 +592,7 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
     llvm::Type* elementType = nullptr;
 
     if (true == arrayType->isArrayTy()) {
-        elementType = context.typeManager->getArrayElementType(arrayType);
+        elementType = llvm::cast<llvm::ArrayType>(arrayType)->getElementType();
         std::vector<llvm::Value*> indices(2);
         indices[0] = context.builder.getInt32(0);
         indices[1] = indexResult.getValue();
@@ -643,7 +642,7 @@ ExprCodegenResult NCastExpression::codegen(ASTContext &context) {
     }
 
     // Get the target type
-    llvm::Type* targetType = context.typeManager->realize(targetTypeDesc, context);
+    llvm::Type* targetType = context.typeManager->realize(targetTypeIdx);
     if (nullptr == targetType) {
         return ExprCodegenResult("Target type is null in cast expression");
     }
@@ -666,7 +665,7 @@ ExprCodegenResult NSizeofExpression::codegen(ASTContext &context) {
 
     if (true == isSizeofType) {
         // sizeof(type)
-        type = context.typeManager->realize(targetTypeDesc, context);
+        type = context.typeManager->realize(targetTypeIdx);
         if (nullptr == type) {
             return ExprCodegenResult("Target type is null in sizeof expression");
         }
@@ -697,7 +696,7 @@ ExprCodegenResult NSizeofExpression::codegen(ASTContext &context) {
         sizeInBytes
     );
 
-    return ExprCodegenResult(sizeValue, context.typeManager->getIntType());
+    return ExprCodegenResult(sizeValue, context.typeManager->getBasicType(VAR_TYPE_INT));
 }
 
 ExprCodegenResult NCommaExpression::codegen(ASTContext &context) {

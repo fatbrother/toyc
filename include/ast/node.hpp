@@ -254,6 +254,7 @@ struct ASTContext {
     bool isInitializingFunction = false;
 
     std::unique_ptr<TypeManager> typeManager;
+    TypeManager& getTypeManager() { return *typeManager; }
 
     // Jump context stack for break/continue statements
     // Used by loops (for/while/do-while) and switch statements

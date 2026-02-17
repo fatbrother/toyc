@@ -7,8 +7,6 @@
 
 namespace toyc::ast {
 
-class TypeDescriptor;
-
 class NStatement : public BasicNode {
 public:
     virtual ~NStatement() override;
@@ -23,10 +21,9 @@ public:
 
 class NDeclarationStatement : public NStatement, public NExternalDeclaration {
 public:
-    NDeclarationStatement(TypeDescriptor *typeDesc, NDeclarator *declarator)
-        : typeDesc(typeDesc), declarator(declarator) {}
+    NDeclarationStatement(TypeIdx typeIdx, NDeclarator *declarator)
+        : typeIdx(typeIdx), declarator(declarator) {}
     ~NDeclarationStatement() {
-        SAFE_DELETE(typeDesc);
         SAFE_DELETE(declarator);
     }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
@@ -43,7 +40,7 @@ private:
     AllocCodegenResult createArrayAllocation(ASTContext &context, llvm::Type* baseType, NDeclarator* declarator);
     AllocCodegenResult createPointerAllocation(ASTContext &context, llvm::Type* baseType, NDeclarator* declarator);
 
-    TypeDescriptor *typeDesc;
+    TypeIdx typeIdx;
     NDeclarator *declarator;
 };
 

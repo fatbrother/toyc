@@ -6,42 +6,15 @@
 
 using namespace toyc::ast;
 
-NParameter::NParameter(TypeDescriptor *typeDesc, NDeclarator *declarator)
-    : isVariadic(false), typeDesc(typeDesc), name("") {
-    if (declarator) {
-        name = declarator->getName();
-
-        if (declarator->isArray()) {
-            this->typeDesc = new PointerTypeDescriptor(
-                TypeDescriptorPtr(typeDesc),
-                1
-            );
-        } else if (declarator->pointerLevel > 0) {
-            this->typeDesc = new PointerTypeDescriptor(
-                TypeDescriptorPtr(typeDesc),
-                declarator->pointerLevel
-            );
-        }
-    }
-
-    SAFE_DELETE(declarator);
-}
-
-NParameter::~NParameter() {
-    SAFE_DELETE(typeDesc);
-    SAFE_DELETE(next);
-}
-
 NFunctionDefinition::~NFunctionDefinition() {
-    SAFE_DELETE(returnTypeDesc);
     SAFE_DELETE(params);
     SAFE_DELETE(body);
 }
 
 StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
-    returnType = context.typeManager->realize(returnTypeDesc, context);
+    returnType = context.typeManager->realize(returnTypeIdx);
     if (!returnType) {
-        return StmtCodegenResult("Failed to realize return type from descriptor");
+        return StmtCodegenResult("Failed to realize return type");
     }
 
     std::vector<llvm::Type *> paramTypes;
@@ -56,9 +29,9 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
             break;
         }
 
-        llvm::Type *paramType = context.typeManager->realize(paramIt->getTypeDescriptor(), context);
+        llvm::Type *paramType = context.typeManager->realize(paramIt->getTypeIdx());
         if (nullptr == paramType) {
-            return StmtCodegenResult("Failed to realize parameter type from descriptor");
+            return StmtCodegenResult("Failed to realize parameter type");
         }
 
         paramTypes.push_back(paramType);

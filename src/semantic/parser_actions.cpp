@@ -3,8 +3,8 @@
 
 namespace toyc::semantic {
 
-ParserActions::ParserActions()
-    : errorOccurred(false) {
+ParserActions::ParserActions(ast::TypeManager* typeManager)
+    : typeManager_(typeManager), errorOccurred(false) {
 }
 
 ParserActions::~ParserActions() {
@@ -23,26 +23,24 @@ ast::NExternalDeclaration* ParserActions::handleExternalDeclarationList(
 
 // Function Definition
 ast::NFunctionDefinition* ParserActions::handleFunctionDefinition(
-    ast::TypeDescriptor* returnType,
+    ast::TypeIdx returnTypeIdx,
     const std::string& name,
     ast::NParameter* params,
     ast::NBlock* body,
     int line,
     int column
 ) {
-    // Semantic check: function should have a body or be a forward declaration
-    return new ast::NFunctionDefinition(returnType, name, params, body);
+    return new ast::NFunctionDefinition(returnTypeIdx, name, params, body);
 }
 
 ast::NFunctionDefinition* ParserActions::handleFunctionDeclaration(
-    ast::TypeDescriptor* returnType,
+    ast::TypeIdx returnTypeIdx,
     const std::string& name,
     ast::NParameter* params,
     int line,
     int column
 ) {
-    // Forward declaration (no body)
-    return new ast::NFunctionDefinition(returnType, name, params, nullptr);
+    return new ast::NFunctionDefinition(returnTypeIdx, name, params, nullptr);
 }
 
 // Parameters
@@ -64,12 +62,23 @@ ast::NParameter* ParserActions::handleParameterList(
 }
 
 ast::NParameter* ParserActions::handleParameter(
-    ast::TypeDescriptor* type,
+    ast::TypeIdx typeIdx,
     ast::NDeclarator* declarator,
     int line,
     int column
 ) {
-    return new ast::NParameter(type, declarator);
+    // Array parameters are treated as pointers per C semantics
+    ast::TypeIdx finalIdx = typeIdx;
+    std::string name = "";
+    if (nullptr != declarator) {
+        name = declarator->getName();
+        if (true == declarator->isArray()) {
+            finalIdx = typeManager_->getPointerIdx(typeIdx, 1);
+        } else if (0 < declarator->pointerLevel) {
+            finalIdx = typeManager_->getPointerIdx(typeIdx, declarator->pointerLevel);
+        }
+    }
+    return new ast::NParameter(finalIdx, std::move(name), declarator);
 }
 
 ast::NParameter* ParserActions::handleVariadicParameter() {
@@ -168,14 +177,14 @@ ast::NContinueStatement* ParserActions::handleContinueStatement() {
 
 // Declarations
 ast::NDeclarationStatement* ParserActions::handleDeclarationStatement(
-    ast::TypeDescriptor* type,
+    ast::TypeIdx typeIdx,
     ast::NDeclarator* declarator
 ) {
-    return new ast::NDeclarationStatement(type, declarator);
+    return new ast::NDeclarationStatement(typeIdx, declarator);
 }
 
-ast::NDeclarationStatement* ParserActions::handleEmptyDeclaration(ast::TypeDescriptor* type) {
-    return new ast::NDeclarationStatement(type, nullptr);
+ast::NDeclarationStatement* ParserActions::handleEmptyDeclaration(ast::TypeIdx typeIdx) {
+    return new ast::NDeclarationStatement(typeIdx, nullptr);
 }
 
 ast::NDeclarator* ParserActions::handleDeclaratorList(
@@ -287,26 +296,23 @@ ast::NExpression* ParserActions::handleMemberAccess(
 }
 
 ast::NExpression* ParserActions::handleCastExpression(
-    ast::TypeDescriptor* type,
+    ast::TypeIdx typeIdx,
     ast::NExpression* expr
 ) {
-    return new ast::NCastExpression(type, expr);
+    return new ast::NCastExpression(typeIdx, expr);
 }
 
 ast::NExpression* ParserActions::handleCastExpressionWithPointer(
-    ast::TypeDescriptor* baseType,
+    ast::TypeIdx baseTypeIdx,
     int pointerLevel,
     ast::NExpression* expr
 ) {
-    ast::TypeDescriptorPtr typeDesc(baseType);
-    for (int i = 0; i < pointerLevel; i++) {
-        typeDesc = ast::makePointerDesc(std::move(typeDesc));
-    }
-    return new ast::NCastExpression(typeDesc.release(), expr);
+    ast::TypeIdx typeIdx = typeManager_->getPointerIdx(baseTypeIdx, pointerLevel);
+    return new ast::NCastExpression(typeIdx, expr);
 }
 
-ast::NExpression* ParserActions::handleSizeofType(ast::TypeDescriptor* type) {
-    return new ast::NSizeofExpression(type);
+ast::NExpression* ParserActions::handleSizeofType(ast::TypeIdx typeIdx) {
+    return new ast::NSizeofExpression(typeIdx);
 }
 
 ast::NExpression* ParserActions::handleSizeofExpression(ast::NExpression* expr) {
@@ -417,47 +423,43 @@ ast::NExpression* ParserActions::handleCompoundAssignment(
 }
 
 // Type Specifiers
-ast::TypeDescriptor* ParserActions::handlePrimitiveType(const std::string& typeName) {
+ast::TypeIdx ParserActions::handlePrimitiveType(const std::string& typeName) {
     if (typeName == "bool") {
-        return ast::makeBoolDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_BOOL);
     } else if (typeName == "char") {
-        return ast::makeCharDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_CHAR);
     } else if (typeName == "short") {
-        return ast::makeShortDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_SHORT);
     } else if (typeName == "int") {
-        return ast::makeIntDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_INT);
     } else if (typeName == "long") {
-        return ast::makeLongDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_LONG);
     } else if (typeName == "float") {
-        return ast::makeFloatDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_FLOAT);
     } else if (typeName == "double") {
-        return ast::makeDoubleDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_DOUBLE);
     } else if (typeName == "void") {
-        return ast::makeVoidDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_VOID);
     }
-    return nullptr;
+    return ast::InvalidTypeIdx;
 }
 
-ast::TypeDescriptor* ParserActions::handlePointerType(
-    ast::TypeDescriptor* baseType,
+ast::TypeIdx ParserActions::handlePointerType(
+    ast::TypeIdx baseTypeIdx,
     int pointerLevel
 ) {
     if (pointerLevel <= 0) {
-        return baseType;
+        return baseTypeIdx;
     }
-    ast::TypeDescriptorPtr typeDesc(baseType);
-    for (int i = 0; i < pointerLevel; i++) {
-        typeDesc = ast::makePointerDesc(std::move(typeDesc));
-    }
-    return typeDesc.release();
+    return typeManager_->getPointerIdx(baseTypeIdx, pointerLevel);
 }
 
 // Struct
 ast::NStructDeclaration* ParserActions::handleStructDeclaration(
-    ast::TypeDescriptor* type,
+    ast::TypeIdx typeIdx,
     ast::NDeclarator* declarator
 ) {
-    return new ast::NStructDeclaration(type, declarator);
+    return new ast::NStructDeclaration(typeIdx, declarator);
 }
 
 ast::NStructDeclaration* ParserActions::handleStructDeclarationList(
@@ -470,52 +472,44 @@ ast::NStructDeclaration* ParserActions::handleStructDeclarationList(
     return current;
 }
 
-ast::TypeDescriptor* ParserActions::handleStructSpecifier(
+ast::TypeIdx ParserActions::handleStructSpecifier(
     const std::string& name,
     ast::NStructDeclaration* declarations
 ) {
-    return ast::makeStructDesc(name, declarations).release();
+    return typeManager_->getStructIdx(name, declarations);
 }
 
-ast::TypeDescriptor* ParserActions::handleAnonymousStruct(ast::NStructDeclaration* declarations) {
-    return ast::makeStructDesc("", declarations).release();
+ast::TypeIdx ParserActions::handleAnonymousStruct(ast::NStructDeclaration* declarations) {
+    return typeManager_->getStructIdx("", declarations);
 }
 
-ast::TypeDescriptor* ParserActions::handleStructReference(const std::string& name) {
-    return ast::makeStructDesc(name, nullptr).release();
+ast::TypeIdx ParserActions::handleStructReference(const std::string& name) {
+    return typeManager_->getStructIdx(name, nullptr);
 }
 
-ast::TypeDescriptor* ParserActions::handleTypeNameWithPointer(
-    ast::TypeDescriptor* baseType,
+ast::TypeIdx ParserActions::handleTypeNameWithPointer(
+    ast::TypeIdx baseTypeIdx,
     int pointerLevel
 ) {
-    ast::TypeDescriptorPtr typeDesc(baseType);
-    for (int i = 0; i < pointerLevel; i++) {
-        typeDesc = ast::makePointerDesc(std::move(typeDesc));
-    }
-    return typeDesc.release();
+    return typeManager_->getPointerIdx(baseTypeIdx, pointerLevel);
 }
 
-ast::TypeDescriptor* ParserActions::handleTypeNameWithArray(
-    ast::TypeDescriptor* baseType,
+ast::TypeIdx ParserActions::handleTypeNameWithArray(
+    ast::TypeIdx baseTypeIdx,
     const std::string& arraySize
 ) {
-    ast::TypeDescriptorPtr typeDesc(baseType);
     std::vector<int> dims = {std::stoi(arraySize)};
-    return ast::makeArrayDesc(std::move(typeDesc), std::move(dims)).release();
+    return typeManager_->getArrayIdx(baseTypeIdx, std::move(dims));
 }
 
-ast::TypeDescriptor* ParserActions::handleTypeNameWithPointerAndArray(
-    ast::TypeDescriptor* baseType,
+ast::TypeIdx ParserActions::handleTypeNameWithPointerAndArray(
+    ast::TypeIdx baseTypeIdx,
     int pointerLevel,
     const std::string& arraySize
 ) {
-    ast::TypeDescriptorPtr typeDesc(baseType);
-    for (int i = 0; i < pointerLevel; i++) {
-        typeDesc = ast::makePointerDesc(std::move(typeDesc));
-    }
+    ast::TypeIdx ptrIdx = typeManager_->getPointerIdx(baseTypeIdx, pointerLevel);
     std::vector<int> dims = {std::stoi(arraySize)};
-    return ast::makeArrayDesc(std::move(typeDesc), std::move(dims)).release();
+    return typeManager_->getArrayIdx(ptrIdx, std::move(dims));
 }
 
 // Error reporting
