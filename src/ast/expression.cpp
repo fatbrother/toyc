@@ -547,7 +547,6 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
 
     if (auto *arrTc = dynamic_cast<const ArrayTypeCodegen *>(context.typeManager->get(arrayTypeIdx))) {
         TypeIdx elementTypeIdx = arrTc->getElementIdx();
-        llvm::Type *elementType = context.typeManager->realize(elementTypeIdx);
         std::vector<llvm::Value *> indices(2);
         indices[0] = context.builder.getInt32(0);
         indices[1] = indexResult.getValue();

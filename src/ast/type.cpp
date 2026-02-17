@@ -362,11 +362,9 @@ std::string TypeManager::getTypeName(llvm::Type* type) const {
     if (auto* structType = llvm::dyn_cast<llvm::StructType>(type)) {
         std::string name;
         if (structType->hasName()) {
-            name = structType->getName().str();
-        } else {
-            name = "anonymous_struct";
+            return structType->getName().str();
         }
-        return structType->getName().str();
+        return "anonymous_struct";
     }
     return "unknown";
 }
