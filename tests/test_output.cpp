@@ -283,6 +283,57 @@ TEST_F(OutputTest, CompleteCompilationPipeline) {
 }
 
 // ============================================================================
+// Qualifier-specific LLVM IR tests
+// ============================================================================
+
+TEST_F(OutputTest, VolatileIntGeneratesVolatileIR) {
+    std::string inputFile = "tests/fixtures/output/qualifiers/volatile_int.c";
+    std::string llvmFile = test_output_dir + "/volatile_int.ll";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "Test file not found: " << inputFile;
+    ASSERT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "LLVM IR generation failed";
+
+    EXPECT_TRUE(llvmIRContains(llvmFile, "load volatile"))
+        << "volatile int load should emit 'load volatile'";
+    EXPECT_TRUE(llvmIRContains(llvmFile, "store volatile"))
+        << "volatile int store should emit 'store volatile'";
+}
+
+TEST_F(OutputTest, ConstIntReadCompilesAndRuns) {
+    std::string inputFile = "tests/fixtures/output/qualifiers/const_int_read.c";
+    std::string execFile = test_output_dir + "/const_int_read";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "Test file not found: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "Compilation failed for const int read";
+
+    std::string output = executeProgramWithOutput(execFile);
+    EXPECT_EQ(output, "42\n") << "const int x = 42; printf(\"%d\\n\", x); should print 42";
+}
+
+TEST_F(OutputTest, ConstPtrReadCompilesAndRuns) {
+    std::string inputFile = "tests/fixtures/output/qualifiers/const_ptr_write_through.c";
+    std::string execFile = test_output_dir + "/const_ptr_write_through";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "Test file not found: " << inputFile;
+    ASSERT_TRUE(compileFile(inputFile, execFile)) << "Compilation failed for const pointer read";
+
+    std::string output = executeProgramWithOutput(execFile);
+    EXPECT_EQ(output, "7\n") << "int * const p = &val; printf(\"%d\\n\", *p); should print 7";
+}
+
+TEST_F(OutputTest, ConstIntNoVolatileIR) {
+    std::string inputFile = "tests/fixtures/output/qualifiers/const_int_read.c";
+    std::string llvmFile = test_output_dir + "/const_int_read.ll";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "Test file not found: " << inputFile;
+    ASSERT_TRUE(generateLLVMIR(inputFile, llvmFile)) << "LLVM IR generation failed";
+
+    // const does not affect IR — should NOT produce 'volatile'
+    EXPECT_FALSE(llvmIRContains(llvmFile, "load volatile"))
+        << "const int should not emit volatile loads";
+}
+
+// ============================================================================
 // 參數化測試：程式執行結果測試
 // ============================================================================
 

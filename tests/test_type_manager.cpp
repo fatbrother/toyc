@@ -354,3 +354,110 @@ TEST_F(TypeManagerTest, InvalidIdxRealizeReturnsNull) {
 TEST_F(TypeManagerTest, InvalidIdxIsFloatingPointFalse) {
     EXPECT_FALSE(tm->isFloatingPointType(InvalidTypeIdx));
 }
+
+// ==================== QualifiedPointerType ====================
+
+TEST_F(TypeManagerTest, QualifiedPointerConstDedup) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx rawPtr = tm->getPointerIdx(intIdx, 1);
+    TypeIdx a = tm->getQualifiedIdx(rawPtr, QUAL_CONST);
+    TypeIdx b = tm->getQualifiedIdx(rawPtr, QUAL_CONST);
+    EXPECT_EQ(a, b);
+}
+
+TEST_F(TypeManagerTest, QualifiedPointerVsUnqualified) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx rawPtr = tm->getPointerIdx(intIdx, 1);
+    TypeIdx unqualified = rawPtr;
+    TypeIdx constPtr = tm->getQualifiedIdx(rawPtr, QUAL_CONST);
+    TypeIdx volatilePtr = tm->getQualifiedIdx(rawPtr, QUAL_VOLATILE);
+    EXPECT_NE(unqualified, constPtr);
+    EXPECT_NE(unqualified, volatilePtr);
+    EXPECT_NE(constPtr, volatilePtr);
+}
+
+TEST_F(TypeManagerTest, QualifiedPointerConstFlag) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx rawPtr = tm->getPointerIdx(intIdx, 1);
+    TypeIdx constPtr = tm->getQualifiedIdx(rawPtr, QUAL_CONST);
+    TypeIdx plain = rawPtr;
+    EXPECT_TRUE(tm->isConstQualified(constPtr));
+    EXPECT_FALSE(tm->isConstQualified(plain));
+    EXPECT_FALSE(tm->isVolatileQualified(constPtr));
+}
+
+TEST_F(TypeManagerTest, QualifiedPointerVolatileFlag) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx rawPtr = tm->getPointerIdx(intIdx, 1);
+    TypeIdx volatilePtr = tm->getQualifiedIdx(rawPtr, QUAL_VOLATILE);
+    TypeIdx plain = rawPtr;
+    EXPECT_TRUE(tm->isVolatileQualified(volatilePtr));
+    EXPECT_FALSE(tm->isVolatileQualified(plain));
+    EXPECT_FALSE(tm->isConstQualified(volatilePtr));
+}
+
+TEST_F(TypeManagerTest, QualifiedPointerBothQualifiers) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx rawPtr = tm->getPointerIdx(intIdx, 1);
+    TypeIdx bothPtr = tm->getQualifiedIdx(rawPtr, QUAL_CONST | QUAL_VOLATILE);
+    EXPECT_TRUE(tm->isConstQualified(bothPtr));
+    EXPECT_TRUE(tm->isVolatileQualified(bothPtr));
+}
+
+TEST_F(TypeManagerTest, QualifiedPointerOnPrimitiveReturnsFalse) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    EXPECT_FALSE(tm->isConstQualified(intIdx));
+    EXPECT_FALSE(tm->isVolatileQualified(intIdx));
+}
+
+// ==================== QualifiedBaseType ====================
+
+TEST_F(TypeManagerTest, QualifiedBaseTypeConstInt) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx constIntIdx = tm->getQualifiedIdx(intIdx, QUAL_CONST);
+    EXPECT_NE(constIntIdx, intIdx);
+    // LLVM type is still i32
+    EXPECT_EQ(tm->realize(constIntIdx), llvm::Type::getInt32Ty(ctx));
+}
+
+TEST_F(TypeManagerTest, QualifiedBaseTypeDedup) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx a = tm->getQualifiedIdx(intIdx, QUAL_CONST);
+    TypeIdx b = tm->getQualifiedIdx(intIdx, QUAL_CONST);
+    EXPECT_EQ(a, b);
+}
+
+TEST_F(TypeManagerTest, QualifiedBaseTypeIsConstTrue) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx constIntIdx = tm->getQualifiedIdx(intIdx, QUAL_CONST);
+    EXPECT_TRUE(tm->isConstQualified(constIntIdx));
+}
+
+TEST_F(TypeManagerTest, QualifiedBaseTypeIsConstFalse) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    EXPECT_FALSE(tm->isConstQualified(intIdx));
+}
+
+TEST_F(TypeManagerTest, QualifiedBaseTypePointerToConstInt) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx constIntIdx = tm->getQualifiedIdx(intIdx, QUAL_CONST);
+    TypeIdx ptrToConstInt = tm->getPointerIdx(constIntIdx, 1);
+    EXPECT_TRUE(tm->realize(ptrToConstInt)->isPointerTy());
+}
+
+TEST_F(TypeManagerTest, QualifiedBaseTypeUnqualify) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    TypeIdx constIntIdx = tm->getQualifiedIdx(intIdx, QUAL_CONST);
+    EXPECT_EQ(tm->unqualify(constIntIdx), intIdx);
+}
+
+TEST_F(TypeManagerTest, QualifiedBaseTypeUnqualifyNonQualified) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    EXPECT_EQ(tm->unqualify(intIdx), intIdx);
+}
+
+TEST_F(TypeManagerTest, QualifiedBaseTypeNoneReturnsBase) {
+    TypeIdx intIdx = tm->getPrimitiveIdx(VAR_TYPE_INT);
+    // getQualifiedIdx with QUAL_NONE returns the base unchanged
+    EXPECT_EQ(tm->getQualifiedIdx(intIdx, QUAL_NONE), intIdx);
+}
