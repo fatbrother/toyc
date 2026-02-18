@@ -8,10 +8,6 @@
 using namespace toyc::ast;
 using namespace toyc::utility;
 
-NStatement::~NStatement() {
-    SAFE_DELETE(next);
-}
-
 StmtCodegenResult NExpressionStatement::codegen(ASTContext &context) {
     if (nullptr == expression) {
         return StmtCodegenResult();
@@ -32,8 +28,8 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
         return StmtCodegenResult("Failed to realize type from descriptor");
     }
 
-    for (auto currentDeclarator = declarator; currentDeclarator != nullptr;
-         currentDeclarator = currentDeclarator->next) {
+    for (auto *currentDeclarator = declarator.get(); currentDeclarator != nullptr;
+         currentDeclarator = currentDeclarator->next.get()) {
         if (true == context.variableTable->lookup(currentDeclarator->getName(), false).first) {
             return StmtCodegenResult("Variable already declared in this scope: " + currentDeclarator->getName());
         }
@@ -63,7 +59,7 @@ StmtCodegenResult NDeclarationStatement::codegen(ASTContext &context) {
 
         llvm::Type *currType = context.typeManager->realize(currTypeIdx);
         if (nullptr != currType && true == currType->isArrayTy()) {
-            NInitializerList *initList = dynamic_cast<NInitializerList *>(currentDeclarator->expr);
+            NInitializerList *initList = dynamic_cast<NInitializerList *>(currentDeclarator->expr.get());
             StmtCodegenResult initResult = initializeArrayElements(allocaInst, currTypeIdx, initList, context);
             if (false == initResult.isSuccess()) {
                 return initResult;
@@ -97,8 +93,8 @@ AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &cont
                                                                 TypeIdx baseTypeIdx, NDeclarator *declarator) {
     if (false == declarator->isVLA) {
         std::vector<int> dimensions;
-        for (auto sizeExpr : declarator->getArrayDimensions()) {
-            dimensions.push_back(static_cast<NInteger *>(sizeExpr)->getValue());
+        for (const auto &sizeExpr : declarator->getArrayDimensions()) {
+            dimensions.push_back(static_cast<NInteger *>(sizeExpr.get())->getValue());
         }
         TypeIdx arrayTypeIdx = context.typeManager->getArrayIdx(baseTypeIdx, dimensions);
         llvm::Type *arrayType = context.typeManager->realize(arrayTypeIdx);
@@ -149,7 +145,7 @@ StmtCodegenResult NDeclarationStatement::initializeArrayElements(llvm::AllocaIns
     llvm::Type *arrayType = context.typeManager->realize(arrayTypeIdx);
     auto *arrTc = dynamic_cast<const ArrayTypeCodegen *>(context.typeManager->get(arrayTypeIdx));
     TypeIdx elementTypeIdx = arrTc ? arrTc->getElementIdx() : InvalidTypeIdx;
-    const std::vector<NExpression *> &elements = initList->getElements();
+    const auto &elements = initList->getElements();
 
     for (size_t i = 0; i < elements.size(); i++) {
         std::vector<llvm::Value *> indices;
@@ -194,12 +190,12 @@ StmtCodegenResult NBlock::codegen(ASTContext &context) {
             TypeIdx paramTypeIdx = (param != nullptr) ? param->getTypeIdx() : InvalidTypeIdx;
             context.variableTable->insert(arg.getName().str(), std::make_pair(allocaInst, paramTypeIdx));
             if (param != nullptr)
-                param = param->next;
+                param = param->next.get();
         }
     }
     context.isInitializingFunction = false;
 
-    for (NStatement *stmt = statements; stmt != nullptr; stmt = stmt->next) {
+    for (NStatement *stmt = statements.get(); stmt != nullptr; stmt = stmt->next.get()) {
         if (nullptr != parent) {
             stmt->setParent(parent);
         }

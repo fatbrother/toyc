@@ -15,10 +15,10 @@ using namespace toyc::ast;
 
 // ==================== NStructDeclaration ====================
 
-NStructDeclaration::~NStructDeclaration() {
-    SAFE_DELETE(declarator);
-    SAFE_DELETE(next);
-}
+NStructDeclaration::NStructDeclaration(TypeIdx typeIdx, NDeclarator* declarator)
+    : typeIdx(typeIdx), declarator(declarator) {}
+
+NStructDeclaration::~NStructDeclaration() = default;
 
 // ==================== StructTypeCodegen ====================
 
@@ -30,7 +30,7 @@ StructTypeCodegen::StructTypeCodegen(std::string name, NStructDeclaration* membe
 void StructTypeCodegen::setMembers(NStructDeclaration* m) {
     memberInfos.clear();
     int index = 0;
-    for (NStructDeclaration* cur = m; cur != nullptr; cur = cur->next, ++index) {
+    for (NStructDeclaration* cur = m; cur != nullptr; cur = cur->next.get(), ++index) {
         memberInfos.push_back({cur->declarator->getName(), cur->typeIdx});
     }
 }

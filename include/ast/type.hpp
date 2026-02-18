@@ -25,12 +25,12 @@ class NDeclarator;
 
 class NStructDeclaration {
 public:
-    NStructDeclaration(TypeIdx typeIdx, NDeclarator* declarator) : typeIdx(typeIdx), declarator(declarator) {}
+    NStructDeclaration(TypeIdx typeIdx, NDeclarator* declarator);
     ~NStructDeclaration();
 
     TypeIdx typeIdx;
-    NDeclarator* declarator = nullptr;
-    NStructDeclaration* next = nullptr;
+    std::unique_ptr<NDeclarator> declarator;
+    std::unique_ptr<NStructDeclaration> next;
 };
 
 // ==================== TypeCodegen ====================

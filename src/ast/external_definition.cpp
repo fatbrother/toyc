@@ -8,10 +8,7 @@
 
 using namespace toyc::ast;
 
-NFunctionDefinition::~NFunctionDefinition() {
-    SAFE_DELETE(params);
-    SAFE_DELETE(body);
-}
+NFunctionDefinition::~NFunctionDefinition() = default;
 
 StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     returnType = context.typeManager->realize(returnTypeIdx);
@@ -24,7 +21,7 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     llvm::FunctionType *functionType = nullptr;
     bool isVariadic = false;
 
-    for (NParameter *paramIt = params; paramIt != nullptr; paramIt = paramIt->next) {
+    for (NParameter *paramIt = params.get(); paramIt != nullptr; paramIt = paramIt->next.get()) {
         if (true == paramIt->isVariadic) {
             isVariadic = true;
             break;
@@ -45,10 +42,10 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
         return StmtCodegenResult("Function creation failed for " + name);
     }
 
-    NParameter *paramIt = params;
+    NParameter *paramIt = params.get();
     for (auto it = llvmFunction->arg_begin(); it != llvmFunction->arg_end() && paramIt != nullptr; ++it) {
         it->setName(paramIt->getName());
-        paramIt = paramIt->next;
+        paramIt = paramIt->next.get();
     }
 
     context.functionDefinitions[name] = this;

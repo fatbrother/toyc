@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <memory>
 
 #include "ast/expression.hpp"
 #include "ast/node.hpp"
@@ -9,20 +10,19 @@ namespace toyc::ast {
 
 class NStatement : public BasicNode {
 public:
-    virtual ~NStatement() override;
+    virtual ~NStatement() override = default;
     virtual StmtCodegenResult codegen(ASTContext &context) = 0;
     virtual std::string getType() const override { return "Statement"; }
     void setParent(NStatement *parent) { this->parent = parent; }
 
 public:
     NStatement *parent = nullptr;
-    NStatement *next = nullptr;
+    std::unique_ptr<NStatement> next;
 };
 
 class NDeclarationStatement : public NStatement, public NExternalDeclaration {
 public:
     NDeclarationStatement(TypeIdx typeIdx, NDeclarator *declarator) : typeIdx(typeIdx), declarator(declarator) {}
-    ~NDeclarationStatement() { SAFE_DELETE(declarator); }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "DeclarationStatement"; }
 
@@ -38,34 +38,32 @@ private:
                                                NDeclarator *declarator);
 
     TypeIdx typeIdx;
-    NDeclarator *declarator;
+    std::unique_ptr<NDeclarator> declarator;
 };
 
 class NExpressionStatement : public NStatement {
 public:
     explicit NExpressionStatement(NExpression *expression) : expression(expression) {}
-    ~NExpressionStatement() { SAFE_DELETE(expression); }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ExpressionStatement"; }
 
 private:
-    NExpression *expression;
+    std::unique_ptr<NExpression> expression;
 };
 
 class NBlock : public NStatement {
 public:
     explicit NBlock(NStatement *statements = nullptr) : statements(statements) {}
-    ~NBlock() { SAFE_DELETE(statements); }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Block"; }
     void setName(const std::string &name) { this->name = name; }
     void setNextBlock(llvm::BasicBlock *nextBlock) { this->nextBlock = nextBlock; }
-    NStatement *getStatements() const { return statements; }
+    NStatement *getStatements() const { return statements.get(); }
     llvm::BasicBlock *getBlock() const { return block; }
 
 private:
     std::string name;
-    NStatement *statements;
+    std::unique_ptr<NStatement> statements;
     llvm::BasicBlock *nextBlock = nullptr;
     llvm::BasicBlock *block = nullptr;
 };
@@ -73,12 +71,11 @@ private:
 class NReturnStatement : public NStatement {
 public:
     explicit NReturnStatement(NExpression *expression = nullptr) : expression(expression) {}
-    ~NReturnStatement() { SAFE_DELETE(expression); }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ReturnStatement"; }
 
 private:
-    NExpression *expression;
+    std::unique_ptr<NExpression> expression;
 };
 
 class NIfStatement : public NStatement {
@@ -86,32 +83,25 @@ public:
     NIfStatement(NExpression *conditionNode, NStatement *thenBlockNode, NStatement *elseBlockNode = nullptr)
         : conditionNode(conditionNode) {
         if ("Block" == thenBlockNode->getType()) {
-            this->thenBlockNode = static_cast<NBlock *>(thenBlockNode);
+            this->thenBlockNode.reset(static_cast<NBlock *>(thenBlockNode));
         } else {
-            this->thenBlockNode = new NBlock(thenBlockNode);
+            this->thenBlockNode = std::make_unique<NBlock>(thenBlockNode);
         }
         if (nullptr != elseBlockNode) {
             if ("Block" == elseBlockNode->getType()) {
-                this->elseBlockNode = static_cast<NBlock *>(elseBlockNode);
+                this->elseBlockNode.reset(static_cast<NBlock *>(elseBlockNode));
             } else {
-                this->elseBlockNode = new NBlock(elseBlockNode);
+                this->elseBlockNode = std::make_unique<NBlock>(elseBlockNode);
             }
-        } else {
-            this->elseBlockNode = nullptr;
         }
-    }
-    ~NIfStatement() {
-        SAFE_DELETE(conditionNode);
-        SAFE_DELETE(thenBlockNode);
-        SAFE_DELETE(elseBlockNode);
     }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "IfStatement"; }
 
 private:
-    NExpression *conditionNode;
-    NBlock *thenBlockNode;
-    NBlock *elseBlockNode;
+    std::unique_ptr<NExpression> conditionNode;
+    std::unique_ptr<NBlock> thenBlockNode;
+    std::unique_ptr<NBlock> elseBlockNode;
 };
 
 class NForStatement : public NStatement {
@@ -120,25 +110,19 @@ public:
                   NStatement *body)
         : initializationNode(initializationNode), conditionNode(conditionNode), incrementNode(incrementNode) {
         if ("Block" == body->getType()) {
-            bodyNode = static_cast<NBlock *>(body);
+            bodyNode.reset(static_cast<NBlock *>(body));
         } else {
-            bodyNode = new NBlock(body);
+            bodyNode = std::make_unique<NBlock>(body);
         }
-    }
-    ~NForStatement() {
-        SAFE_DELETE(initializationNode);
-        SAFE_DELETE(conditionNode);
-        SAFE_DELETE(incrementNode);
-        SAFE_DELETE(bodyNode);
     }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ForStatement"; }
 
 private:
-    NStatement *initializationNode;
-    NExpression *conditionNode;
-    NExpression *incrementNode;
-    NBlock *bodyNode;
+    std::unique_ptr<NStatement> initializationNode;
+    std::unique_ptr<NExpression> conditionNode;
+    std::unique_ptr<NExpression> incrementNode;
+    std::unique_ptr<NBlock> bodyNode;
 };
 
 class NWhileStatement : public NStatement {
@@ -146,28 +130,23 @@ public:
     NWhileStatement(NExpression *conditionNode, NStatement *bodyNode, bool isDoWhile = false)
         : conditionNode(conditionNode), isDoWhile(isDoWhile) {
         if ("Block" == bodyNode->getType()) {
-            this->bodyNode = static_cast<NBlock *>(bodyNode);
+            this->bodyNode.reset(static_cast<NBlock *>(bodyNode));
         } else {
-            this->bodyNode = new NBlock(bodyNode);
+            this->bodyNode = std::make_unique<NBlock>(bodyNode);
         }
-    }
-    ~NWhileStatement() {
-        SAFE_DELETE(conditionNode);
-        SAFE_DELETE(bodyNode);
     }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "WhileStatement"; }
 
 private:
-    NExpression *conditionNode;
-    NBlock *bodyNode;
+    std::unique_ptr<NExpression> conditionNode;
+    std::unique_ptr<NBlock> bodyNode;
     bool isDoWhile;  // true if this is a do-while loop
 };
 
 class NBreakStatement : public NStatement {
 public:
     NBreakStatement() = default;
-    ~NBreakStatement() = default;
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "BreakStatement"; }
 };
@@ -175,7 +154,6 @@ public:
 class NContinueStatement : public NStatement {
 public:
     NContinueStatement() = default;
-    ~NContinueStatement() = default;
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ContinueStatement"; }
 };
@@ -183,19 +161,17 @@ public:
 class NLabelStatement : public NStatement {
 public:
     NLabelStatement(const std::string &label, NStatement *statement) : label(label), statement(statement) {}
-    ~NLabelStatement() { SAFE_DELETE(statement); }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "LabelStatement"; }
 
 private:
     std::string label;
-    NStatement *statement;
+    std::unique_ptr<NStatement> statement;
 };
 
 class NGotoStatement : public NStatement {
 public:
     explicit NGotoStatement(const std::string &label) : label(label) {}
-    ~NGotoStatement() = default;
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "GotoStatement"; }
 
@@ -206,16 +182,12 @@ private:
 class NSwitchStatement : public NStatement {
 public:
     NSwitchStatement(NExpression *condition, NStatement *body) : condition(condition), body(body) {}
-    ~NSwitchStatement() {
-        SAFE_DELETE(condition);
-        SAFE_DELETE(body);
-    }
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "SwitchStatement"; }
 
 private:
-    NExpression *condition;
-    NStatement *body;
+    std::unique_ptr<NExpression> condition;
+    std::unique_ptr<NStatement> body;
 };
 
 class NCaseStatement : public NStatement {
@@ -226,21 +198,16 @@ public:
     explicit NCaseStatement(bool isDefault, NStatement *statements = nullptr)
         : value(nullptr), statements(statements), isDefault(isDefault) {}
 
-    ~NCaseStatement() {
-        SAFE_DELETE(value);
-        SAFE_DELETE(statements);
-    }
-
     virtual StmtCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "CaseStatement"; }
 
-    NExpression *getValue() const { return value; }
+    NExpression *getValue() const { return value.get(); }
     bool getIsDefault() const { return isDefault; }
-    NStatement *getStatements() const { return statements; }
+    NStatement *getStatements() const { return statements.get(); }
 
 private:
-    NExpression *value;
-    NStatement *statements;
+    std::unique_ptr<NExpression> value;
+    std::unique_ptr<NStatement> statements;
     bool isDefault;
 
     friend class NSwitchStatement;

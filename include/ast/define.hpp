@@ -5,12 +5,6 @@
 
 namespace toyc::ast {
 
-#define SAFE_DELETE(ptr) \
-    if (ptr) {           \
-        delete ptr;      \
-        ptr = nullptr;   \
-    }
-
 enum VarType {
     VAR_TYPE_VOID = 0,
     VAR_TYPE_DEFINED = 1,

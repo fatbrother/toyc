@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <stack>
 #include <string>
 #include <unordered_set>
@@ -139,12 +140,12 @@ public:
 
 class NExternalDeclaration : public BasicNode {
 public:
-    virtual ~NExternalDeclaration() { SAFE_DELETE(next); }
+    virtual ~NExternalDeclaration() = default;
 
     virtual StmtCodegenResult codegen(ASTContext &context) = 0;
 
 public:
-    NExternalDeclaration *next = nullptr;
+    std::unique_ptr<NExternalDeclaration> next;
 };
 
 }  // namespace toyc::ast

@@ -393,9 +393,9 @@ ExprCodegenResult NFunctionCall::codegen(ASTContext &context) {
     }
 
     NParameter *paramIt = function->getParams();
-    NArguments *argNode = argNodes;
+    NArguments *argNode = argNodes.get();
 
-    for (; argNode != nullptr; argNode = argNode->next) {
+    for (; argNode != nullptr; argNode = argNode->next.get()) {
         CodegenResult argResult = argNode->codegen(context);
         llvm::Value *argValue = argResult.getValue();
         TypeIdx argTypeIdx = argResult.getType();
@@ -413,7 +413,7 @@ ExprCodegenResult NFunctionCall::codegen(ASTContext &context) {
         }
 
         if (paramIt != nullptr) {
-            paramIt = paramIt->next;
+            paramIt = paramIt->next.get();
         }
 
         args.push_back(argValue);
@@ -505,16 +505,17 @@ CodegenResult<llvm::Value *> NDeclarator::getArraySizeValue(ASTContext &context)
     if (false == sizeResult.isSuccess()) {
         return CodegenResult<llvm::Value *>("Failed to generate code for array size expression") << sizeResult;
     }
+    llvm::Value *totalSize = sizeResult.getValue();
     for (size_t i = 1; i < arrayDimensions.size(); ++i) {
-        sizeResult = NBinaryOperator(arrayDimensions[i - 1], BineryOperator::MUL, arrayDimensions[i]).codegen(context);
-
-        if (false == sizeResult.isSuccess()) {
+        ExprCodegenResult dimResult = arrayDimensions[i]->codegen(context);
+        if (false == dimResult.isSuccess()) {
             return CodegenResult<llvm::Value *>("Failed to compute total size for multi-dimensional array")
-                   << sizeResult;
+                   << dimResult;
         }
+        totalSize = context.builder.CreateMul(totalSize, dimResult.getValue(), "array_size");
     }
 
-    return CodegenResult<llvm::Value *>(sizeResult.getValue());
+    return CodegenResult<llvm::Value *>(totalSize);
 }
 
 ExprCodegenResult NArraySubscript::codegen(ASTContext &context) {
@@ -621,6 +622,107 @@ ExprCodegenResult NSizeofExpression::codegen(ASTContext &context) {
     llvm::Value *sizeValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context.llvmContext), sizeInBytes);
 
     return ExprCodegenResult(sizeValue, context.typeManager->getPrimitiveIdx(VAR_TYPE_INT));
+}
+
+ExprCodegenResult NCompoundAssignment::codegen(ASTContext &context) {
+    // Get the lvalue (alloca) for lhs
+    AllocCodegenResult lhsAllocResult = lhs->allocgen(context);
+    if (false == lhsAllocResult.isSuccess()) {
+        return ExprCodegenResult("Failed to get lvalue for compound assignment") << lhsAllocResult;
+    }
+    llvm::AllocaInst *lhsAlloca = static_cast<llvm::AllocaInst *>(lhsAllocResult.getAllocaInst());
+    TypeIdx lhsTypeIdx = lhsAllocResult.getType();
+
+    if (context.typeManager->isConstQualified(lhsTypeIdx)) {
+        return ExprCodegenResult("Compound assignment to const-qualified variable");
+    }
+
+    // Load current value of lhs
+    bool isVolatile = context.typeManager->isVolatileQualified(lhsTypeIdx);
+    llvm::Type *lhsType = context.typeManager->realize(lhsTypeIdx);
+    llvm::Value *lhsValue = context.builder.CreateLoad(lhsType, lhsAlloca, isVolatile, "compound_lhs");
+
+    // Evaluate rhs
+    ExprCodegenResult rhsResult = rhs->codegen(context);
+    if (false == rhsResult.isSuccess()) {
+        return ExprCodegenResult("Failed to evaluate rhs of compound assignment") << rhsResult;
+    }
+    llvm::Value *rhsValue = rhsResult.getValue();
+    TypeIdx rhsTypeIdx = rhsResult.getType();
+
+    // Promote both to common type for the operation
+    TypeIdx commonTypeIdx = context.typeManager->getCommonTypeIdx(lhsTypeIdx, rhsTypeIdx);
+
+    CodegenResult castLhsResult = context.typeManager->typeCast(lhsValue, lhsTypeIdx, commonTypeIdx, context.builder);
+    if (false == castLhsResult.isSuccess()) {
+        return ExprCodegenResult("Type cast failed for lhs in compound assignment") << castLhsResult;
+    }
+    lhsValue = castLhsResult.getValue();
+
+    CodegenResult castRhsResult = context.typeManager->typeCast(rhsValue, rhsTypeIdx, commonTypeIdx, context.builder);
+    if (false == castRhsResult.isSuccess()) {
+        return ExprCodegenResult("Type cast failed for rhs in compound assignment") << castRhsResult;
+    }
+    rhsValue = castRhsResult.getValue();
+
+    // Apply binary operation
+    llvm::Value *result = nullptr;
+    switch (op) {
+        case ADD:
+            if (context.typeManager->isFloatingPointType(commonTypeIdx))
+                result = context.builder.CreateFAdd(lhsValue, rhsValue, "add");
+            else
+                result = context.builder.CreateAdd(lhsValue, rhsValue, "add");
+            break;
+        case SUB:
+            if (context.typeManager->isFloatingPointType(commonTypeIdx))
+                result = context.builder.CreateFSub(lhsValue, rhsValue, "sub");
+            else
+                result = context.builder.CreateSub(lhsValue, rhsValue, "sub");
+            break;
+        case MUL:
+            if (context.typeManager->isFloatingPointType(commonTypeIdx))
+                result = context.builder.CreateFMul(lhsValue, rhsValue, "mul");
+            else
+                result = context.builder.CreateMul(lhsValue, rhsValue, "mul");
+            break;
+        case DIV:
+            if (context.typeManager->isFloatingPointType(commonTypeIdx))
+                result = context.builder.CreateFDiv(lhsValue, rhsValue, "div");
+            else
+                result = context.builder.CreateSDiv(lhsValue, rhsValue, "div");
+            break;
+        case MOD:
+            result = context.builder.CreateSRem(lhsValue, rhsValue, "mod");
+            break;
+        case LEFT:
+            result = context.builder.CreateShl(lhsValue, rhsValue, "left");
+            break;
+        case RIGHT:
+            result = context.builder.CreateLShr(lhsValue, rhsValue, "right");
+            break;
+        case BIT_AND:
+            result = context.builder.CreateAnd(lhsValue, rhsValue, "bit_and");
+            break;
+        case BIT_OR:
+            result = context.builder.CreateOr(lhsValue, rhsValue, "bit_or");
+            break;
+        case XOR:
+            result = context.builder.CreateXor(lhsValue, rhsValue, "xor");
+            break;
+        default:
+            return ExprCodegenResult("Unknown operator in compound assignment");
+    }
+
+    // Cast result back to lhs type and store
+    CodegenResult castBackResult = context.typeManager->typeCast(result, commonTypeIdx, lhsTypeIdx, context.builder);
+    if (false == castBackResult.isSuccess()) {
+        return ExprCodegenResult("Type cast failed for result in compound assignment") << castBackResult;
+    }
+    result = castBackResult.getValue();
+
+    context.builder.CreateStore(result, lhsAlloca, isVolatile);
+    return ExprCodegenResult(result, lhsTypeIdx);
 }
 
 ExprCodegenResult NCommaExpression::codegen(ASTContext &context) {

@@ -21,7 +21,7 @@ ParserActions::~ParserActions() {}
 ast::NExternalDeclaration* ParserActions::handleExternalDeclarationList(ast::NExternalDeclaration* current,
                                                                         ast::NExternalDeclaration* next) {
     if (current) {
-        current->next = next;
+        current->next.reset(next);
     }
     return current;
 }
@@ -48,7 +48,7 @@ ast::NParameter* ParserActions::handleParameterList(ast::NParameter* current, as
     }
 
     if (current) {
-        current->next = next;
+        current->next.reset(next);
     }
     return current;
 }
@@ -86,7 +86,7 @@ ast::NBlock* ParserActions::handleEmptyCompoundStatement() {
 
 ast::NStatement* ParserActions::handleStatementList(ast::NStatement* current, ast::NStatement* next) {
     if (current) {
-        current->next = next;
+        current->next.reset(next);
     }
     return current;
 }
@@ -155,14 +155,14 @@ ast::NDeclarationStatement* ParserActions::handleEmptyDeclaration(ast::TypeIdx t
 
 ast::NDeclarator* ParserActions::handleDeclaratorList(ast::NDeclarator* current, ast::NDeclarator* next) {
     if (current) {
-        current->next = next;
+        current->next.reset(next);
     }
     return current;
 }
 
 ast::NDeclarator* ParserActions::handleInitDeclarator(ast::NDeclarator* declarator, ast::NExpression* initializer) {
     if (declarator && initializer) {
-        declarator->expr = initializer;
+        declarator->expr.reset(initializer);
     }
     return declarator;
 }
@@ -315,21 +315,19 @@ ast::NString* ParserActions::handleString(const std::string& value) {
 ast::NArguments* ParserActions::handleArgumentList(ast::NExpression* expr, ast::NArguments* next) {
     ast::NArguments* args = new ast::NArguments(expr);
     if (next) {
-        args->next = next;
+        args->next.reset(next);
     }
     return args;
 }
 
 // Initializers
 ast::NInitializerList* ParserActions::handleInitializerList(ast::NExpression* expr, ast::NInitializerList* next) {
-    ast::NInitializerList* initList = new ast::NInitializerList();
     if (next) {
-        // First add elements from existing list to maintain order
-        for (auto* elem : next->getElements()) {
-            initList->push_back(elem);
-        }
+        // Add the new element at the end of existing list
+        next->push_back(expr);
+        return next;
     }
-    // Then add the new element at the end
+    ast::NInitializerList* initList = new ast::NInitializerList();
     initList->push_back(expr);
     return initList;
 }
@@ -351,8 +349,7 @@ ast::NExpression* ParserActions::handleCommaExpression(ast::NExpression* left, a
 // Compound Assignment
 ast::NExpression* ParserActions::handleCompoundAssignment(ast::NExpression* left, ast::BineryOperator op,
                                                           ast::NExpression* right) {
-    // TODO(kevin): Use smart pointer and remove clone()
-    return new ast::NAssignment(left, new ast::NBinaryOperator(left->clone(), op, right));
+    return new ast::NCompoundAssignment(left, op, right);
 }
 
 // Type Specifiers
@@ -401,7 +398,7 @@ ast::NStructDeclaration* ParserActions::handleStructDeclaration(ast::TypeIdx typ
 ast::NStructDeclaration* ParserActions::handleStructDeclarationList(ast::NStructDeclaration* current,
                                                                     ast::NStructDeclaration* next) {
     if (current) {
-        current->next = next;
+        current->next.reset(next);
     }
     return current;
 }

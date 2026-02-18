@@ -114,21 +114,24 @@ int main(int argc, char *argv[]) {
 
     // Parse the file with preprocessor
     res = toyc::parser::parseFileWithPreprocessor(inputFileName, macroDefines, includePaths);
+
+    // Take ownership of globals allocated during parsing
+    std::unique_ptr<toyc::ast::NExternalDeclaration> programOwner(program);
+    program = nullptr;
+    std::unique_ptr<toyc::semantic::ParserActions> parserActionsOwner(parser_actions);
+    parser_actions = nullptr;
+
     if (res != 0 && error_handler != nullptr) {
         error_handler->setFileName(inputFileName);
         error_handler->logError();
-        delete program;
-        delete parser_actions;
         return -1;
     }
 
     // Code generation
-    for (auto *decl = program; decl != nullptr; decl = decl->next) {
+    for (auto *decl = programOwner.get(); decl != nullptr; decl = decl->next.get()) {
         toyc::ast::CodegenResult result = decl->codegen(astContext);
         if (false == result.isSuccess()) {
             std::cerr << "Error: \n" << result.getErrorMessage() << std::endl;
-            delete program;
-            delete parser_actions;
             return -1;
         }
     }
@@ -146,14 +149,10 @@ int main(int argc, char *argv[]) {
         llvm::raw_fd_ostream llvmFile(outputFileName, EC);
         if (EC) {
             std::cerr << "Error opening file for writing: " << EC.message() << std::endl;
-            delete program;
-            delete parser_actions;
             return -1;
         }
         astContext.module.print(llvmFile, nullptr);
         llvmFile.close();
-        delete program;
-        delete parser_actions;
         return 0;
     }
 
@@ -162,8 +161,6 @@ int main(int argc, char *argv[]) {
     isOutputFile = objectGenner.generate(astContext.module, TMP_FILE_NAME);
     if (!isOutputFile) {
         std::cerr << "Failed to generate object file." << std::endl;
-        delete program;
-        delete parser_actions;
         return -1;
     }
 
@@ -172,18 +169,12 @@ int main(int argc, char *argv[]) {
     int ret = system(command.c_str());
     if (ret == -1) {
         std::cerr << "Failed to generate executable file." << std::endl;
-        delete program;
-        delete parser_actions;
         return -1;
     }
 
     // remove object file
     command = "rm -f " TMP_FILE_NAME;
     system(command.c_str());
-
-    // Clean up AST memory
-    delete program;
-    delete parser_actions;
 
     return 0;
 }

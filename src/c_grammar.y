@@ -279,7 +279,7 @@ init_declarator_list
 	}
 	| init_declarator ',' init_declarator_list {
 		$$ = $1;
-		$$->next = $3;
+		$$->next.reset($3);
 	}
 	;
 
@@ -763,7 +763,7 @@ struct_declaration_list
 	}
 	| struct_declaration struct_declaration_list {
 		$$ = $1;
-		$$->next = $2;
+		$$->next.reset($2);
 	}
 	| /* empty */ {
 		$$ = nullptr;
@@ -782,7 +782,7 @@ struct_declarator_list
 	}
 	| struct_declarator_list ',' declarator {
 		$$ = $1;
-		$$->next = $3;
+		$$->next.reset($3);
 	}
 	;
 

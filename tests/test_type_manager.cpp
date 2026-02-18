@@ -249,7 +249,7 @@ TEST_F(TypeManagerTest, StructTypeMemberLookup) {
 
     auto* declX = new NDeclarator("x");
     auto* memberX = new NStructDeclaration(intIdx, declX);
-    memberX->next = memberY;
+    memberX->next.reset(memberY);
 
     TypeIdx structIdx = tm->getStructIdx("Point", memberX);
     // StructTypeCodegen takes ownership of memberX — do NOT free it

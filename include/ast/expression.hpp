@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 
 #include "ast/node.hpp"
 
@@ -12,23 +13,18 @@ public:
     virtual AllocCodegenResult allocgen(ASTContext & /*context*/) {
         return AllocCodegenResult("Allocation not supported for " + getType());
     }
-    virtual NExpression *clone() const { return nullptr; }
     virtual std::string getType() const override { return "Expression"; }
 };
 
 class NBinaryOperator : public NExpression {
 public:
     NBinaryOperator(NExpression *lhs, BineryOperator op, NExpression *rhs) : lhs(lhs), rhs(rhs), op(op) {}
-    ~NBinaryOperator() {
-        SAFE_DELETE(lhs);
-        SAFE_DELETE(rhs);
-    }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "BinaryOperator"; }
 
 protected:
-    NExpression *lhs;
-    NExpression *rhs;
+    std::unique_ptr<NExpression> lhs;
+    std::unique_ptr<NExpression> rhs;
     BineryOperator op;
 };
 
@@ -42,32 +38,26 @@ public:
 class NUnaryExpression : public NExpression {
 public:
     NUnaryExpression(UnaryOperator op, NExpression *expr) : op(op), expr(expr) {}
-    ~NUnaryExpression() { SAFE_DELETE(expr); }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "UnaryOperator"; }
     virtual AllocCodegenResult allocgen(ASTContext &context) override { return expr->allocgen(context); };
 
 private:
     UnaryOperator op;
-    NExpression *expr;
+    std::unique_ptr<NExpression> expr;
 };
 
 class NConditionalExpression : public NExpression {
 public:
     NConditionalExpression(NExpression *condition, NExpression *trueExpr, NExpression *falseExpr)
         : condition(condition), trueExpr(trueExpr), falseExpr(falseExpr) {}
-    ~NConditionalExpression() {
-        SAFE_DELETE(condition);
-        SAFE_DELETE(trueExpr);
-        SAFE_DELETE(falseExpr);
-    }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "ConditionalExpression"; }
 
 private:
-    NExpression *condition;
-    NExpression *trueExpr;
-    NExpression *falseExpr;
+    std::unique_ptr<NExpression> condition;
+    std::unique_ptr<NExpression> trueExpr;
+    std::unique_ptr<NExpression> falseExpr;
 };
 
 class NIdentifier : public NExpression {
@@ -75,7 +65,6 @@ public:
     explicit NIdentifier(const std::string &name) : name(name) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
-    virtual NExpression *clone() const override { return new NIdentifier(name); }
     virtual std::string getType() const override { return "Identifier"; }
 
 private:
@@ -116,13 +105,6 @@ private:
 class NDeclarator : public NExpression {
 public:
     explicit NDeclarator(const std::string &name, int pointerLevel = 0) : pointerLevel(pointerLevel), name(name) {}
-    ~NDeclarator() {
-        SAFE_DELETE(expr);
-        SAFE_DELETE(next);
-        for (auto dim : arrayDimensions) {
-            SAFE_DELETE(dim);
-        }
-    }
     virtual ExprCodegenResult codegen(ASTContext &context) override {
         if (nullptr == expr) {
             return ExprCodegenResult();
@@ -134,7 +116,7 @@ public:
     bool isNonInitialized() const { return expr == nullptr; }
     CodegenResult<llvm::Value *> getArraySizeValue(ASTContext &context);
 
-    void addArrayDimension(NExpression *size) { arrayDimensions.push_back(size); }
+    void addArrayDimension(NExpression *size) { arrayDimensions.emplace_back(size); }
 
     int getArrayDimensionCount() const { return static_cast<int>(arrayDimensions.size()); }
 
@@ -142,14 +124,14 @@ public:
 
     bool isPointer() const { return pointerLevel > 0; }
 
-    const std::vector<NExpression *> &getArrayDimensions() const { return arrayDimensions; }
+    const std::vector<std::unique_ptr<NExpression>> &getArrayDimensions() const { return arrayDimensions; }
 
 public:
     int pointerLevel = 0;
     uint8_t qualifiers = QUAL_NONE;
-    NDeclarator *next = nullptr;
-    NExpression *expr = nullptr;
-    std::vector<NExpression *> arrayDimensions;
+    std::unique_ptr<NDeclarator> next;
+    std::unique_ptr<NExpression> expr;
+    std::vector<std::unique_ptr<NExpression>> arrayDimensions;
     bool isVLA = false;
 
 private:
@@ -159,56 +141,46 @@ private:
 class NAssignment : public NExpression {
 public:
     NAssignment(NExpression *lhs, NExpression *rhs) : lhs(lhs), rhs(rhs) {}
-    ~NAssignment() {
-        SAFE_DELETE(lhs);
-        SAFE_DELETE(rhs);
-    }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Assignment"; }
 
 private:
-    NExpression *lhs;
-    NExpression *rhs;
+    std::unique_ptr<NExpression> lhs;
+    std::unique_ptr<NExpression> rhs;
 };
 
 class NArguments : public NExpression {
 public:
     explicit NArguments(NExpression *expr) : expr(expr) {}
-    ~NArguments() {
-        SAFE_DELETE(expr);
-        SAFE_DELETE(next);
-    }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "Arguments"; }
 
 public:
-    NArguments *next = nullptr;
-    NExpression *expr = nullptr;
+    std::unique_ptr<NArguments> next;
+    std::unique_ptr<NExpression> expr;
 };
 
 class NFunctionCall : public NExpression {
 public:
     NFunctionCall(const std::string &name, NArguments *argNodes) : name(name), argNodes(argNodes) {}
-    ~NFunctionCall() { SAFE_DELETE(argNodes); }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "FunctionCall"; }
 
 private:
     std::string name;
-    NArguments *argNodes;
+    std::unique_ptr<NArguments> argNodes;
 };
 
 class NMemberAccess : public NExpression {
 public:
     NMemberAccess(NExpression *base, const std::string &memberName, bool isPointerAccess)
         : base(base), memberName(memberName), isPointerAccess(isPointerAccess) {}
-    ~NMemberAccess() { SAFE_DELETE(base); }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "MemberAccess"; }
 
 private:
-    NExpression *base;
+    std::unique_ptr<NExpression> base;
     std::string memberName;
     bool isPointerAccess;
 };
@@ -216,83 +188,79 @@ private:
 class NArraySubscript : public NExpression {
 public:
     NArraySubscript(NExpression *array, NExpression *index) : array(array), index(index) {}
-    ~NArraySubscript() {
-        SAFE_DELETE(array);
-        SAFE_DELETE(index);
-    }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
-    virtual NExpression *clone() const override { return new NArraySubscript(array->clone(), index->clone()); }
     virtual std::string getType() const override { return "ArraySubscript"; }
 
 private:
-    NExpression *array;
-    NExpression *index;
+    std::unique_ptr<NExpression> array;
+    std::unique_ptr<NExpression> index;
 };
 
 class NInitializerList : public NExpression {
 public:
     NInitializerList() {}
-    ~NInitializerList() {
-        for (auto elem : elements) {
-            SAFE_DELETE(elem);
-        }
-    }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "InitializerList"; }
 
-    const std::vector<NExpression *> &getElements() const { return elements; }
-    void push_back(NExpression *expr) { elements.push_back(expr); }
+    const std::vector<std::unique_ptr<NExpression>> &getElements() const { return elements; }
+    void push_back(NExpression *expr) { elements.emplace_back(expr); }
+    void push_back(std::unique_ptr<NExpression> expr) { elements.push_back(std::move(expr)); }
 
 private:
-    std::vector<NExpression *> elements;
+    std::vector<std::unique_ptr<NExpression>> elements;
 };
 
 // Cast expression: (type) expression
 class NCastExpression : public NExpression {
 public:
     NCastExpression(TypeIdx targetTypeIdx, NExpression *expr) : targetTypeIdx(targetTypeIdx), expr(expr) {}
-    ~NCastExpression() { SAFE_DELETE(expr); }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "CastExpression"; }
 
 private:
     TypeIdx targetTypeIdx;
-    NExpression *expr;
+    std::unique_ptr<NExpression> expr;
 };
 
 // Sizeof operator: sizeof(type) or sizeof expression
 class NSizeofExpression : public NExpression {
 public:
     // sizeof(type)
-    explicit NSizeofExpression(TypeIdx targetTypeIdx)
-        : targetTypeIdx(targetTypeIdx), expr(nullptr), isSizeofType(true) {}
+    explicit NSizeofExpression(TypeIdx targetTypeIdx) : targetTypeIdx(targetTypeIdx), isSizeofType(true) {}
     // sizeof expression
     explicit NSizeofExpression(NExpression *expr) : targetTypeIdx(InvalidTypeIdx), expr(expr), isSizeofType(false) {}
-    ~NSizeofExpression() { SAFE_DELETE(expr); }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "SizeofExpression"; }
 
 private:
     TypeIdx targetTypeIdx;
-    NExpression *expr;
+    std::unique_ptr<NExpression> expr;
     bool isSizeofType;
+};
+
+class NCompoundAssignment : public NExpression {
+public:
+    NCompoundAssignment(NExpression *lhs, BineryOperator op, NExpression *rhs) : lhs(lhs), op(op), rhs(rhs) {}
+    virtual ExprCodegenResult codegen(ASTContext &context) override;
+    virtual std::string getType() const override { return "CompoundAssignment"; }
+
+private:
+    std::unique_ptr<NExpression> lhs;
+    BineryOperator op;
+    std::unique_ptr<NExpression> rhs;
 };
 
 // Comma operator: expr1, expr2
 class NCommaExpression : public NExpression {
 public:
     NCommaExpression(NExpression *left, NExpression *right) : left(left), right(right) {}
-    ~NCommaExpression() {
-        SAFE_DELETE(left);
-        SAFE_DELETE(right);
-    }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual std::string getType() const override { return "CommaExpression"; }
 
 private:
-    NExpression *left;
-    NExpression *right;
+    std::unique_ptr<NExpression> left;
+    std::unique_ptr<NExpression> right;
 };
 
 }  // namespace toyc::ast
