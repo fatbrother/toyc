@@ -9,7 +9,6 @@ using namespace toyc::ast;
 using namespace toyc::utility;
 
 NStatement::~NStatement() {
-    SAFE_DELETE(parent);
     SAFE_DELETE(next);
 }
 

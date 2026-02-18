@@ -12,6 +12,7 @@ public:
     virtual AllocCodegenResult allocgen(ASTContext & /*context*/) {
         return AllocCodegenResult("Allocation not supported for " + getType());
     }
+    virtual NExpression *clone() const { return nullptr; }
     virtual std::string getType() const override { return "Expression"; }
 };
 
@@ -74,6 +75,7 @@ public:
     explicit NIdentifier(const std::string &name) : name(name) {}
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
+    virtual NExpression *clone() const override { return new NIdentifier(name); }
     virtual std::string getType() const override { return "Identifier"; }
 
 private:
@@ -220,6 +222,7 @@ public:
     }
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
+    virtual NExpression *clone() const override { return new NArraySubscript(array->clone(), index->clone()); }
     virtual std::string getType() const override { return "ArraySubscript"; }
 
 private:

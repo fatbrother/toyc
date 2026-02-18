@@ -351,8 +351,8 @@ ast::NExpression* ParserActions::handleCommaExpression(ast::NExpression* left, a
 // Compound Assignment
 ast::NExpression* ParserActions::handleCompoundAssignment(ast::NExpression* left, ast::BineryOperator op,
                                                           ast::NExpression* right) {
-    ast::NExpression* binaryOp = new ast::NBinaryOperator(left, op, right);
-    return new ast::NAssignment(left, binaryOp);
+    // TODO(kevin): Use smart pointer and remove clone()
+    return new ast::NAssignment(left, new ast::NBinaryOperator(left->clone(), op, right));
 }
 
 // Type Specifiers
