@@ -1,11 +1,11 @@
 #pragma once
 
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <fstream>
-#include <sstream>
 
 namespace toyc::utility {
 
@@ -18,8 +18,7 @@ public:
         bool isFunction;
 
         Macro() : isFunction(false) {}
-        Macro(const std::string& n, const std::string& b)
-            : name(n), body(b), isFunction(false) {}
+        Macro(const std::string& n, const std::string& b) : name(n), body(b), isFunction(false) {}
         Macro(const std::string& n, const std::vector<std::string>& p, const std::string& b)
             : name(n), parameters(p), body(b), isFunction(true) {}
     };
@@ -88,4 +87,4 @@ private:
     bool hasErrors_;
 };
 
-} // namespace toyc::utility
+}  // namespace toyc::utility

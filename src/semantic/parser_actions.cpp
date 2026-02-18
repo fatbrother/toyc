@@ -1,20 +1,25 @@
 #include "semantic/parser_actions.hpp"
+
 #include <iostream>
 
 namespace toyc::semantic {
 
-ParserActions::ParserActions()
-    : errorOccurred(false) {
+namespace {
+inline int decodePointerLevel(int encoded) {
+    return encoded & ast::POINTER_LEVEL_MASK;
 }
+inline uint8_t decodePointerQuals(int encoded) {
+    return static_cast<uint8_t>((encoded >> 16) & 0xFF);
+}
+}  // namespace
 
-ParserActions::~ParserActions() {
-}
+ParserActions::ParserActions(ast::TypeManager* typeManager) : typeManager_(typeManager), errorOccurred(false) {}
+
+ParserActions::~ParserActions() {}
 
 // External Declarations
-ast::NExternalDeclaration* ParserActions::handleExternalDeclarationList(
-    ast::NExternalDeclaration* current,
-    ast::NExternalDeclaration* next
-) {
+ast::NExternalDeclaration* ParserActions::handleExternalDeclarationList(ast::NExternalDeclaration* current,
+                                                                        ast::NExternalDeclaration* next) {
     if (current) {
         current->next = next;
     }
@@ -22,36 +27,21 @@ ast::NExternalDeclaration* ParserActions::handleExternalDeclarationList(
 }
 
 // Function Definition
-ast::NFunctionDefinition* ParserActions::handleFunctionDefinition(
-    ast::TypeDescriptor* returnType,
-    const std::string& name,
-    ast::NParameter* params,
-    ast::NBlock* body,
-    int line,
-    int column
-) {
-    // Semantic check: function should have a body or be a forward declaration
-    return new ast::NFunctionDefinition(returnType, name, params, body);
+ast::NFunctionDefinition* ParserActions::handleFunctionDefinition(ast::TypeIdx returnTypeIdx, const std::string& name,
+                                                                  ast::NParameter* params, ast::NBlock* body,
+                                                                  int /*line*/, int /*column*/) {
+    return new ast::NFunctionDefinition(returnTypeIdx, name, params, body);
 }
 
-ast::NFunctionDefinition* ParserActions::handleFunctionDeclaration(
-    ast::TypeDescriptor* returnType,
-    const std::string& name,
-    ast::NParameter* params,
-    int line,
-    int column
-) {
-    // Forward declaration (no body)
-    return new ast::NFunctionDefinition(returnType, name, params, nullptr);
+ast::NFunctionDefinition* ParserActions::handleFunctionDeclaration(ast::TypeIdx returnTypeIdx, const std::string& name,
+                                                                   ast::NParameter* params, int /*line*/,
+                                                                   int /*column*/) {
+    return new ast::NFunctionDefinition(returnTypeIdx, name, params, nullptr);
 }
 
 // Parameters
-ast::NParameter* ParserActions::handleParameterList(
-    ast::NParameter* current,
-    ast::NParameter* next,
-    int line,
-    int column
-) {
+ast::NParameter* ParserActions::handleParameterList(ast::NParameter* current, ast::NParameter* next, int line,
+                                                    int column) {
     if (current && current->isVariadic) {
         reportError("syntax error: variadic parameter must be the last parameter", line, column);
         return current;
@@ -63,17 +53,26 @@ ast::NParameter* ParserActions::handleParameterList(
     return current;
 }
 
-ast::NParameter* ParserActions::handleParameter(
-    ast::TypeDescriptor* type,
-    ast::NDeclarator* declarator,
-    int line,
-    int column
-) {
-    return new ast::NParameter(type, declarator);
+ast::NParameter* ParserActions::handleParameter(ast::TypeIdx typeIdx, ast::NDeclarator* declarator, int /*line*/,
+                                                int /*column*/) {
+    // Array parameters are treated as pointers per C semantics
+    ast::TypeIdx finalIdx = typeIdx;
+    std::string name = "";
+    if (nullptr != declarator) {
+        name = declarator->getName();
+        if (true == declarator->isArray()) {
+            finalIdx = typeManager_->getPointerIdx(typeIdx, 1);
+        } else if (0 < declarator->pointerLevel) {
+            finalIdx = typeManager_->getPointerIdx(typeIdx, declarator->pointerLevel);
+            if (declarator->qualifiers != ast::QUAL_NONE)
+                finalIdx = typeManager_->getQualifiedIdx(finalIdx, declarator->qualifiers);
+        }
+    }
+    return new ast::NParameter(finalIdx, std::move(name), declarator);
 }
 
 ast::NParameter* ParserActions::handleVariadicParameter() {
-    return new ast::NParameter(); // Creates variadic parameter
+    return new ast::NParameter();  // Creates variadic parameter
 }
 
 // Statements
@@ -85,59 +84,37 @@ ast::NBlock* ParserActions::handleEmptyCompoundStatement() {
     return new ast::NBlock();
 }
 
-ast::NStatement* ParserActions::handleStatementList(
-    ast::NStatement* current,
-    ast::NStatement* next
-) {
+ast::NStatement* ParserActions::handleStatementList(ast::NStatement* current, ast::NStatement* next) {
     if (current) {
         current->next = next;
     }
     return current;
 }
 
-ast::NForStatement* ParserActions::handleForStatement(
-    ast::NStatement* init,
-    ast::NExpression* condition,
-    ast::NExpression* increment,
-    ast::NStatement* body
-) {
+ast::NForStatement* ParserActions::handleForStatement(ast::NStatement* init, ast::NExpression* condition,
+                                                      ast::NExpression* increment, ast::NStatement* body) {
     return new ast::NForStatement(init, condition, increment, body);
 }
 
-ast::NWhileStatement* ParserActions::handleWhileStatement(
-    ast::NExpression* condition,
-    ast::NStatement* body
-) {
+ast::NWhileStatement* ParserActions::handleWhileStatement(ast::NExpression* condition, ast::NStatement* body) {
     return new ast::NWhileStatement(condition, body);
 }
 
-ast::NWhileStatement* ParserActions::handleDoWhileStatement(
-    ast::NExpression* condition,
-    ast::NStatement* body
-) {
+ast::NWhileStatement* ParserActions::handleDoWhileStatement(ast::NExpression* condition, ast::NStatement* body) {
     return new ast::NWhileStatement(condition, body, true);
 }
 
-ast::NSwitchStatement* ParserActions::handleSwitchStatement(
-    ast::NExpression* condition,
-    ast::NBlock* body
-) {
+ast::NSwitchStatement* ParserActions::handleSwitchStatement(ast::NExpression* condition, ast::NBlock* body) {
     return new ast::NSwitchStatement(condition, body);
 }
 
-ast::NIfStatement* ParserActions::handleIfStatement(
-    ast::NExpression* condition,
-    ast::NStatement* thenBlock,
-    ast::NStatement* elseBlock
-) {
+ast::NIfStatement* ParserActions::handleIfStatement(ast::NExpression* condition, ast::NStatement* thenBlock,
+                                                    ast::NStatement* elseBlock) {
     return new ast::NIfStatement(condition, thenBlock, elseBlock);
 }
 
 // Labeled Statements
-ast::NLabelStatement* ParserActions::handleLabelStatement(
-    const std::string& label,
-    ast::NStatement* statement
-) {
+ast::NLabelStatement* ParserActions::handleLabelStatement(const std::string& label, ast::NStatement* statement) {
     return new ast::NLabelStatement(label, statement);
 }
 
@@ -167,57 +144,42 @@ ast::NContinueStatement* ParserActions::handleContinueStatement() {
 }
 
 // Declarations
-ast::NDeclarationStatement* ParserActions::handleDeclarationStatement(
-    ast::TypeDescriptor* type,
-    ast::NDeclarator* declarator
-) {
-    return new ast::NDeclarationStatement(type, declarator);
+ast::NDeclarationStatement* ParserActions::handleDeclarationStatement(ast::TypeIdx typeIdx,
+                                                                      ast::NDeclarator* declarator) {
+    return new ast::NDeclarationStatement(typeIdx, declarator);
 }
 
-ast::NDeclarationStatement* ParserActions::handleEmptyDeclaration(ast::TypeDescriptor* type) {
-    return new ast::NDeclarationStatement(type, nullptr);
+ast::NDeclarationStatement* ParserActions::handleEmptyDeclaration(ast::TypeIdx typeIdx) {
+    return new ast::NDeclarationStatement(typeIdx, nullptr);
 }
 
-ast::NDeclarator* ParserActions::handleDeclaratorList(
-    ast::NDeclarator* current,
-    ast::NDeclarator* next
-) {
+ast::NDeclarator* ParserActions::handleDeclaratorList(ast::NDeclarator* current, ast::NDeclarator* next) {
     if (current) {
         current->next = next;
     }
     return current;
 }
 
-ast::NDeclarator* ParserActions::handleInitDeclarator(
-    ast::NDeclarator* declarator,
-    ast::NExpression* initializer
-) {
+ast::NDeclarator* ParserActions::handleInitDeclarator(ast::NDeclarator* declarator, ast::NExpression* initializer) {
     if (declarator && initializer) {
         declarator->expr = initializer;
     }
     return declarator;
 }
 
-ast::NDeclarator* ParserActions::handleDeclarator(
-    int pointerLevel,
-    ast::NDeclarator* declarator
-) {
-    declarator->pointerLevel = pointerLevel;
+ast::NDeclarator* ParserActions::handleDeclarator(int encoded, ast::NDeclarator* declarator) {
+    declarator->pointerLevel = decodePointerLevel(encoded);
+    declarator->qualifiers = decodePointerQuals(encoded);
     return declarator;
 }
 
-ast::NDeclarator* ParserActions::handleDeclarator(
-    const std::string* name
-) {
+ast::NDeclarator* ParserActions::handleDeclarator(const std::string* name) {
     std::string declName = name ? *name : "";
     delete name;
     return new ast::NDeclarator(declName);
 }
 
-ast::NDeclarator* ParserActions::handleArrayDeclarator(
-    ast::NDeclarator* declarator,
-    ast::NExpression* arraySize
-) {
+ast::NDeclarator* ParserActions::handleArrayDeclarator(ast::NDeclarator* declarator, ast::NExpression* arraySize) {
     if (nullptr == arraySize) {
         arraySize = handleInteger(0);
     }
@@ -230,11 +192,8 @@ ast::NDeclarator* ParserActions::handleArrayDeclarator(
 }
 
 // Expressions
-ast::NExpression* ParserActions::handleBinaryExpression(
-    ast::BineryOperator op,
-    ast::NExpression* left,
-    ast::NExpression* right
-) {
+ast::NExpression* ParserActions::handleBinaryExpression(ast::BineryOperator op, ast::NExpression* left,
+                                                        ast::NExpression* right) {
     // Check if it's a logical operator (AND, OR)
     if (op == ast::BineryOperator::AND || op == ast::BineryOperator::OR) {
         return new ast::NLogicalOperator(left, op, right);
@@ -242,71 +201,47 @@ ast::NExpression* ParserActions::handleBinaryExpression(
     return new ast::NBinaryOperator(left, op, right);
 }
 
-ast::NExpression* ParserActions::handleUnaryExpression(
-    ast::UnaryOperator op,
-    ast::NExpression* operand
-) {
+ast::NExpression* ParserActions::handleUnaryExpression(ast::UnaryOperator op, ast::NExpression* operand) {
     return new ast::NUnaryExpression(op, operand);
 }
 
-ast::NExpression* ParserActions::handleAssignment(
-    ast::NExpression* left,
-    ast::NExpression* right
-) {
+ast::NExpression* ParserActions::handleAssignment(ast::NExpression* left, ast::NExpression* right) {
     return new ast::NAssignment(left, right);
 }
 
-ast::NExpression* ParserActions::handleConditionalExpression(
-    ast::NExpression* condition,
-    ast::NExpression* trueExpr,
-    ast::NExpression* falseExpr
-) {
+ast::NExpression* ParserActions::handleConditionalExpression(ast::NExpression* condition, ast::NExpression* trueExpr,
+                                                             ast::NExpression* falseExpr) {
     return new ast::NConditionalExpression(condition, trueExpr, falseExpr);
 }
 
-ast::NExpression* ParserActions::handleFunctionCall(
-    const std::string& name,
-    ast::NArguments* args
-) {
+ast::NExpression* ParserActions::handleFunctionCall(const std::string& name, ast::NArguments* args) {
     return new ast::NFunctionCall(name, args);
 }
 
-ast::NExpression* ParserActions::handleArrayAccess(
-    ast::NExpression* array,
-    ast::NExpression* index
-) {
+ast::NExpression* ParserActions::handleArrayAccess(ast::NExpression* array, ast::NExpression* index) {
     return new ast::NArraySubscript(array, index);
 }
 
-ast::NExpression* ParserActions::handleMemberAccess(
-    ast::NExpression* object,
-    const std::string& member,
-    bool isPointer
-) {
+ast::NExpression* ParserActions::handleMemberAccess(ast::NExpression* object, const std::string& member,
+                                                    bool isPointer) {
     return new ast::NMemberAccess(object, member, isPointer);
 }
 
-ast::NExpression* ParserActions::handleCastExpression(
-    ast::TypeDescriptor* type,
-    ast::NExpression* expr
-) {
-    return new ast::NCastExpression(type, expr);
+ast::NExpression* ParserActions::handleCastExpression(ast::TypeIdx typeIdx, ast::NExpression* expr) {
+    return new ast::NCastExpression(typeIdx, expr);
 }
 
-ast::NExpression* ParserActions::handleCastExpressionWithPointer(
-    ast::TypeDescriptor* baseType,
-    int pointerLevel,
-    ast::NExpression* expr
-) {
-    ast::TypeDescriptorPtr typeDesc(baseType);
-    for (int i = 0; i < pointerLevel; i++) {
-        typeDesc = ast::makePointerDesc(std::move(typeDesc));
-    }
-    return new ast::NCastExpression(typeDesc.release(), expr);
+ast::NExpression* ParserActions::handleCastExpressionWithPointer(ast::TypeIdx baseTypeIdx, int encoded,
+                                                                 ast::NExpression* expr) {
+    ast::TypeIdx typeIdx = typeManager_->getPointerIdx(baseTypeIdx, decodePointerLevel(encoded));
+    uint8_t quals = decodePointerQuals(encoded);
+    if (quals != ast::QUAL_NONE)
+        typeIdx = typeManager_->getQualifiedIdx(typeIdx, quals);
+    return new ast::NCastExpression(typeIdx, expr);
 }
 
-ast::NExpression* ParserActions::handleSizeofType(ast::TypeDescriptor* type) {
-    return new ast::NSizeofExpression(type);
+ast::NExpression* ParserActions::handleSizeofType(ast::TypeIdx typeIdx) {
+    return new ast::NSizeofExpression(typeIdx);
 }
 
 ast::NExpression* ParserActions::handleSizeofExpression(ast::NExpression* expr) {
@@ -333,23 +268,36 @@ ast::NInteger* ParserActions::handleCharConstant(const std::string& value) {
         if (value[1] == '\\' && value.length() >= 4) {
             // Escape sequence
             switch (value[2]) {
-                case 'n': return new ast::NInteger((int)'\n');
-                case 't': return new ast::NInteger((int)'\t');
-                case 'r': return new ast::NInteger((int)'\r');
-                case '0': return new ast::NInteger((int)'\0');
-                case '\\': return new ast::NInteger((int)'\\');
-                case '\'': return new ast::NInteger((int)'\'');
-                case '"': return new ast::NInteger((int)'"');
-                case 'a': return new ast::NInteger((int)'\a');
-                case 'b': return new ast::NInteger((int)'\b');
-                case 'f': return new ast::NInteger((int)'\f');
-                case 'v': return new ast::NInteger((int)'\v');
-                case '?': return new ast::NInteger((int)'\?');
-                default: return new ast::NInteger((int)value[2]);
+                case 'n':
+                    return new ast::NInteger('\n');
+                case 't':
+                    return new ast::NInteger('\t');
+                case 'r':
+                    return new ast::NInteger('\r');
+                case '0':
+                    return new ast::NInteger('\0');
+                case '\\':
+                    return new ast::NInteger('\\');
+                case '\'':
+                    return new ast::NInteger('\'');
+                case '"':
+                    return new ast::NInteger('"');
+                case 'a':
+                    return new ast::NInteger('\a');
+                case 'b':
+                    return new ast::NInteger('\b');
+                case 'f':
+                    return new ast::NInteger('\f');
+                case 'v':
+                    return new ast::NInteger('\v');
+                case '?':
+                    return new ast::NInteger('\?');
+                default:
+                    return new ast::NInteger(static_cast<int>(value[2]));
             }
         } else {
             // Regular character
-            return new ast::NInteger((int)value[1]);
+            return new ast::NInteger(static_cast<int>(value[1]));
         }
     }
     return new ast::NInteger(0);
@@ -364,10 +312,7 @@ ast::NString* ParserActions::handleString(const std::string& value) {
 }
 
 // Arguments
-ast::NArguments* ParserActions::handleArgumentList(
-    ast::NExpression* expr,
-    ast::NArguments* next
-) {
+ast::NArguments* ParserActions::handleArgumentList(ast::NExpression* expr, ast::NArguments* next) {
     ast::NArguments* args = new ast::NArguments(expr);
     if (next) {
         args->next = next;
@@ -376,10 +321,7 @@ ast::NArguments* ParserActions::handleArgumentList(
 }
 
 // Initializers
-ast::NInitializerList* ParserActions::handleInitializerList(
-    ast::NExpression* expr,
-    ast::NInitializerList* next
-) {
+ast::NInitializerList* ParserActions::handleInitializerList(ast::NExpression* expr, ast::NInitializerList* next) {
     ast::NInitializerList* initList = new ast::NInitializerList();
     if (next) {
         // First add elements from existing list to maintain order
@@ -407,115 +349,96 @@ ast::NExpression* ParserActions::handleCommaExpression(ast::NExpression* left, a
 }
 
 // Compound Assignment
-ast::NExpression* ParserActions::handleCompoundAssignment(
-    ast::NExpression* left,
-    ast::BineryOperator op,
-    ast::NExpression* right
-) {
-    ast::NExpression* binaryOp = new ast::NBinaryOperator(left, op, right);
-    return new ast::NAssignment(left, binaryOp);
+ast::NExpression* ParserActions::handleCompoundAssignment(ast::NExpression* left, ast::BineryOperator op,
+                                                          ast::NExpression* right) {
+    // TODO(kevin): Use smart pointer and remove clone()
+    return new ast::NAssignment(left, new ast::NBinaryOperator(left->clone(), op, right));
 }
 
 // Type Specifiers
-ast::TypeDescriptor* ParserActions::handlePrimitiveType(const std::string& typeName) {
+ast::TypeIdx ParserActions::handlePrimitiveType(const std::string& typeName) {
     if (typeName == "bool") {
-        return ast::makeBoolDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_BOOL);
     } else if (typeName == "char") {
-        return ast::makeCharDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_CHAR);
     } else if (typeName == "short") {
-        return ast::makeShortDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_SHORT);
     } else if (typeName == "int") {
-        return ast::makeIntDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_INT);
     } else if (typeName == "long") {
-        return ast::makeLongDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_LONG);
     } else if (typeName == "float") {
-        return ast::makeFloatDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_FLOAT);
     } else if (typeName == "double") {
-        return ast::makeDoubleDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_DOUBLE);
     } else if (typeName == "void") {
-        return ast::makeVoidDesc().release();
+        return typeManager_->getPrimitiveIdx(toyc::ast::VAR_TYPE_VOID);
     }
-    return nullptr;
+    return ast::InvalidTypeIdx;
 }
 
-ast::TypeDescriptor* ParserActions::handlePointerType(
-    ast::TypeDescriptor* baseType,
-    int pointerLevel
-) {
-    if (pointerLevel <= 0) {
-        return baseType;
+ast::TypeIdx ParserActions::handlePointerType(ast::TypeIdx baseTypeIdx, int encoded) {
+    int level = decodePointerLevel(encoded);
+    if (level <= 0) {
+        return baseTypeIdx;
     }
-    ast::TypeDescriptorPtr typeDesc(baseType);
-    for (int i = 0; i < pointerLevel; i++) {
-        typeDesc = ast::makePointerDesc(std::move(typeDesc));
-    }
-    return typeDesc.release();
+    ast::TypeIdx ptrIdx = typeManager_->getPointerIdx(baseTypeIdx, level);
+    uint8_t quals = decodePointerQuals(encoded);
+    if (quals != ast::QUAL_NONE)
+        ptrIdx = typeManager_->getQualifiedIdx(ptrIdx, quals);
+    return ptrIdx;
+}
+
+ast::TypeIdx ParserActions::handleQualifiedType(ast::TypeIdx baseTypeIdx, uint8_t qualifiers) {
+    return typeManager_->getQualifiedIdx(baseTypeIdx, qualifiers);
 }
 
 // Struct
-ast::NStructDeclaration* ParserActions::handleStructDeclaration(
-    ast::TypeDescriptor* type,
-    ast::NDeclarator* declarator
-) {
-    return new ast::NStructDeclaration(type, declarator);
+ast::NStructDeclaration* ParserActions::handleStructDeclaration(ast::TypeIdx typeIdx, ast::NDeclarator* declarator) {
+    return new ast::NStructDeclaration(typeIdx, declarator);
 }
 
-ast::NStructDeclaration* ParserActions::handleStructDeclarationList(
-    ast::NStructDeclaration* current,
-    ast::NStructDeclaration* next
-) {
+ast::NStructDeclaration* ParserActions::handleStructDeclarationList(ast::NStructDeclaration* current,
+                                                                    ast::NStructDeclaration* next) {
     if (current) {
         current->next = next;
     }
     return current;
 }
 
-ast::TypeDescriptor* ParserActions::handleStructSpecifier(
-    const std::string& name,
-    ast::NStructDeclaration* declarations
-) {
-    return ast::makeStructDesc(name, declarations).release();
+ast::TypeIdx ParserActions::handleStructSpecifier(const std::string& name, ast::NStructDeclaration* declarations) {
+    return typeManager_->getStructIdx(name, declarations);
 }
 
-ast::TypeDescriptor* ParserActions::handleAnonymousStruct(ast::NStructDeclaration* declarations) {
-    return ast::makeStructDesc("", declarations).release();
+ast::TypeIdx ParserActions::handleAnonymousStruct(ast::NStructDeclaration* declarations) {
+    return typeManager_->getStructIdx("", declarations);
 }
 
-ast::TypeDescriptor* ParserActions::handleStructReference(const std::string& name) {
-    return ast::makeStructDesc(name, nullptr).release();
+ast::TypeIdx ParserActions::handleStructReference(const std::string& name) {
+    return typeManager_->getStructIdx(name, nullptr);
 }
 
-ast::TypeDescriptor* ParserActions::handleTypeNameWithPointer(
-    ast::TypeDescriptor* baseType,
-    int pointerLevel
-) {
-    ast::TypeDescriptorPtr typeDesc(baseType);
-    for (int i = 0; i < pointerLevel; i++) {
-        typeDesc = ast::makePointerDesc(std::move(typeDesc));
-    }
-    return typeDesc.release();
+ast::TypeIdx ParserActions::handleTypeNameWithPointer(ast::TypeIdx baseTypeIdx, int encoded) {
+    ast::TypeIdx ptrIdx = typeManager_->getPointerIdx(baseTypeIdx, decodePointerLevel(encoded));
+    uint8_t quals = decodePointerQuals(encoded);
+    if (quals != ast::QUAL_NONE)
+        ptrIdx = typeManager_->getQualifiedIdx(ptrIdx, quals);
+    return ptrIdx;
 }
 
-ast::TypeDescriptor* ParserActions::handleTypeNameWithArray(
-    ast::TypeDescriptor* baseType,
-    const std::string& arraySize
-) {
-    ast::TypeDescriptorPtr typeDesc(baseType);
+ast::TypeIdx ParserActions::handleTypeNameWithArray(ast::TypeIdx baseTypeIdx, const std::string& arraySize) {
     std::vector<int> dims = {std::stoi(arraySize)};
-    return ast::makeArrayDesc(std::move(typeDesc), std::move(dims)).release();
+    return typeManager_->getArrayIdx(baseTypeIdx, std::move(dims));
 }
 
-ast::TypeDescriptor* ParserActions::handleTypeNameWithPointerAndArray(
-    ast::TypeDescriptor* baseType,
-    int pointerLevel,
-    const std::string& arraySize
-) {
-    ast::TypeDescriptorPtr typeDesc(baseType);
-    for (int i = 0; i < pointerLevel; i++) {
-        typeDesc = ast::makePointerDesc(std::move(typeDesc));
-    }
+ast::TypeIdx ParserActions::handleTypeNameWithPointerAndArray(ast::TypeIdx baseTypeIdx, int encoded,
+                                                              const std::string& arraySize) {
+    ast::TypeIdx ptrIdx = typeManager_->getPointerIdx(baseTypeIdx, decodePointerLevel(encoded));
+    uint8_t quals = decodePointerQuals(encoded);
+    if (quals != ast::QUAL_NONE)
+        ptrIdx = typeManager_->getQualifiedIdx(ptrIdx, quals);
     std::vector<int> dims = {std::stoi(arraySize)};
-    return ast::makeArrayDesc(std::move(typeDesc), std::move(dims)).release();
+    return typeManager_->getArrayIdx(ptrIdx, std::move(dims));
 }
 
 // Error reporting
@@ -531,4 +454,4 @@ void ParserActions::reportError(const std::string& message, int line, int column
     errorOccurred = true;
 }
 
-} // namespace toyc::semantic
+}  // namespace toyc::semantic

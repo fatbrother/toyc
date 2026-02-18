@@ -1,47 +1,22 @@
 #include "ast/external_definition.hpp"
-#include "utility/raii_guard.hpp"
+
+#include <llvm/IR/Verifier.h>
 
 #include <iostream>
-#include <llvm/IR/Verifier.h>
+
+#include "utility/raii_guard.hpp"
 
 using namespace toyc::ast;
 
-NParameter::NParameter(TypeDescriptor *typeDesc, NDeclarator *declarator)
-    : isVariadic(false), typeDesc(typeDesc), name("") {
-    if (declarator) {
-        name = declarator->getName();
-
-        if (declarator->isArray()) {
-            this->typeDesc = new PointerTypeDescriptor(
-                TypeDescriptorPtr(typeDesc),
-                1
-            );
-        } else if (declarator->pointerLevel > 0) {
-            this->typeDesc = new PointerTypeDescriptor(
-                TypeDescriptorPtr(typeDesc),
-                declarator->pointerLevel
-            );
-        }
-    }
-
-    SAFE_DELETE(declarator);
-}
-
-NParameter::~NParameter() {
-    SAFE_DELETE(typeDesc);
-    SAFE_DELETE(next);
-}
-
 NFunctionDefinition::~NFunctionDefinition() {
-    SAFE_DELETE(returnTypeDesc);
     SAFE_DELETE(params);
     SAFE_DELETE(body);
 }
 
 StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
-    returnType = context.typeManager->realize(returnTypeDesc, context);
+    returnType = context.typeManager->realize(returnTypeIdx);
     if (!returnType) {
-        return StmtCodegenResult("Failed to realize return type from descriptor");
+        return StmtCodegenResult("Failed to realize return type");
     }
 
     std::vector<llvm::Type *> paramTypes;
@@ -49,16 +24,15 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     llvm::FunctionType *functionType = nullptr;
     bool isVariadic = false;
 
-
     for (NParameter *paramIt = params; paramIt != nullptr; paramIt = paramIt->next) {
         if (true == paramIt->isVariadic) {
             isVariadic = true;
             break;
         }
 
-        llvm::Type *paramType = context.typeManager->realize(paramIt->getTypeDescriptor(), context);
+        llvm::Type *paramType = context.typeManager->realize(paramIt->getTypeIdx());
         if (nullptr == paramType) {
-            return StmtCodegenResult("Failed to realize parameter type from descriptor");
+            return StmtCodegenResult("Failed to realize parameter type");
         }
 
         paramTypes.push_back(paramType);
@@ -71,7 +45,7 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
         return StmtCodegenResult("Function creation failed for " + name);
     }
 
-    NParameter* paramIt = params;
+    NParameter *paramIt = params;
     for (auto it = llvmFunction->arg_begin(); it != llvmFunction->arg_end() && paramIt != nullptr; ++it) {
         it->setName(paramIt->getName());
         paramIt = paramIt->next;
@@ -86,9 +60,7 @@ StmtCodegenResult NFunctionDefinition::codegen(ASTContext &context) {
     context.currentFunction = this;
     context.isInitializingFunction = true;
     body->setName("entry");
-    auto labelGuard = toyc::utility::makeScopeGuard([&context]() {
-        context.clearLabels();
-    });
+    auto labelGuard = toyc::utility::makeScopeGuard([&context]() { context.clearLabels(); });
     StmtCodegenResult bodyResult = body->codegen(context);
     if (false == bodyResult.isSuccess()) {
         return StmtCodegenResult("Function body code generation failed for " + name) << bodyResult;

@@ -1,0 +1,81 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+IndentCaseLabels: true
+NamespaceIndentation: None
+
+# Line length
+ColumnLimit: 120
+
+# Braces — K&R attach style
+BreakBeforeBraces: Attach
+
+# Pointer/reference alignment: star and amp on the type side (e.g. "Type* ptr", "Type& ref")
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Constructor initializers: colon on new line, aligned
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: BeforeColon
+
+# Template declarations
+AlwaysBreakTemplateDeclarations: Yes
+
+# Short constructs
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+# Alignment
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: Align
+AlignTrailingComments: true
+
+# Spacing
+SpacesBeforeTrailingComments: 2
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Include ordering:
+#   1. Same-name header (e.g. "ast/type.hpp" in type.cpp) — auto-detected, Priority 0
+#   2. Third-party headers       <llvm/...>   Priority 2
+#   3. Standard library headers  <iostream>   Priority 3
+#   4. Own project headers       "ast/..."    Priority 4
+#
+# IncludeIsMainRegex: stem of the header must match the source file stem.
+# The matched header is promoted to Priority 0 and placed first.
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeIsMainRegex: '([-_](test|unittest))?$'
+IncludeCategories:
+  - Regex:    '^<llvm/'
+    Priority: 2
+  - Regex:    '^<'
+    Priority: 3
+  - Regex:    '^"'
+    Priority: 4
+
+# Misc
+Cpp11BracedListStyle: true
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+Standard: Latest

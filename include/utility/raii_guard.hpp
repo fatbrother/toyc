@@ -6,11 +6,10 @@
 namespace toyc::utility {
 
 // Generic RAII guard that executes cleanup function on scope exit
-template<typename T>
+template <typename T>
 class ScopeGuard {
 public:
-    ScopeGuard(std::function<void()> cleanup)
-        : cleanup_(cleanup), dismissed_(false) {}
+    explicit ScopeGuard(std::function<void()> cleanup) : cleanup_(cleanup), dismissed_(false) {}
 
     ~ScopeGuard() {
         if (!dismissed_) {
@@ -23,15 +22,12 @@ public:
     ScopeGuard& operator=(const ScopeGuard&) = delete;
 
     // Allow moving
-    ScopeGuard(ScopeGuard&& other) noexcept
-        : cleanup_(std::move(other.cleanup_)), dismissed_(other.dismissed_) {
+    ScopeGuard(ScopeGuard&& other) noexcept : cleanup_(std::move(other.cleanup_)), dismissed_(other.dismissed_) {
         other.dismissed_ = true;
     }
 
     // Dismiss the guard, preventing cleanup
-    void dismiss() {
-        dismissed_ = true;
-    }
+    void dismiss() { dismissed_ = true; }
 
 private:
     std::function<void()> cleanup_;
@@ -39,9 +35,9 @@ private:
 };
 
 // Helper function to create ScopeGuard
-template<typename F>
+template <typename F>
 auto makeScopeGuard(F&& cleanup) {
     return ScopeGuard<F>(std::forward<F>(cleanup));
 }
 
-} // namespace toyc::utility
+}  // namespace toyc::utility

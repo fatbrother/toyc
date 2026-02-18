@@ -1,21 +1,23 @@
-#include <iostream>
 #include <llvm/IR/LegacyPassManager.h>
-#include <llvm/Transforms/Utils.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
+#include <llvm/Transforms/Utils.h>
+
+#include <filesystem>
+#include <iostream>
 #include <unistd.h>
 #include <vector>
-#include <filesystem>
 
 #include "ast/node.hpp"
 #include "obj/object_genner.hpp"
-#include "utility/parse_file.hpp"
+#include "semantic/parser_actions.hpp"
 #include "utility/error_handler.hpp"
+#include "utility/parse_file.hpp"
 #include "utility/preprocessor.hpp"
-#include "semantic/semantic_analyzer.hpp"
 
 extern toyc::ast::NExternalDeclaration *program;
 extern toyc::utility::ErrorHandler *error_handler;
+extern toyc::semantic::ParserActions *parser_actions;
 
 #define TMP_FILE_NAME "%%%%TMP%%%%.o"
 
@@ -92,12 +94,12 @@ int main(int argc, char *argv[]) {
         toyc::utility::Preprocessor preprocessor;
 
         // Add user-defined macros
-        for (const auto& macro : macroDefines) {
+        for (const auto &macro : macroDefines) {
             preprocessor.addPredefinedMacro(macro.first, macro.second);
         }
 
         // Add include paths
-        for (const auto& path : includePaths) {
+        for (const auto &path : includePaths) {
             preprocessor.addIncludePath(path);
         }
 
@@ -106,33 +108,27 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    // Create ASTContext early so TypeManager is available during parsing
+    toyc::ast::ASTContext astContext;
+    parser_actions = new toyc::semantic::ParserActions(&astContext.getTypeManager());
+
     // Parse the file with preprocessor
     res = toyc::parser::parseFileWithPreprocessor(inputFileName, macroDefines, includePaths);
     if (res != 0 && error_handler != nullptr) {
         error_handler->setFileName(inputFileName);
         error_handler->logError();
-        return -1;
-    }
-
-    // Perform semantic analysis
-    toyc::semantic::SemanticAnalyzer semanticAnalyzer;
-    if (!semanticAnalyzer.analyze(program)) {
-        if (semanticAnalyzer.hasErrors()) {
-            auto* err = semanticAnalyzer.getErrorHandler();
-            err->setFileName(inputFileName);
-            err->logError();
-        } else {
-            std::cerr << "Semantic analysis failed" << std::endl;
-        }
+        delete program;
+        delete parser_actions;
         return -1;
     }
 
     // Code generation
-    toyc::ast::ASTContext astContext;
-    for (auto &decl = program; decl != nullptr; decl = decl->next) {
+    for (auto *decl = program; decl != nullptr; decl = decl->next) {
         toyc::ast::CodegenResult result = decl->codegen(astContext);
         if (false == result.isSuccess()) {
             std::cerr << "Error: \n" << result.getErrorMessage() << std::endl;
+            delete program;
+            delete parser_actions;
             return -1;
         }
     }
@@ -150,10 +146,14 @@ int main(int argc, char *argv[]) {
         llvm::raw_fd_ostream llvmFile(outputFileName, EC);
         if (EC) {
             std::cerr << "Error opening file for writing: " << EC.message() << std::endl;
+            delete program;
+            delete parser_actions;
             return -1;
         }
         astContext.module.print(llvmFile, nullptr);
         llvmFile.close();
+        delete program;
+        delete parser_actions;
         return 0;
     }
 
@@ -162,6 +162,8 @@ int main(int argc, char *argv[]) {
     isOutputFile = objectGenner.generate(astContext.module, TMP_FILE_NAME);
     if (!isOutputFile) {
         std::cerr << "Failed to generate object file." << std::endl;
+        delete program;
+        delete parser_actions;
         return -1;
     }
 
@@ -170,6 +172,8 @@ int main(int argc, char *argv[]) {
     int ret = system(command.c_str());
     if (ret == -1) {
         std::cerr << "Failed to generate executable file." << std::endl;
+        delete program;
+        delete parser_actions;
         return -1;
     }
 
@@ -179,6 +183,7 @@ int main(int argc, char *argv[]) {
 
     // Clean up AST memory
     delete program;
+    delete parser_actions;
 
     return 0;
 }

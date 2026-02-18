@@ -91,6 +91,46 @@ TEST_F(CompilerErrorTest, UnmatchedBraces) {
     EXPECT_FALSE(errorOutput.empty()) << "編譯器應該輸出錯誤信息";
 }
 
+TEST_F(CompilerErrorTest, ConstPointerAssignment) {
+    std::string inputFile = "tests/fixtures/output/error_cases/const_assignment.c";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "Test file not found: " << inputFile;
+
+    auto [exitCode, errorOutput] = compileWithOutput(inputFile);
+
+    // Assigning to a const-qualified pointer should fail
+    EXPECT_NE(exitCode, 0) << "Compiler should reject assignment to const-qualified variable";
+    EXPECT_TRUE(errorOutput.find("const") != std::string::npos ||
+                errorOutput.find("Assignment") != std::string::npos)
+        << "Error output should mention const or assignment. Got: " << errorOutput;
+}
+
+TEST_F(CompilerErrorTest, ConstIntAssignment) {
+    std::string inputFile = "tests/fixtures/output/error_cases/const_int_assignment.c";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "Test file not found: " << inputFile;
+
+    auto [exitCode, errorOutput] = compileWithOutput(inputFile);
+
+    EXPECT_NE(exitCode, 0) << "Compiler should reject assignment to const int";
+    EXPECT_TRUE(errorOutput.find("const") != std::string::npos ||
+                errorOutput.find("Assignment") != std::string::npos)
+        << "Error output should mention const or assignment. Got: " << errorOutput;
+}
+
+TEST_F(CompilerErrorTest, ConstIntIncrement) {
+    std::string inputFile = "tests/fixtures/output/error_cases/const_int_increment.c";
+
+    ASSERT_TRUE(fileExists(inputFile)) << "Test file not found: " << inputFile;
+
+    auto [exitCode, errorOutput] = compileWithOutput(inputFile);
+
+    EXPECT_NE(exitCode, 0) << "Compiler should reject increment of const int";
+    EXPECT_TRUE(errorOutput.find("const") != std::string::npos ||
+                errorOutput.find("Increment") != std::string::npos)
+        << "Error output should mention const or increment. Got: " << errorOutput;
+}
+
 TEST_F(CompilerErrorTest, NonExistentFile) {
     std::string inputFile = "non_existent_file.c";
 

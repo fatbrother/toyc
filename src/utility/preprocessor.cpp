@@ -1,8 +1,9 @@
 #include "utility/preprocessor.hpp"
-#include <iostream>
-#include <regex>
+
 #include <algorithm>
 #include <cctype>
+#include <iostream>
+#include <regex>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -42,8 +43,7 @@ std::string Preprocessor::preprocess(const std::string& filename) {
         return "";
     }
 
-    std::string content((std::istreambuf_iterator<char>(file)),
-                        std::istreambuf_iterator<char>());
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
     return preprocessContent(content, filename);
@@ -85,7 +85,8 @@ std::string Preprocessor::preprocessContent(const std::string& content, const st
     }
 
     return result.str();
-}std::string Preprocessor::processLine(const std::string& line, const std::string& currentFile, int lineNumber) {
+}
+std::string Preprocessor::processLine(const std::string& line, const std::string& currentFile, int lineNumber) {
     std::string trimmedLine = trim(line);
 
     // 空行或註解行
@@ -96,7 +97,7 @@ std::string Preprocessor::preprocessContent(const std::string& content, const st
     // 預處理指令
     if (trimmedLine.length() > 0 && trimmedLine[0] == '#') {
         if (trimmedLine.length() == 1) {
-            return ""; // 只有 # 符號，忽略
+            return "";  // 只有 # 符號，忽略
         }
 
         std::string directive = trimmedLine.substr(1);
@@ -150,7 +151,7 @@ std::string Preprocessor::preprocessContent(const std::string& content, const st
 void Preprocessor::handleDefine(const std::string& line, int lineNumber) {
     // 手動解析而不是使用 tokenize，因為函數宏的語法特殊
     std::string trimmedLine = trim(line);
-    if (trimmedLine.length() <= 6) { // "define" = 6 chars
+    if (trimmedLine.length() <= 6) {  // "define" = 6 chars
         error("Invalid #define directive", lineNumber);
         return;
     }
@@ -207,7 +208,7 @@ void Preprocessor::handleDefine(const std::string& line, int lineNumber) {
     }
 }
 
-std::string Preprocessor::handleInclude(const std::string& line, const std::string& currentFile, int lineNumber) {
+std::string Preprocessor::handleInclude(const std::string& line, const std::string& /*currentFile*/, int lineNumber) {
     std::regex includeRegex(R"(include\s*[<"](.*?)[>"])");
     std::smatch match;
 
@@ -237,8 +238,7 @@ std::string Preprocessor::handleInclude(const std::string& line, const std::stri
             return "";
         }
 
-        std::string rawContent((std::istreambuf_iterator<char>(file)),
-                               std::istreambuf_iterator<char>());
+        std::string rawContent((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         file.close();
 
         // 使用當前的預處理器狀態處理包含的內容
@@ -309,7 +309,7 @@ void Preprocessor::handleIf(const std::string& line, int lineNumber) {
         return;
     }
 
-    std::string condition = line.substr(2); // 移除 "if"
+    std::string condition = line.substr(2);  // 移除 "if"
     condition = trim(condition);
 
     bool result = evaluateCondition(condition);
@@ -368,7 +368,7 @@ void Preprocessor::handleElif(const std::string& line, int lineNumber) {
             return;
         }
 
-        std::string condition = line.substr(4); // 移除 "elif"
+        std::string condition = line.substr(4);  // 移除 "elif"
         condition = trim(condition);
 
         bool result = evaluateCondition(condition);
@@ -388,7 +388,8 @@ void Preprocessor::handleElif(const std::string& line, int lineNumber) {
     } else {
         state.isActive = false;
     }
-}void Preprocessor::handleEndif(int lineNumber) {
+}
+void Preprocessor::handleEndif(int lineNumber) {
     if (conditionalStack_.empty()) {
         error("#endif without matching #if", lineNumber);
         return;
@@ -422,12 +423,18 @@ bool Preprocessor::evaluateCondition(const std::string& condition) {
         std::string op = match[2].str();
         int right = std::stoi(match[3].str());
 
-        if (op == "==") return left == right;
-        if (op == "!=") return left != right;
-        if (op == "<") return left < right;
-        if (op == ">") return left > right;
-        if (op == "<=") return left <= right;
-        if (op == ">=") return left >= right;
+        if (op == "==")
+            return left == right;
+        if (op == "!=")
+            return left != right;
+        if (op == "<")
+            return left < right;
+        if (op == ">")
+            return left > right;
+        if (op == "<=")
+            return left <= right;
+        if (op == ">=")
+            return left >= right;
     }
 
     // 檢查是否為簡單的宏名稱
@@ -464,7 +471,8 @@ std::string Preprocessor::expandObjectMacros(const std::string& text) {
 
     // 只展開物件宏
     for (const auto& [name, macro] : macros_) {
-        if (name == "__LINE__" || name == "__FILE__") continue;
+        if (name == "__LINE__" || name == "__FILE__")
+            continue;
 
         if (!macro.isFunction) {
             // 物件宏
@@ -540,7 +548,7 @@ std::string Preprocessor::expandFunctionMacro(const Macro& macro, const std::vec
 std::string Preprocessor::expandMacros(const std::string& text) {
     std::string result = text;
     std::string lastResult;
-    int maxIterations = 10; // 防止無限循環
+    int maxIterations = 10;  // 防止無限循環
     int iteration = 0;
 
     do {
@@ -562,7 +570,8 @@ std::string Preprocessor::expandMacros(const std::string& text) {
 
         // 展開物件宏
         for (const auto& [name, macro] : macros_) {
-            if (name == "__LINE__" || name == "__FILE__") continue;
+            if (name == "__LINE__" || name == "__FILE__")
+                continue;
 
             if (!macro.isFunction) {
                 // 物件宏
@@ -592,7 +601,8 @@ std::string Preprocessor::expandMacros(const std::string& text) {
 
         // 展開函數宏
         for (const auto& [name, macro] : macros_) {
-            if (name == "__LINE__" || name == "__FILE__") continue;
+            if (name == "__LINE__" || name == "__FILE__")
+                continue;
 
             if (macro.isFunction) {
                 // 函數宏的展開
@@ -627,7 +637,6 @@ std::string Preprocessor::expandMacros(const std::string& text) {
                 }
             }
         }
-
     } while (result != lastResult && iteration < maxIterations);
 
     return result;
@@ -695,7 +704,8 @@ std::string Preprocessor::trim(const std::string& str) {
     }
 
     return str.substr(start, end - start + 1);
-}bool Preprocessor::isValidIdentifier(const std::string& str) {
+}
+bool Preprocessor::isValidIdentifier(const std::string& str) {
     if (str.empty() || (!std::isalpha(str[0]) && str[0] != '_')) {
         return false;
     }
@@ -718,4 +728,4 @@ void Preprocessor::warning(const std::string& message, int lineNumber) {
     std::cerr << currentFile_ << ":" << lineNumber << ": warning: " << message << std::endl;
 }
 
-} // namespace toyc::utility
+}  // namespace toyc::utility

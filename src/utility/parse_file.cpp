@@ -1,20 +1,19 @@
 #include "utility/parse_file.hpp"
-#include "utility/preprocessor.hpp"
-#include "semantic/parser_actions.hpp"
 
 #include <fstream>
 #include <iostream>
 #include <string>
 
-typedef struct yy_buffer_state * YY_BUFFER_STATE;
+#include "utility/preprocessor.hpp"
+
+typedef struct yy_buffer_state* YY_BUFFER_STATE;
 extern int yyparse();
 extern int yylineno;
-extern YY_BUFFER_STATE yy_scan_string(const char * str);
+extern YY_BUFFER_STATE yy_scan_string(const char* str);
 extern YY_BUFFER_STATE yy_switch_to_buffer(YY_BUFFER_STATE buffer);
 extern void yy_delete_buffer(YY_BUFFER_STATE buffer);
-extern toyc::semantic::ParserActions *parser_actions;
 
-int toyc::parser::parseFile(const std::string &fileName) {
+int toyc::parser::parseFile(const std::string& fileName) {
     std::ifstream file(fileName);
     std::string content;
 
@@ -28,25 +27,20 @@ int toyc::parser::parseFile(const std::string &fileName) {
     return parseContent(content);
 }
 
-int toyc::parser::parseContent(const std::string &content) {
+int toyc::parser::parseContent(const std::string& content) {
     yylineno = 1;
-    
-    // Initialize parser actions if not already done
-    if (!parser_actions) {
-        parser_actions = new toyc::semantic::ParserActions();
-    }
-    
+
     YY_BUFFER_STATE my_string_buffer = yy_scan_string(content.c_str());
-    yy_switch_to_buffer( my_string_buffer);
+    yy_switch_to_buffer(my_string_buffer);
     int res = yyparse();
     yy_delete_buffer(my_string_buffer);
 
     return res;
 }
 
-int toyc::parser::parseFileWithPreprocessor(const std::string &fileName,
-                                           const std::vector<std::pair<std::string, std::string>>& macros,
-                                           const std::vector<std::string>& includePaths) {
+int toyc::parser::parseFileWithPreprocessor(const std::string& fileName,
+                                            const std::vector<std::pair<std::string, std::string>>& macros,
+                                            const std::vector<std::string>& includePaths) {
     toyc::utility::Preprocessor preprocessor;
 
     // 添加預定義宏

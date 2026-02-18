@@ -77,4 +77,51 @@ clean-cache:
 clean:
 	rm -rf $(BUILDDIR) toyc
 
-.PHONY: all test clean clean-cache test-build
+# Format all C++ sources and headers in-place using clang-format
+CLANG_FORMAT ?= clang-format
+FORMAT_SRCS = $(shell find $(SRCDIR) $(INCDIR) -name "*.cpp" -o -name "*.hpp")
+
+format:
+	$(CLANG_FORMAT) -i --style=file $(FORMAT_SRCS)
+	@for f in $(FORMAT_SRCS); do \
+		if [ -n "$$(tail -c1 $$f)" ]; then printf '\n' >> $$f; fi; \
+	done
+
+format-check:
+	$(CLANG_FORMAT) --dry-run --Werror --style=file $(FORMAT_SRCS)
+
+# Run cpplint on all C++ sources and headers
+LINT_SRCS = $(SRCDIR) $(INCDIR)
+
+lint:
+	cpplint --recursive $(LINT_SRCS)
+
+# Compile with unused-variable/function warnings.
+# cpplint is a style linter and cannot detect unused symbols;
+# this target uses the compiler for that semantic check.
+WARN_FLAGS = $(FLAGS) -Wall -Wextra -Wunused -Wunused-variable -Wunused-function \
+             -Wunused-parameter -Wunused-but-set-variable \
+             -Wno-unused-result
+
+warn:
+	@echo "=== Checking for unused variables/functions (project sources only) ==="
+	@warnings=0; \
+	for src in $$(find $(SRCDIR) -name "*.cpp" | grep -v "toyc.cpp"); do \
+		output=$$($(CXX) $(WARN_FLAGS) -fsyntax-only $$src $(LDFLAGS) 2>&1 \
+			| grep -E "warning:|error:" \
+			| grep -v "^/usr/"); \
+		if [ -n "$$output" ]; then \
+			echo "  $$src"; \
+			echo "$$output"; \
+			warnings=1; \
+		fi; \
+	done; \
+	if [ $$warnings -eq 0 ]; then \
+		echo "  No warnings found in project sources."; \
+		echo "=== Done ==="; \
+	else \
+		echo "=== Done ==="; \
+		exit 1; \
+	fi
+
+.PHONY: all test clean clean-cache test-build format format-check lint warn

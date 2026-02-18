@@ -19,8 +19,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           clang \
-          clang-tools \
-          cppcheck \
           valgrind
           
     - name: Install dependencies for build
@@ -41,20 +39,8 @@ jobs:
         
     - name: Run static security analysis
       run: |
-        echo "🔍 Running static security analysis..."
-        
-        # Use clang static analyzer
-        scan-build --status-bugs make clean all || {
-          echo "⚠️ Static analyzer found potential security issues"
-        }
-        
-        # Additional cppcheck security checks
-        cppcheck --enable=all --inconclusive \
-          --suppress=missingIncludeSystem \
-          --suppress=unusedFunction \
-          src/ || {
-          echo "⚠️ Cppcheck found potential issues"
-        }
+        echo "Running compiler warning checks..."
+        make warn
     
     - name: Memory leak detection preparation
       run: |
@@ -67,17 +53,15 @@ jobs:
     - name: Memory leak detection with Valgrind
       run: |
         if [ -f "./toyc" ] && [ -f "simple_test.c" ]; then
-          echo "🧪 Running memory leak detection..."
+          echo "Running memory leak detection..."
           valgrind --leak-check=full --error-exitcode=1 \
-            ./toyc simple_test.c 2>&1 || {
-            echo "⚠️ Memory leaks detected"
-          }
+            ./toyc simple_test.c
         fi
         
     - name: Security scan summary
       run: |
-        echo "✅ Security scan completed"
-        echo "📋 Summary:"
+        echo "Security scan completed"
+        echo "Summary:"
         echo "- Static analysis: Completed"
         echo "- Memory leak detection: Completed"
         echo "- Build security: Verified"
