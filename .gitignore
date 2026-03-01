@@ -16,5 +16,6 @@ build/
 # Ignore test output cache
 tests/gcc_output_cache/
 tests/output_temp/
+tests/fixtures/output/error_cases/undefined_function
 
 .vscode/
