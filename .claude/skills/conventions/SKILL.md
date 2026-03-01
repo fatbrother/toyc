@@ -1,3 +1,9 @@
+---
+name: conventions
+description: Code conventions for ToyC — naming, style, memory management, error handling, and scope tables. Load automatically when writing, reviewing, or explaining ToyC code.
+user-invocable: false
+---
+
 # Code Conventions
 
 ## Naming

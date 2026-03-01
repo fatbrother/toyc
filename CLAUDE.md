@@ -11,7 +11,7 @@ toyc/
 ├── include/          # Headers (ast/, obj/, semantic/, utility/)
 ├── src/              # Implementations + c_lexer.l, c_grammar.y, toyc.cpp
 ├── tests/            # GTest suite + fixtures/
-├── .claude/commands/ # Project skills (invoke with /skill-name)
+├── .claude/skills/   # Project skills (invoke with /skill-name)
 ├── Makefile
 └── README.md
 ```
@@ -47,9 +47,9 @@ feat: | fix: | test: | refactor: | chore: | docs:
 
 ## Available Skills
 
-Skills live in `.claude/commands/` and are loaded with `/skill-name`. Only invoke the skills below directly — other skills (e.g. `simplify`, `session-start-hook`) are system skills used internally by Claude and should not be called by users.
+Skills live in `.claude/skills/` as `SKILL.md` files with YAML frontmatter. Invoke user-facing skills with `/skill-name`.
 
-| Skill | When to use |
-|-------|-------------|
-| `/build` | Make targets, test filtering, compiler flags |
-| `/conventions` | Naming rules, style, memory management, error handling |
+| Skill | Invocation | When to use |
+|-------|-----------|-------------|
+| `build` | `/build` | Make targets, test filtering, compiler flags, CI/CD |
+| `conventions` | auto-loaded by Claude | Naming, style, memory management, error handling — Claude applies this automatically; not user-invocable |
