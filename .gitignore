@@ -5,6 +5,7 @@ toyc
 
 # Ignore build directories
 build/
+!.claude/skills/build/
 
 # Ignore test output cache
 tests/gcc_output_cache/
