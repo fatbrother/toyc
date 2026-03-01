@@ -11,6 +11,7 @@
 #include <memory>
 #include <stack>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "ast/codegen_result.hpp"
@@ -110,6 +111,12 @@ struct ASTContext {
     llvm::BasicBlock *currentSwitchAfter = nullptr;
     llvm::BasicBlock *currentSwitchDefault = nullptr;
     bool switchHasDefault = false;
+
+    // Multi-dimensional VLA stride storage.
+    // Maps variable name → alloca instructions holding each inner dimension size.
+    // For `int matrix[rows][cols]`, stores {cols_alloca}.
+    // Used during subscript codegen to compute row offsets (i * cols).
+    std::unordered_map<std::string, std::vector<llvm::AllocaInst *>> vlaStrides;
 
     ASTContext();
     ~ASTContext();

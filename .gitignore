@@ -3,6 +3,12 @@
 *.out
 toyc
 
+# Ignore test executables and output files  
+test_array*
+test
+test.c
+test.ll
+
 # Ignore build directories
 build/
 !.claude/skills/build/
@@ -10,5 +16,6 @@ build/
 # Ignore test output cache
 tests/gcc_output_cache/
 tests/output_temp/
+tests/fixtures/output/error_cases/undefined_function
 
 .vscode/

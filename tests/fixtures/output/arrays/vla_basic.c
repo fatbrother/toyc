@@ -1,3 +1,6 @@
+// Test: Basic Variable Length Array (VLA)
+// Expected: Should declare and use a VLA with runtime size
+
 int printf(char *format, ...);
 
 int main() {

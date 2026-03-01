@@ -101,15 +101,40 @@ AllocCodegenResult NDeclarationStatement::createArrayAllocation(ASTContext &cont
         return createSingleAllocation(context, arrayType, arrayTypeIdx, declarator);
     }
 
-    // Handle VLA allocation
-    CodegenResult<llvm::Value *> sizeValue = declarator->getArraySizeValue(context);
-    if (false == sizeValue.isSuccess()) {
-        return AllocCodegenResult("Failed to generate size value for VLA") << sizeValue;
+    // Handle VLA allocation: evaluate each dimension expression individually.
+    const auto &dims = declarator->getArrayDimensions();
+    std::vector<llvm::Value *> dimValues;
+    dimValues.reserve(dims.size());
+    for (const auto &dimExpr : dims) {
+        ExprCodegenResult dimResult = dimExpr->codegen(context);
+        if (false == dimResult.isSuccess()) {
+            return AllocCodegenResult("Failed to evaluate VLA dimension expression") << dimResult;
+        }
+        dimValues.push_back(dimResult.getValue());
+    }
+
+    // Compute total element count = dim0 * dim1 * ... * dimN
+    llvm::Value *totalSize = dimValues[0];
+    for (size_t i = 1; i < dimValues.size(); ++i) {
+        totalSize = context.builder.CreateMul(totalSize, dimValues[i], "vla_total_size");
+    }
+
+    // For multi-dimensional VLA, store inner dimension allocas so that subscript
+    // codegen can compute row strides (e.g., matrix[i] → base + i * cols).
+    if (dimValues.size() > 1) {
+        std::vector<llvm::AllocaInst *> innerDimAllocas;
+        for (size_t i = 1; i < dimValues.size(); ++i) {
+            llvm::AllocaInst *dimAlloca =
+                context.builder.CreateAlloca(llvm::Type::getInt32Ty(context.llvmContext), nullptr,
+                                             declarator->getName() + ".dim" + std::to_string(i));
+            context.builder.CreateStore(dimValues[i], dimAlloca);
+            innerDimAllocas.push_back(dimAlloca);
+        }
+        context.vlaStrides[declarator->getName()] = std::move(innerDimAllocas);
     }
 
     // CreateAlloca with array size returns a pointer to the array
-    llvm::Value *vlaArrayPtr =
-        context.builder.CreateAlloca(baseType, sizeValue.getData(), declarator->getName() + ".vla");
+    llvm::Value *vlaArrayPtr = context.builder.CreateAlloca(baseType, totalSize, declarator->getName() + ".vla");
 
     // Wrap the VLA pointer in an alloca so it can be treated like a regular pointer
     llvm::Type *ptrType = vlaArrayPtr->getType();
@@ -286,6 +311,10 @@ StmtCodegenResult NForStatement::codegen(ASTContext &context) {
     llvm::BasicBlock *loopCondition = llvm::BasicBlock::Create(context.llvmContext, "for_condition", function);
     llvm::BasicBlock *loopIncrement = llvm::BasicBlock::Create(context.llvmContext, "for_increment", function);
     llvm::BasicBlock *loopBody = nullptr;
+
+    // Push a scope for the for-loop init declaration (C99: for-init has its own scope)
+    auto scopeGuard = toyc::utility::makeScopeGuard([&context]() { context.popScope(); });
+    context.pushScope();
 
     initializationNode->setParent(this);
     initializationNode->codegen(context);

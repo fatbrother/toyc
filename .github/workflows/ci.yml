@@ -23,8 +23,8 @@ jobs:
           gcc \
           flex \
           bison \
-          llvm-14 \
-          llvm-14-dev \
+          llvm-18 \
+          llvm-18-dev \
           libgtest-dev \
           libgmock-dev \
           googletest
