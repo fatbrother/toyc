@@ -67,6 +67,7 @@ public:
     virtual ExprCodegenResult codegen(ASTContext &context) override;
     virtual AllocCodegenResult allocgen(ASTContext &context) override;
     virtual std::string getType() const override { return "Identifier"; }
+    std::string getName() const { return name; }
 
 private:
     std::string name;

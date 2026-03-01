@@ -560,8 +560,36 @@ AllocCodegenResult NArraySubscript::allocgen(ASTContext &context) {
         llvm::Type *elementType = context.typeManager->realize(elementTypeIdx);
 
         llvm::Value *ptrValue = context.builder.CreateLoad(arrayType, basePtr, "load_ptr");
-        llvm::Value *elementPtr = context.builder.CreateGEP(elementType, ptrValue, indexResult.getValue(), "ptridx");
+        llvm::Value *idx = indexResult.getValue();
 
+        // Multi-dimensional VLA: if the base is a named variable with inner-dimension
+        // strides stored in the context, multiply the index by the stride so that
+        // matrix[i] points to the start of row i (base + i * cols).
+        if (auto *ident = dynamic_cast<NIdentifier *>(array.get())) {
+            auto strideIt = context.vlaStrides.find(ident->getName());
+            if (strideIt != context.vlaStrides.end() && !strideIt->second.empty()) {
+                // Compute stride = product of all stored inner dimensions.
+                llvm::Value *stride = context.builder.CreateLoad(llvm::Type::getInt32Ty(context.llvmContext),
+                                                                 strideIt->second[0], "vla_stride");
+                for (size_t i = 1; i < strideIt->second.size(); ++i) {
+                    llvm::Value *d = context.builder.CreateLoad(llvm::Type::getInt32Ty(context.llvmContext),
+                                                                strideIt->second[i], "vla_dim");
+                    stride = context.builder.CreateMul(stride, d, "vla_stride_prod");
+                }
+                idx = context.builder.CreateMul(idx, stride, "vla_row_offset");
+
+                // GEP to the start of the requested row and store in a temp alloca
+                // so the result can be subscripted again (matrix[i][j]).
+                llvm::Value *rowPtr = context.builder.CreateGEP(elementType, ptrValue, idx, "vla_rowptr");
+                TypeIdx rowPtrTypeIdx = context.typeManager->getPointerIdx(elementTypeIdx, 1);
+                llvm::Type *rowPtrLLVMType = context.typeManager->realize(rowPtrTypeIdx);
+                llvm::AllocaInst *rowPtrStorage = context.builder.CreateAlloca(rowPtrLLVMType, nullptr, "vla_row");
+                context.builder.CreateStore(rowPtr, rowPtrStorage);
+                return AllocCodegenResult(rowPtrStorage, rowPtrTypeIdx);
+            }
+        }
+
+        llvm::Value *elementPtr = context.builder.CreateGEP(elementType, ptrValue, idx, "ptridx");
         return AllocCodegenResult(elementPtr, elementTypeIdx);
     }
 
